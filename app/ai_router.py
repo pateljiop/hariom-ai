@@ -1,5 +1,6 @@
 import json
 import requests
+import time
 from .config import PROVIDERS
 
 
@@ -57,13 +58,35 @@ class AIRouter:
             return f'HTTP {error.response.status_code}: {body}'
         return str(error)[:500]
 
+    RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+    MAX_RETRIES = 2
+    RETRY_DELAYS = (1, 2)
+
+    def _post(self, url, **kwargs):
+        last_response = None
+        for attempt in range(self.MAX_RETRIES + 1):
+            try:
+                response = requests.post(url, **kwargs)
+                last_response = response
+                if response.status_code not in self.RETRYABLE_STATUS_CODES:
+                    response.raise_for_status()
+                    return response
+                if attempt >= self.MAX_RETRIES:
+                    response.raise_for_status()
+            except requests.RequestException:
+                if attempt >= self.MAX_RETRIES:
+                    raise
+            delay = self.RETRY_DELAYS[min(attempt, len(self.RETRY_DELAYS) - 1)]
+            self.activity.emit(f"AI -> temporary provider error; retrying in {delay}s")
+            time.sleep(delay)
+        raise RuntimeError("Provider request failed after retries.")
+
     def _compatible(self,cfg,prompt,system):
         messages=[]
         if system:
             messages.append({'role':'system','content':system})
         messages.append({'role':'user','content':prompt})
-        r=requests.post(cfg['base'],headers={'Authorization':'Bearer '+cfg['key'],'Content-Type':'application/json'},json={'model':cfg['model'],'messages':messages,'temperature':0.2},timeout=90)
-        r.raise_for_status()
+        r=self._post(cfg['base'],headers={'Authorization':'Bearer '+cfg['key'],'Content-Type':'application/json'},json={'model':cfg['model'],'messages':messages,'temperature':0.2},timeout=90)
         return r.json()['choices'][0]['message']['content']
 
     def _compatible_json(self,cfg,prompt,system):
@@ -72,8 +95,7 @@ class AIRouter:
             messages.append({'role':'system','content':system})
         messages.append({'role':'user','content':prompt})
         payload={'model':cfg['model'],'messages':messages,'temperature':0.1}
-        r=requests.post(cfg['base'],headers={'Authorization':'Bearer '+cfg['key'],'Content-Type':'application/json'},json=payload,timeout=90)
-        r.raise_for_status()
+        r=self._post(cfg['base'],headers={'Authorization':'Bearer '+cfg['key'],'Content-Type':'application/json'},json=payload,timeout=90)
         return r.json()['choices'][0]['message']['content']
 
     def _gemini(self,cfg,prompt,system):
@@ -108,8 +130,7 @@ class AIRouter:
             payload['systemInstruction']={'parts':[{'text':system}]}
         if generation_config:
             payload['generationConfig']=generation_config
-        r=requests.post(url,headers=headers,json=payload,timeout=90)
-        r.raise_for_status()
+        r=self._post(url,headers=headers,json=payload,timeout=90)
         data=r.json()
         candidates=data.get('candidates') or []
         if not candidates:
