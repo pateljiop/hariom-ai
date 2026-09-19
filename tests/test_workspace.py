@@ -18,6 +18,15 @@ class WorkspaceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 ws.write_file("../outside.txt", "blocked")
 
+    def test_patch_requires_exact_match_count(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Workspace(tmp)
+            ws.write_file("app.py", "print('one')\nprint('one')\n")
+            with self.assertRaises(ValueError):
+                ws.patch_file("app.py", "print('one')", "print('two')")
+            ws.patch_file("app.py", "print('one')", "print('two')", expected_replacements=2)
+            self.assertEqual(ws.read_file("app.py"), "print('two')\nprint('two')\n")
+
 
 if __name__ == "__main__":
     unittest.main()
