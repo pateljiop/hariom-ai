@@ -3,7 +3,7 @@ import tkinter as tk
 import webbrowser
 from tkinter import ttk, messagebox, filedialog
 
-from .config import WORKSPACE, PROVIDERS
+from .config import WORKSPACE, PROVIDERS, save_workspace
 from .activity import ActivityBus
 from .ai_router import AIRouter
 from .workspace import Workspace
@@ -738,7 +738,8 @@ class App(tk.Tk):
         path = filedialog.askdirectory(initialdir=str(self.ws.root))
         if path:
             self.ws = Workspace(path)
-            self.agent.workspace = self.ws
+            save_workspace(self.ws.root)
+            self.agent.set_workspace(self.ws)
             self.refresh_files()
             self.activity.emit("SYSTEM -> workspace changed to " + str(self.ws.root))
 
