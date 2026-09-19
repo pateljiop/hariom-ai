@@ -1,5 +1,6 @@
 import json
 from .terminal import run_command
+import subprocess
 
 
 class Agent:
@@ -9,6 +10,7 @@ class Agent:
     MAX_READ_CHARS = 20000
     MAX_RESULT_CHARS = 6000
     MAX_ITERATIONS = 3
+    GIT_TIMEOUT = 30
 
     def __init__(self, router, workspace, activity):
         self.router = router
@@ -93,6 +95,9 @@ Do not repeat a failed action unless the new plan changes the cause.
         return None
 
     def _execute(self, tool, args):
+        if tool == "git_commit":
+            raise PermissionError("git_commit requires explicit approval and is not available to the autonomous planner yet.")
+
         if tool == "list_workspace":
             files = self.workspace.list_files()
             return [str(path.relative_to(self.workspace.root)) for path in files[:300]]
@@ -126,6 +131,18 @@ Do not repeat a failed action unless the new plan changes the cause.
             target, count = self.workspace.patch_file(path, old_text, new_text, expected)
             return f"Patched {target.relative_to(self.workspace.root)} ({count} replacement)."
 
+        if tool == "git_status":
+            return self._git("status", "--short")
+
+        if tool == "git_diff":
+            return self._git("diff", "--no-ext-diff", "--", *self._git_paths(args.get("paths")))
+
+        if tool == "git_log":
+            return self._git("log", "-5", "--oneline")
+
+        if tool == "git_branch":
+            return self._git("branch", "--show-current")
+
         if tool == "run_command":
             command = args.get("command")
             if not isinstance(command, str) or not command.strip():
@@ -138,18 +155,41 @@ Do not repeat a failed action unless the new plan changes the cause.
 
         raise ValueError(f"Unknown agent tool: {tool}")
 
+    def _git_paths(self, paths):
+        if paths is None:
+            return []
+        if not isinstance(paths, list) or not all(isinstance(path, str) and path.strip() for path in paths):
+            raise ValueError("Git paths must be a list of relative path strings.")
+        return paths
+
+    def _git(self, *args):
+        command = ["git", *args]
+        for arg in args:
+            if arg.startswith("/") or ":" in arg[:3]:
+                raise ValueError("Git tool accepts repository-relative arguments only.")
+        process = subprocess.run(
+            command,
+            cwd=str(self.workspace.root),
+            capture_output=True,
+            text=True,
+            timeout=self.GIT_TIMEOUT,
+            shell=False,
+        )
+        output = (process.stdout or "") + (("\n" + process.stderr) if process.stderr else "")
+        return {"exit_code": process.returncode, "output": output[-self.MAX_RESULT_CHARS:]}
+
     def _planner_system(self):
         return """You are the planning component of Hariom AI, a local Windows workstation agent.
 Return ONLY valid JSON matching this exact shape:
 {
   "steps": [
-    {"tool": "list_workspace|read_file|write_file|patch_file|run_command", "args": {}}
+    {"tool": "list_workspace|read_file|write_file|patch_file|run_command|git_status|git_diff|git_log|git_branch", "args": {}}
   ],
   "goal": "short description"
 }
 
 Rules:
-- Use only the five listed tools.
+- Use only the nine listed tools.
 - Paths for read_file/write_file/patch_file are relative to the user's workspace.
 - Never use absolute paths.
 - Prefer inspecting the workspace before modifying existing files.
@@ -157,7 +197,7 @@ Rules:
 - Use patch_file for targeted edits to existing files; include exact old_text and new_text.
 - expected_replacements defaults to 1; set it explicitly when more than one identical occurrence is intentionally changed.
 - Use run_command for tests/builds only when needed.
-- Do not use destructive commands such as delete, format, shutdown, registry changes, force pushes, or disk operations.
+- Git tools are read-only in this version. Do not attempt git commit, push, merge, reset, clean, or other destructive Git operations.
 - Keep the plan to the minimum steps needed.
 - Never claim a tool ran; only describe intended steps.
 """
