@@ -14,9 +14,9 @@ class Agent:
         self.workspace = workspace
         self.activity = activity
 
-    def run(self, task):
+    def run(self, task, preferred=None):
         self.activity.emit("AGENT -> planning task")
-        plan, provider = self.router.plan(task, self._planner_system())
+        plan, provider = self.router.plan(task, self._planner_system(), preferred=preferred)
         self.activity.emit(f"AGENT -> plan ready ({provider})")
 
         steps = plan.get("steps")
@@ -44,7 +44,7 @@ class Agent:
                 results.append({"step": index, "tool": tool, "error": error})
                 self.activity.emit(f"AGENT BLOCKED/FAILED -> {tool}: {error}")
 
-        summary = self._summarize(task, plan, results)
+        summary = self._summarize(task, plan, results, preferred=provider)
         self.activity.emit("AGENT -> task complete")
         return summary, results
 
@@ -106,7 +106,7 @@ Rules:
 - Never claim a tool ran; only describe intended steps.
 """
 
-    def _summarize(self, task, plan, results):
+    def _summarize(self, task, plan, results, preferred=None):
         compact = json.dumps(results, ensure_ascii=False)
         prompt = f"""Task:
 {task}
@@ -124,5 +124,5 @@ Separate:
 3. Commands/tests run and their exit codes
 4. Anything blocked, failed, or still needing approval
 Never claim an action happened unless it appears in the actual tool results."""
-        text, _ = self.router.chat(prompt, system="You are the reporting component of Hariom AI. Report only verified tool results.")
+        text, _ = self.router.chat(prompt, system="You are the reporting component of Hariom AI. Report only verified tool results.", preferred=preferred)
         return text
