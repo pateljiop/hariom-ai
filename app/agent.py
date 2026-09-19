@@ -72,6 +72,16 @@ class Agent:
             target = self.workspace.write_file(path, content)
             return f"Wrote {target.relative_to(self.workspace.root)} ({len(content)} chars)."
 
+        if tool == "patch_file":
+            path = args.get("path")
+            old_text = args.get("old_text")
+            new_text = args.get("new_text")
+            expected = args.get("expected_replacements", 1)
+            if not isinstance(path, str) or not path.strip():
+                raise ValueError("patch_file requires a path.")
+            target, count = self.workspace.patch_file(path, old_text, new_text, expected)
+            return f"Patched {target.relative_to(self.workspace.root)} ({count} replacement)."
+
         if tool == "run_command":
             command = args.get("command")
             if not isinstance(command, str) or not command.strip():
@@ -95,11 +105,13 @@ Return ONLY valid JSON matching this exact shape:
 }
 
 Rules:
-- Use only the four listed tools.
+- Use only the five listed tools.
 - Paths for read_file/write_file are relative to the user's workspace.
 - Never use absolute paths.
 - Prefer inspecting the workspace before modifying existing files.
-- Use write_file for creating or replacing files.
+- Use write_file for creating new files or replacing complete files when appropriate.
+- Use patch_file for targeted edits to existing files; include exact old_text and new_text.
+- expected_replacements defaults to 1; set it explicitly when more than one identical occurrence is intentionally changed.
 - Use run_command for tests/builds only when needed.
 - Do not use destructive commands such as delete, format, shutdown, registry changes, force pushes, or disk operations.
 - Keep the plan to the minimum steps needed.
