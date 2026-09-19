@@ -10,24 +10,34 @@ Windows-first personal AI workstation.
 - V1 agent execution loop
 - Git-safe secret handling
 
-## V1 agent workflow
+## Agent workflow
 
 Use **Run Agent** for tasks that should interact with the selected workspace.
 
 Current agent tools:
+- `project_context`
 - `list_workspace`
 - `read_file`
 - `write_file`
+- `patch_file`
 - `run_command`
+- `run_tests`
+- `git_status`
+- `git_diff`
+- `git_log`
+- `git_branch`
 
-The agent first asks the configured AI provider for a structured plan, executes only the supported tools, records operational activity in the UI, and then produces a factual completion report.
+`project_context` is a read-only project inspection tool. It reports the selected workspace, bounded file inventory, common project manifests, file-extension counts, Git branch/status when available, and whether the agent is running on Windows.
+
+The agent asks the configured AI provider for a structured plan, executes only the supported tools, records operational activity in the UI, and then produces a factual completion report.
 
 Safety boundaries:
 - File paths are restricted to the selected workspace.
 - Terminal commands run with the workspace as their working directory.
 - Existing terminal risky-command checks remain active.
-- The agent cannot delete files, perform disk operations, change the registry, shut down Windows, or force-push Git.
-- This v1 does not yet have an interactive approval UI for blocked actions.
+- Project context and Git context tools are read-only.
+- Destructive Git operations are not planner tools.
+- Protected actions use the approval mechanism where applicable.
 
 ## Run
 
