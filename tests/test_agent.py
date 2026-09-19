@@ -208,6 +208,22 @@ class AgentRecoveryTests(unittest.TestCase):
             self.assertEqual(summary, "incomplete")
             self.assertTrue(any("task ended with failures" in event for event in activity.events))
 
+    def test_github_limit_string_is_normalized(self):
+        activity = Activity()
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(Router(), Workspace(tmp), activity)
+            args = {"limit": "20"}
+            agent._normalize_args("github_branches", args)
+            self.assertEqual(args["limit"], 20)
+            self.assertIsNone(agent._validate_step("github_branches", args))
+
+    def test_read_file_blocks_git_internal_paths(self):
+        activity = Activity()
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(Router(), Workspace(tmp), activity)
+            error = agent._validate_step("read_file", {"path": ".git/config"})
+            self.assertIn("cannot inspect .git internal files", error)
+
     def test_set_workspace_rebinds_github_client(self):
         with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
             activity = Activity()
