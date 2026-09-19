@@ -26,6 +26,7 @@ class Agent:
         current_task = task
         provider = preferred
         final_plan = {}
+        completed = False
 
         for cycle in range(1, self.MAX_ITERATIONS + 1):
             plan, provider_name = self.router.plan(
@@ -46,12 +47,26 @@ class Agent:
             cycle_results = []
             for index, step in enumerate(steps, start=1):
                 if not isinstance(step, dict):
-                    cycle_results.append({"step": index, "error": "Invalid step object."})
+                    cycle_results.append({"cycle": cycle, "step": index, "error": "Invalid step object."})
                     continue
 
                 tool = step.get("tool")
                 args = step.get("args") or {}
                 self.activity.emit(f"AGENT -> step {index}/{len(steps)}: {tool}")
+
+                validation_error = self._validate_step(tool, args)
+                if validation_error:
+                    entry = {
+                        "cycle": cycle,
+                        "step": index,
+                        "tool": tool,
+                        "error": validation_error,
+                    }
+                    cycle_results.append(entry)
+                    self.activity.emit(
+                        f"AGENT BLOCKED/FAILED -> {tool}: {validation_error}"
+                    )
+                    continue
 
                 try:
                     result = self._execute(tool, args)
@@ -67,6 +82,7 @@ class Agent:
             all_results.extend(cycle_results)
             failure = self._find_failure(cycle_results)
             if not failure:
+                completed = True
                 break
 
             if cycle >= self.MAX_ITERATIONS:
@@ -77,16 +93,62 @@ class Agent:
             current_task = f"""Original task:
 {task}
 
-The previous agent cycle failed or produced a non-zero test/command result.
+The previous agent cycle failed because of a tool execution or plan-validation problem.
 Previous cycle results:
 {json.dumps(cycle_results, ensure_ascii=False)}
 
-Create the next minimal corrective plan. Inspect relevant files before changing them.
-Do not repeat a failed action unless the new plan changes the cause.
+Create a corrected minimal plan for the original task.
+Use the exact required arguments for every tool.
+Do not repeat a malformed or failed action unless you have fixed its cause.
+Inspect relevant files when that is useful.
 """
-        summary = self._summarize(task, final_plan, all_results, preferred=provider)
-        self.activity.emit("AGENT -> task complete")
+
+        summary = self._summarize(
+            task, final_plan, all_results, preferred=provider, completed=completed
+        )
+        if completed:
+            self.activity.emit("AGENT -> task complete")
+        else:
+            self.activity.emit("AGENT -> task ended with failures")
         return summary, all_results
+
+    def _validate_step(self, tool, args):
+        if tool not in {
+            "list_workspace", "read_file", "write_file", "patch_file",
+            "run_command", "git_status", "git_diff", "git_log", "git_branch",
+        }:
+            return f"Unknown planner tool: {tool}"
+
+        if not isinstance(args, dict):
+            return f"{tool} requires an args object."
+
+        required = {
+            "read_file": ("path",),
+            "write_file": ("path", "content"),
+            "patch_file": ("path", "old_text", "new_text"),
+            "run_command": ("command",),
+        }
+        for key in required.get(tool, ()):
+            if key not in args:
+                return f"{tool} requires '{key}'."
+            if not isinstance(args[key], str):
+                return f"{tool} requires '{key}' to be a string."
+            if key != "content" and not args[key].strip():
+                return f"{tool} requires a non-empty '{key}'."
+
+        if tool == "patch_file":
+            expected = args.get("expected_replacements", 1)
+            if not isinstance(expected, int) or expected < 1:
+                return "patch_file requires expected_replacements to be a positive integer."
+
+        if tool == "git_diff" and "paths" in args:
+            paths = args["paths"]
+            if not isinstance(paths, list) or not all(
+                isinstance(path, str) and path.strip() for path in paths
+            ):
+                return "git_diff paths must be a list of non-empty strings."
+
+        return None
 
     def _find_failure(self, results):
         for entry in results:
@@ -182,7 +244,14 @@ Do not repeat a failed action unless the new plan changes the cause.
         return bool(self.approval_callback(action, detail))
 
     def _git_commit(self, message):
-        add = subprocess.run(["git", "add", "-A"], cwd=str(self.workspace.root), capture_output=True, text=True, timeout=self.GIT_TIMEOUT, shell=False)
+        add = subprocess.run(
+            ["git", "add", "-A"],
+            cwd=str(self.workspace.root),
+            capture_output=True,
+            text=True,
+            timeout=self.GIT_TIMEOUT,
+            shell=False,
+        )
         if add.returncode != 0:
             return {"exit_code": add.returncode, "output": (add.stdout or "") + (add.stderr or "")}
         return self._git("commit", "-m", message)
@@ -200,11 +269,15 @@ Do not repeat a failed action unless the new plan changes the cause.
             timeout=self.GIT_TIMEOUT,
             shell=False,
         )
-        output = (process.stdout or "") + (("\n" + process.stderr) if process.stderr else "")
+        output = (process.stdout or "") + (("
+" + process.stderr) if process.stderr else "")
         return {"exit_code": process.returncode, "output": output[-self.MAX_RESULT_CHARS:]}
 
     def _planner_system(self):
         return """You are the planning component of Hariom AI, a local Windows workstation agent.
+Understand natural-language requests yourself. The user may be brief, informal, or in Hinglish.
+Infer the intended filename, implementation, tests, and minimal execution steps from the request.
+
 Return ONLY valid JSON matching this exact shape:
 {
   "steps": [
@@ -213,10 +286,18 @@ Return ONLY valid JSON matching this exact shape:
   "goal": "short description"
 }
 
+Tool argument requirements:
+- read_file: {"path": "..."}
+- write_file: {"path": "...", "content": "..."}
+- patch_file: {"path": "...", "old_text": "...", "new_text": "...", "expected_replacements": 1}
+- run_command: {"command": "..."}
+- git_diff: {"paths": ["relative/path"]} or {"paths": []}
+
 Rules:
 - Use only the nine listed tools.
 - Paths for read_file/write_file/patch_file are relative to the user's workspace.
 - Never use absolute paths.
+- Infer missing details when the user's intent is clear. Do not ask the user for a filename when a sensible filename can be derived from the request.
 - Prefer inspecting the workspace before modifying existing files.
 - Use write_file for creating new files or replacing complete files when appropriate.
 - Use patch_file for targeted edits to existing files; include exact old_text and new_text.
@@ -227,8 +308,9 @@ Rules:
 - Never claim a tool ran; only describe intended steps.
 """
 
-    def _summarize(self, task, plan, results, preferred=None):
+    def _summarize(self, task, plan, results, preferred=None, completed=False):
         compact = json.dumps(results, ensure_ascii=False)
+        status = "completed successfully" if completed else "ended with failures or blocked actions"
         prompt = f"""Task:
 {task}
 
@@ -238,6 +320,9 @@ Planned steps:
 Actual tool results:
 {compact}
 
+Overall execution status:
+{status}
+
 Give a concise factual completion report.
 Separate:
 1. What was done
@@ -245,5 +330,9 @@ Separate:
 3. Commands/tests run and their exit codes
 4. Anything blocked, failed, or still needing approval
 Never claim an action happened unless it appears in the actual tool results."""
-        text, _ = self.router.chat(prompt, system="You are the reporting component of Hariom AI. Report only verified tool results.", preferred=preferred)
+        text, _ = self.router.chat(
+            prompt,
+            system="You are the reporting component of Hariom AI. Report only verified tool results.",
+            preferred=preferred,
+        )
         return text
