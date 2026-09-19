@@ -15,5 +15,5 @@ PROVIDERS={
 'groq':{'key':os.getenv('GROQ_API_KEY',''),'model':os.getenv('GROQ_MODEL','llama-3.3-70b-versatile'),'base':'https://api.groq.com/openai/v1/chat/completions'},
 'openrouter':{'key':os.getenv('OPENROUTER_API_KEY',''),'model':os.getenv('OPENROUTER_MODEL','openrouter/free'),'base':'https://openrouter.ai/api/v1/chat/completions'},
 'cerebras':{'key':os.getenv('CEREBRAS_API_KEY',''),'model':os.getenv('CEREBRAS_MODEL','llama-3.3-70b'),'base':'https://api.cerebras.ai/v1/chat/completions'},
-'cavoti':{'key':os.getenv('CAVOTI_API_KEY',''),'model':os.getenv('CAVOTI_MODEL','claude-fable-5'),'base':os.getenv('CAVOTI_BASE_URL','').rstrip('/')+'/v1/chat/completions'}
+'cavoti':{'key':os.getenv('CAVOTI_API_KEY',''),'model':os.getenv('CAVOTI_MODEL','claude-fable-5'),'base':os.getenv('CAVOTI_BASE_URL','https://cavoti.com').rstrip('/')+'/v1/chat/completions'}
 }
