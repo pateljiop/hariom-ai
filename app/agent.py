@@ -206,14 +206,26 @@ Inspect relevant files when that is useful.
         if not github_request:
             return True
 
-        successful_github = {
-            "github_repo_context", "github_issues", "github_prs",
-            "github_branches", "github_commits", "github_pr_reviews",
-        }
-        return any(
-            entry.get("tool") in successful_github and "error" not in entry
+        successful = {
+            entry.get("tool")
             for entry in results
-        )
+            if "error" not in entry
+        }
+        requested = {
+            "github_repo_context": any(token in text for token in (
+                "repository name", "default branch", "repository connected",
+                "github repository",
+            )),
+            "github_branches": "branch" in text or "branches" in text,
+            "github_issues": "issue" in text or "issues" in text,
+            "github_prs": "pull request" in text or "pull requests" in text,
+            "github_commits": "commit" in text or "commits" in text,
+            "github_pr_reviews": "review" in text or "reviews" in text,
+        }
+        required_tools = {tool for tool, needed in requested.items() if needed}
+        if not required_tools:
+            required_tools = {"github_repo_context"}
+        return required_tools.issubset(successful)
 
     def _execute(self, tool, args):
         if tool == "git_commit":
