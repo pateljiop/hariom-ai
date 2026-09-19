@@ -6,8 +6,29 @@ ROOT=Path(__file__).resolve().parent.parent
 load_dotenv(ROOT/'.env')
 APP_DIR=Path(os.getenv('APPDATA',ROOT/'runtime'))/'HariomAI'
 APP_DIR.mkdir(parents=True,exist_ok=True)
+WORKSPACE_STATE = APP_DIR/'workspace.txt'
+
+
+def _load_saved_workspace():
+    try:
+        value = WORKSPACE_STATE.read_text(encoding='utf-8').strip()
+    except OSError:
+        return ''
+    return value
+
+
+def save_workspace(path):
+    target = Path(path).expanduser().resolve()
+    target.mkdir(parents=True,exist_ok=True)
+    WORKSPACE_STATE.write_text(str(target), encoding='utf-8')
+    return target
+
+
+_saved_workspace = _load_saved_workspace()
 _configured_workspace = os.getenv('HARIOM_WORKSPACE','').strip()
-if _configured_workspace:
+if _saved_workspace:
+    WORKSPACE = Path(_saved_workspace).expanduser().resolve()
+elif _configured_workspace:
     WORKSPACE = Path(_configured_workspace).expanduser().resolve()
 elif Path('A:/').exists():
     WORKSPACE = Path('A:/project').resolve()
