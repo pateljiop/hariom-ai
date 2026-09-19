@@ -113,6 +113,8 @@ class Workspace:
         except (OSError, subprocess.SubprocessError):
             pass
 
+        vscode_running = self._is_vscode_running()
+
         return {
             "workspace": str(self.root),
             "file_count": len(files),
@@ -122,7 +124,24 @@ class Workspace:
             "git_branch": git_branch,
             "git_status": git_status,
             "windows": os.name == "nt",
+            "vscode_running": vscode_running,
         }
+
+    @staticmethod
+    def _is_vscode_running():
+        if os.name != "nt":
+            return False
+        try:
+            result = subprocess.run(
+                ["tasklist", "/FI", "IMAGENAME eq Code.exe", "/NH"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                shell=False,
+            )
+            return result.returncode == 0 and "Code.exe" in result.stdout
+        except (OSError, subprocess.SubprocessError):
+            return False
 
     def _safe_path(self, path):
         target = (self.root / path).resolve()
