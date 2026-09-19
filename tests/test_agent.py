@@ -133,6 +133,30 @@ class AgentRecoveryTests(unittest.TestCase):
             self.assertEqual(result["exit_code"], 0)
             self.assertIn("OK", result["output"])
 
+    def test_failed_test_run_triggers_recovery(self):
+        class TestRecoveryRouter:
+            def __init__(self):
+                self.calls = 0
+
+            def plan(self, prompt, system, preferred=None):
+                self.calls += 1
+                if self.calls == 1:
+                    return {"steps": [{"tool": "run_tests", "args": {"command": "python -c \\\"raise SystemExit(1)\\\""}}], "goal": "run tests"}, "fake"
+                return {"steps": [{"tool": "write_file", "args": {"path": "fixed.txt", "content": "fixed"}}], "goal": "recover"}, "fake"
+
+            def chat(self, prompt, system="", preferred=None):
+                return "recovered after test failure", "fake"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            activity = Activity()
+            ws = Workspace(tmp)
+            agent = Agent(TestRecoveryRouter(), ws, activity)
+            summary, results = agent.run("fix the failing tests")
+            self.assertEqual(summary, "recovered after test failure")
+            self.assertTrue((ws.root / "fixed.txt").is_file())
+            self.assertTrue(any(item.get("result", {}).get("action") == "run_tests" for item in results))
+            self.assertTrue(any("recovering from cycle 1 failure" in event for event in activity.events))
+
     def test_malformed_tool_plan_is_replanned(self):
         with tempfile.TemporaryDirectory() as tmp:
             activity = Activity()
