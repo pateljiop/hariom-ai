@@ -5,11 +5,12 @@ from .activity import ActivityBus
 from .ai_router import AIRouter
 from .workspace import Workspace
 from .terminal import run_command
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__(); self.title('Hariom AI - Personal Workstation'); self.geometry('1200x760'); self.minsize(900,600)
-        self.activity=ActivityBus(); self.router=AIRouter(self.activity); self.ws=Workspace(self.activity); self.build(); self.activity.subscribe(self.log_line)
-        self.activity.emit('SYSTEM -> workspace: '+str(WORKSPACE)); self.activity.emit('SYSTEM -> providers: '+(', '.join(self.router.available()) or 'none'))
+        self.activity=ActivityBus(); self.router=AIRouter(self.activity); self.ws=Workspace(); self.build(); self.activity.subscribe(self.log_line)
+        self.activity.emit('SYSTEM -> workspace: '+str(self.ws.root)); self.activity.emit('SYSTEM -> providers: '+(', '.join(self.router.available()) or 'none'))
     def build(self):
         top=ttk.Frame(self,padding=10); top.pack(fill='x'); ttk.Label(top,text='HARIOM AI',font=('Segoe UI',20,'bold')).pack(side='left'); ttk.Button(top,text='Refresh',command=self.refresh).pack(side='right')
         panes=ttk.PanedWindow(self,orient='horizontal'); panes.pack(fill='both',expand=True,padx=10,pady=10)
@@ -34,16 +35,18 @@ class App(tk.Tk):
         except Exception as e:self.after(0,lambda:messagebox.showerror('AI error',str(e)))
     def list_workspace(self):
         try:
-            items=self.ws.list_files(); self.append(self.response,'\n'.join(str(p.relative_to(WORKSPACE)) for p in items[:300]) or 'Workspace is empty.')
+            items=self.ws.list_files(); self.append(self.response,'\n'.join(str(p.relative_to(self.ws.root)) for p in items[:300]) or 'Workspace is empty.')
         except Exception as e:messagebox.showerror('Workspace',str(e))
     def choose_workspace(self):
-        import app.config as config
-        p=filedialog.askdirectory(initialdir=str(WORKSPACE))
-        if p: config.WORKSPACE=p; self.activity.emit('SYSTEM -> workspace changed to '+p)
+        p=filedialog.askdirectory(initialdir=str(self.ws.root))
+        if p:
+            self.ws=Workspace(p)
+            self.activity.emit('SYSTEM -> workspace changed to '+str(self.ws.root))
     def run(self):
         c=self.command.get().strip()
         if not c:return
         try:
             code,out=run_command(c,self.activity); self.append(self.response,'$ '+c+'\n'+out)
         except Exception as e:messagebox.showwarning('Command blocked',str(e))
+
 def launch(): App().mainloop()
