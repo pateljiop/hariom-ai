@@ -222,7 +222,10 @@ class AgentRecoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             agent = Agent(Router(), Workspace(tmp), activity)
             error = agent._validate_step("read_file", {"path": ".git/config"})
-            self.assertIn("cannot inspect .git internal files", error)
+            self.assertIsNone(error)
+            with self.assertRaises(ValueError) as exc:
+                agent._execute("read_file", {"path": ".git/config"})
+            self.assertIn("cannot inspect .git internal files", str(exc.exception))
 
     def test_set_workspace_rebinds_github_client(self):
         with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
