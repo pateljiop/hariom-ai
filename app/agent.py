@@ -114,6 +114,7 @@ Inspect relevant files when that is useful.
 
     def _validate_step(self, tool, args):
         if tool not in {
+            "project_context",
             "list_workspace", "read_file", "write_file", "patch_file",
             "run_command", "run_tests", "git_status", "git_diff", "git_log", "git_branch",
         }:
@@ -168,6 +169,9 @@ Inspect relevant files when that is useful.
             if not self._request_approval("git_commit", f"Create Git commit: {message}"):
                 raise PermissionError("Git commit denied by user.")
             return self._git_commit(message)
+
+        if tool == "project_context":
+            return self.workspace.project_context()
 
         if tool == "list_workspace":
             files = self.workspace.list_files()
@@ -295,12 +299,13 @@ Infer the intended filename, implementation, tests, and minimal execution steps 
 Return ONLY valid JSON matching this exact shape:
 {
   "steps": [
-    {"tool": "list_workspace|read_file|write_file|patch_file|run_command|run_tests|git_status|git_diff|git_log|git_branch", "args": {}}
+    {"tool": "project_context|list_workspace|read_file|write_file|patch_file|run_command|run_tests|git_status|git_diff|git_log|git_branch", "args": {}}
   ],
   "goal": "short description"
 }
 
 Tool argument requirements:
+- project_context: {}
 - read_file: {"path": "..."}
 - write_file: {"path": "...", "content": "..."}
 - patch_file: {"path": "...", "old_text": "...", "new_text": "...", "expected_replacements": 1}
@@ -309,11 +314,12 @@ Tool argument requirements:
 - git_diff: {"paths": ["relative/path"]} or {"paths": []}
 
 Rules:
-- Use only the ten listed tools.
+- Use only the eleven listed tools.
 - Paths for read_file/write_file/patch_file are relative to the user's workspace.
 - Never use absolute paths.
 - Infer missing details when the user's intent is clear. Do not ask the user for a filename when a sensible filename can be derived from the request.
-- For coding tasks, inspect the workspace first when existing project context may matter; use list_workspace and read_file when useful.
+- For coding tasks, use project_context first when project structure, framework, Git state, or development environment may matter.
+- Use list_workspace/read_file when specific existing content is needed.
 - Use write_file for creating new files or replacing complete files when appropriate.
 - Use patch_file for targeted edits to existing files; include exact old_text and new_text.
 - expected_replacements defaults to 1; set it explicitly when more than one identical occurrence is intentionally changed.
