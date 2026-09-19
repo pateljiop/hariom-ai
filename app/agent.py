@@ -115,7 +115,7 @@ Inspect relevant files when that is useful.
     def _validate_step(self, tool, args):
         if tool not in {
             "list_workspace", "read_file", "write_file", "patch_file",
-            "run_command", "git_status", "git_diff", "git_log", "git_branch",
+            "run_command", "run_tests", "git_status", "git_diff", "git_log", "git_branch",
         }:
             return f"Unknown planner tool: {tool}"
 
@@ -127,6 +127,7 @@ Inspect relevant files when that is useful.
             "write_file": ("path", "content"),
             "patch_file": ("path", "old_text", "new_text"),
             "run_command": ("command",),
+            "run_tests": (),
         }
         for key in required.get(tool, ()):
             if key not in args:
@@ -213,6 +214,19 @@ Inspect relevant files when that is useful.
         if tool == "git_branch":
             return self._git("branch", "--show-current")
 
+        if tool == "run_tests":
+            command = args.get("command", "")
+            if command and not isinstance(command, str):
+                raise ValueError("run_tests command must be a string.")
+            if not command.strip():
+                command = "python -m unittest discover -v"
+            code, output = run_command(command, self.activity, cwd=self.workspace.root)
+            return {
+                "action": "run_tests",
+                "exit_code": code,
+                "output": output[-self.MAX_RESULT_CHARS:],
+            }
+
         if tool == "run_command":
             command = args.get("command")
             if not isinstance(command, str) or not command.strip():
@@ -225,6 +239,7 @@ Inspect relevant files when that is useful.
                     raise PermissionError("Risky command denied by user.")
             code, output = run_command(command, self.activity, approved=approved, cwd=self.workspace.root)
             return {
+                "action": "run_command",
                 "exit_code": code,
                 "output": output[-self.MAX_RESULT_CHARS:],
             }
@@ -280,7 +295,7 @@ Infer the intended filename, implementation, tests, and minimal execution steps 
 Return ONLY valid JSON matching this exact shape:
 {
   "steps": [
-    {"tool": "list_workspace|read_file|write_file|patch_file|run_command|git_status|git_diff|git_log|git_branch", "args": {}}
+    {"tool": "list_workspace|read_file|write_file|patch_file|run_command|run_tests|git_status|git_diff|git_log|git_branch", "args": {}}
   ],
   "goal": "short description"
 }
@@ -290,10 +305,11 @@ Tool argument requirements:
 - write_file: {"path": "...", "content": "..."}
 - patch_file: {"path": "...", "old_text": "...", "new_text": "...", "expected_replacements": 1}
 - run_command: {"command": "..."}
+- run_tests: {"command": "..."} or {} (defaults to python -m unittest discover -v)
 - git_diff: {"paths": ["relative/path"]} or {"paths": []}
 
 Rules:
-- Use only the nine listed tools.
+- Use only the ten listed tools.
 - Paths for read_file/write_file/patch_file are relative to the user's workspace.
 - Never use absolute paths.
 - Infer missing details when the user's intent is clear. Do not ask the user for a filename when a sensible filename can be derived from the request.
