@@ -269,8 +269,7 @@ Inspect relevant files when that is useful.
             timeout=self.GIT_TIMEOUT,
             shell=False,
         )
-        output = (process.stdout or "") + (("
-" + process.stderr) if process.stderr else "")
+        output = (process.stdout or "") + (("\n" + process.stderr) if process.stderr else "")
         return {"exit_code": process.returncode, "output": output[-self.MAX_RESULT_CHARS:]}
 
     def _planner_system(self):
