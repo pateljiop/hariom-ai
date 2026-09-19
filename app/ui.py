@@ -19,7 +19,7 @@ class App(tk.Tk):
         b=ttk.Frame(left); b.pack(fill='x'); ttk.Button(b,text='Ask AI',command=self.ask).pack(side='left'); ttk.Button(b,text='List Workspace',command=self.list_workspace).pack(side='left',padx=6); ttk.Button(b,text='Choose Workspace',command=self.choose_workspace).pack(side='left')
         ttk.Label(left,text='Response').pack(anchor='w',pady=(12,4)); self.response=tk.Text(left,wrap='word',state='disabled'); self.response.pack(fill='both',expand=True)
         ttk.Label(right,text='Live Activity').pack(anchor='w'); self.log=tk.Text(right,wrap='word',state='disabled'); self.log.pack(fill='both',expand=True,pady=6)
-        row=ttk.Frame(right); row.pack(fill='x'); self.command=ttk.Entry(row); self.command.pack(side='left',fill='x',expand=True); ttk.Button(row,text='Run',command=self.run).pack(side='left',padx=5)
+        row=ttk.Frame(right); row.pack(fill='x'); self.command=tk.Entry(row); self.command.pack(side='left',fill='x',expand=True); ttk.Button(row,text='Run',command=self.run).pack(side='left',padx=5)
         self.status=tk.StringVar(value='Ready'); ttk.Label(self,textvariable=self.status,relief='sunken',anchor='w').pack(fill='x',side='bottom')
     def log_line(self,line): self.after(0,lambda:self.append(self.log,line)); self.after(0,lambda:self.status.set(line))
     def append(self,w,text): w.configure(state='normal'); w.insert('end',text+'\n'); w.see('end'); w.configure(state='disabled')
@@ -32,11 +32,15 @@ class App(tk.Tk):
         try:
             text,provider=self.router.chat(p,system='You are Hariom AI, a transparent local workstation assistant. Give actionable plans. Never claim an action was performed unless a tool actually performed it.')
             self.after(0,lambda:self.append(self.response,f'Hariom AI ({provider}):\n{text}'))
-        except Exception as e:self.after(0,lambda:messagebox.showerror('AI error',str(e)))
+        except Exception as e:
+            err=str(e)
+            self.after(0,lambda err=err: messagebox.showerror('AI error',err))
     def list_workspace(self):
         try:
             items=self.ws.list_files(); self.append(self.response,'\n'.join(str(p.relative_to(self.ws.root)) for p in items[:300]) or 'Workspace is empty.')
-        except Exception as e:messagebox.showerror('Workspace',str(e))
+        except Exception as e:
+            err=str(e)
+            messagebox.showerror('Workspace',err)
     def choose_workspace(self):
         p=filedialog.askdirectory(initialdir=str(self.ws.root))
         if p:
@@ -47,6 +51,8 @@ class App(tk.Tk):
         if not c:return
         try:
             code,out=run_command(c,self.activity); self.append(self.response,'$ '+c+'\n'+out)
-        except Exception as e:messagebox.showwarning('Command blocked',str(e))
+        except Exception as e:
+            err=str(e)
+            messagebox.showwarning('Command blocked',err)
 
 def launch(): App().mainloop()
