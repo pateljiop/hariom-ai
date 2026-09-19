@@ -42,15 +42,34 @@ class AIRouter:
             try:
                 self.activity.emit(f'AI -> planning with {name} ({cfg["model"]})')
                 text=self._gemini_json(cfg,prompt,system) if name=='gemini' else self._compatible_json(cfg,prompt,system)
-                plan=json.loads(text)
-                if not isinstance(plan,dict):
-                    raise ValueError('Planner returned a non-object JSON value.')
+                plan=self._parse_plan(text)
                 self.activity.emit(f'AI OK -> planner {name}')
                 return plan,name
             except Exception as e:
                 errors.append(f'{name}: {e}')
                 self.activity.emit(f'AI FAILED -> planner {name}')
         raise RuntimeError('No working planner provider. '+ ' | '.join(errors))
+
+    def _parse_plan(self, text):
+        if not isinstance(text, str):
+            raise ValueError("Planner returned non-text content.")
+        cleaned = text.strip()
+        if cleaned.startswith("```"):
+            parts = cleaned.splitlines()
+            if parts and parts[0].strip().startswith("```"):
+                parts = parts[1:]
+            if parts and parts[-1].strip() == "```":
+                parts = parts[:-1]
+            cleaned = "\n".join(parts).strip()
+        try:
+            plan = json.loads(cleaned)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"Planner returned invalid JSON: {error}") from error
+        if not isinstance(plan, dict):
+            raise ValueError("Planner returned a non-object JSON value.")
+        if not isinstance(plan.get("steps"), list):
+            raise ValueError("Planner JSON must contain a steps list.")
+        return plan
 
     def _safe_error(self, error):
         if isinstance(error, requests.HTTPError) and error.response is not None:
