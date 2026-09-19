@@ -22,6 +22,10 @@ class Agent:
         self.approval_callback = approval_callback
         self.github = GitHubClient(workspace.root, activity)
 
+    def set_workspace(self, workspace):
+        self.workspace = workspace
+        self.github = GitHubClient(workspace.root, self.activity)
+
     def run(self, task, preferred=None):
         self.activity.emit("AGENT -> planning task")
         all_results = []
@@ -83,9 +87,20 @@ class Agent:
 
             all_results.extend(cycle_results)
             failure = self._find_failure(cycle_results)
-            if not failure:
+            if not failure and self._task_objective_met(task, all_results):
                 completed = True
                 break
+
+            if not failure:
+                failure = {
+                    "cycle": cycle,
+                    "error": "Task objective was not verified by the executed tools.",
+                }
+                cycle_results.append(failure)
+                all_results.append(failure)
+                self.activity.emit(
+                    "AGENT BLOCKED/FAILED -> task objective was not verified"
+                )
 
             if cycle >= self.MAX_ITERATIONS:
                 self.activity.emit("AGENT -> max recovery cycles reached")
@@ -181,6 +196,24 @@ Inspect relevant files when that is useful.
             if isinstance(result, dict) and result.get("exit_code", 0) != 0:
                 return entry
         return None
+
+    def _task_objective_met(self, task, results):
+        text = task.lower()
+        github_request = any(token in text for token in (
+            "github", "repository", "pull request", "pull requests",
+            "open issues", "branches", "recent commits",
+        ))
+        if not github_request:
+            return True
+
+        successful_github = {
+            "github_repo_context", "github_issues", "github_prs",
+            "github_branches", "github_commits", "github_pr_reviews",
+        }
+        return any(
+            entry.get("tool") in successful_github and "error" not in entry
+            for entry in results
+        )
 
     def _execute(self, tool, args):
         if tool == "git_commit":
