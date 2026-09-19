@@ -143,14 +143,14 @@ Do not repeat a failed action unless the new plan changes the cause.
 Return ONLY valid JSON matching this exact shape:
 {
   "steps": [
-    {"tool": "list_workspace|read_file|write_file|run_command", "args": {}}
+    {"tool": "list_workspace|read_file|write_file|patch_file|run_command", "args": {}}
   ],
   "goal": "short description"
 }
 
 Rules:
 - Use only the five listed tools.
-- Paths for read_file/write_file are relative to the user's workspace.
+- Paths for read_file/write_file/patch_file are relative to the user's workspace.
 - Never use absolute paths.
 - Prefer inspecting the workspace before modifying existing files.
 - Use write_file for creating new files or replacing complete files when appropriate.
