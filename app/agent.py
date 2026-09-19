@@ -114,7 +114,7 @@ Inspect relevant files when that is useful.
 
     def _validate_step(self, tool, args):
         if tool not in {
-            "project_context",
+            "project_context", "vscode_context",
             "list_workspace", "read_file", "write_file", "patch_file",
             "run_command", "run_tests", "git_status", "git_diff", "git_log", "git_branch",
         }:
@@ -172,6 +172,9 @@ Inspect relevant files when that is useful.
 
         if tool == "project_context":
             return self.workspace.project_context()
+
+        if tool == "vscode_context":
+            return self.workspace.project_context().get("vscode", {})
 
         if tool == "list_workspace":
             files = self.workspace.list_files()
@@ -299,13 +302,14 @@ Infer the intended filename, implementation, tests, and minimal execution steps 
 Return ONLY valid JSON matching this exact shape:
 {
   "steps": [
-    {"tool": "project_context|list_workspace|read_file|write_file|patch_file|run_command|run_tests|git_status|git_diff|git_log|git_branch", "args": {}}
+    {"tool": "project_context|vscode_context|list_workspace|read_file|write_file|patch_file|run_command|run_tests|git_status|git_diff|git_log|git_branch", "args": {}}
   ],
   "goal": "short description"
 }
 
 Tool argument requirements:
 - project_context: {}
+- vscode_context: {} (read-only; inspect active VS Code windows/file/project when relevant)
 - read_file: {"path": "..."}
 - write_file: {"path": "...", "content": "..."}
 - patch_file: {"path": "...", "old_text": "...", "new_text": "...", "expected_replacements": 1}
@@ -314,11 +318,11 @@ Tool argument requirements:
 - git_diff: {"paths": ["relative/path"]} or {"paths": []}
 
 Rules:
-- Use only the eleven listed tools.
+- Use only the twelve listed tools.
 - Paths for read_file/write_file/patch_file are relative to the user's workspace.
 - Never use absolute paths.
 - Infer missing details when the user's intent is clear. Do not ask the user for a filename when a sensible filename can be derived from the request.
-- For coding tasks, use project_context first when project structure, framework, Git state, or development environment may matter.
+- For coding tasks, use project_context first when project structure, framework, Git state, or development environment may matter. Use vscode_context when the request refers to the currently open VS Code file/project or when active editor context would reduce ambiguity.
 - Use list_workspace/read_file when specific existing content is needed.
 - Use write_file for creating new files or replacing complete files when appropriate.
 - Use patch_file for targeted edits to existing files; include exact old_text and new_text.
