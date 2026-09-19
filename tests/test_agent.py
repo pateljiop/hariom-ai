@@ -124,6 +124,7 @@ class AgentRecoveryTests(unittest.TestCase):
             self.assertEqual(result["extensions"][".py"], 1)
             self.assertEqual(result["extensions"][".txt"], 1)
             self.assertIn("windows", result)
+            self.assertIn("vscode_running", result)
             self.assertIn("git_branch", result)
             self.assertIn("git_status", result)
 
