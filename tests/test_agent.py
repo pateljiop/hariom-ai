@@ -48,6 +48,34 @@ class Router:
         return "verified summary", "fake"
 
 
+class MalformedPlanRouter:
+    def __init__(self):
+        self.calls = 0
+
+    def plan(self, prompt, system, preferred=None):
+        self.calls += 1
+        if self.calls == 1:
+            return {
+                "steps": [{"tool": "write_file", "args": {"content": "calculator"}}],
+                "goal": "create calculator",
+            }, "fake"
+        return {
+            "steps": [
+                {
+                    "tool": "write_file",
+                    "args": {
+                        "path": "calculator.py",
+                        "content": "print('calculator')",
+                    },
+                }
+            ],
+            "goal": "create calculator",
+        }, "fake"
+
+    def chat(self, prompt, system="", preferred=None):
+        return "calculator created", "fake"
+
+
 class AgentRecoveryTests(unittest.TestCase):
     def test_git_context_tools_are_read_only(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -90,6 +118,17 @@ class AgentRecoveryTests(unittest.TestCase):
             self.assertTrue((ws.root / "recovered.txt").is_file())
             self.assertGreaterEqual(len(results), 2)
             self.assertTrue(any("recovering" in event for event in activity.events))
+
+    def test_malformed_tool_plan_is_replanned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            activity = Activity()
+            ws = Workspace(tmp)
+            agent = Agent(MalformedPlanRouter(), ws, activity)
+            summary, results = agent.run("ek python script likho calculator ke liye")
+            self.assertEqual(summary, "calculator created")
+            self.assertTrue((ws.root / "calculator.py").is_file())
+            self.assertTrue(any("requires 'path'" in item.get("error", "") for item in results))
+            self.assertTrue(any("recovering from cycle 1 failure" in event for event in activity.events))
 
 
 if __name__ == "__main__":
