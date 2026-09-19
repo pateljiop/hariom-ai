@@ -73,8 +73,9 @@ class AIRouter:
                     return response
                 if attempt >= self.MAX_RETRIES:
                     response.raise_for_status()
-            except requests.RequestException:
-                if attempt >= self.MAX_RETRIES:
+            except requests.RequestException as error:
+                status = getattr(getattr(error, 'response', None), 'status_code', None)
+                if status not in self.RETRYABLE_STATUS_CODES or attempt >= self.MAX_RETRIES:
                     raise
             delay = self.RETRY_DELAYS[min(attempt, len(self.RETRY_DELAYS) - 1)]
             self.activity.emit(f"AI -> temporary provider error; retrying in {delay}s")
