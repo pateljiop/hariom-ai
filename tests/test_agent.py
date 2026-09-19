@@ -5,6 +5,7 @@ from app.agent import Agent
 from app.workspace import Workspace
 
 
+
 class Activity:
     def __init__(self):
         self.events = []
@@ -38,6 +39,16 @@ class Router:
 
 
 class AgentRecoveryTests(unittest.TestCase):
+    def test_git_context_tools_are_read_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            activity = Activity()
+            ws = Workspace(tmp)
+            agent = Agent(Router(), ws, activity)
+            result = agent._execute("git_branch", {})
+            self.assertIn("exit_code", result)
+            with self.assertRaises(PermissionError):
+                agent._execute("git_commit", {"message": "test"})
+
     def test_recovery_cycle_after_failed_command(self):
         with tempfile.TemporaryDirectory() as tmp:
             activity = Activity()
