@@ -201,13 +201,13 @@ Inspect relevant files when that is useful.
             return self.github.issues(state=args.get("state", "open"), limit=args.get("limit", 20), repo_full_name=args.get("repo_full_name") or None)
 
         if tool == "github_prs":
-            return self.github.pull_requests(state=args.get("state", "open"), limit=args.get("limit", self.github.DEFAULT_LIMIT))
+            return self.github.pull_requests(state=args.get("state", "open"), limit=args.get("limit", 20), repo_full_name=args.get("repo_full_name") or None)
 
         if tool == "github_branches":
-            return self.github.branches(limit=args.get("limit", self.github.DEFAULT_LIMIT))
+            return self.github.branches(limit=args.get("limit", 20), repo_full_name=args.get("repo_full_name") or None)
 
         if tool == "github_commits":
-            return self.github.commits(limit=args.get("limit", self.github.DEFAULT_LIMIT))
+            return self.github.commits(limit=args.get("limit", 20), repo_full_name=args.get("repo_full_name") or None)
 
         if tool == "github_pr_reviews":
             number = args.get("number")
