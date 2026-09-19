@@ -6,7 +6,13 @@ ROOT=Path(__file__).resolve().parent.parent
 load_dotenv(ROOT/'.env')
 APP_DIR=Path(os.getenv('APPDATA',ROOT/'runtime'))/'HariomAI'
 APP_DIR.mkdir(parents=True,exist_ok=True)
-WORKSPACE=Path(os.getenv('HARIOM_WORKSPACE',Path('A:/project'))).resolve()
+_configured_workspace = os.getenv('HARIOM_WORKSPACE','').strip()
+if _configured_workspace:
+    WORKSPACE = Path(_configured_workspace).expanduser().resolve()
+elif Path('A:/').exists():
+    WORKSPACE = Path('A:/project').resolve()
+else:
+    WORKSPACE = (Path.home()/'HariomAI'/'projects').resolve()
 WORKSPACE.mkdir(parents=True,exist_ok=True)
 PROVIDERS={
 'openai':{'key':os.getenv('OPENAI_API_KEY',''),'model':os.getenv('OPENAI_MODEL','gpt-5-mini'),'base':'https://api.openai.com/v1/chat/completions'},
