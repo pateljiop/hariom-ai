@@ -108,6 +108,25 @@ class AgentRecoveryTests(unittest.TestCase):
             self.assertEqual(result["exit_code"], 0)
             self.assertEqual(approval.calls[0][0], "git_commit")
 
+    def test_project_context_tool_is_read_only_and_structured(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            activity = Activity()
+            ws = Workspace(tmp)
+            (ws.root / "requirements.txt").write_text("requests\n", encoding="utf-8")
+            (ws.root / "main.py").write_text("print('ok')\n", encoding="utf-8")
+            agent = Agent(Router(), ws, activity)
+
+            result = agent._execute("project_context", {})
+
+            self.assertEqual(result["workspace"], str(ws.root))
+            self.assertEqual(result["file_count"], 2)
+            self.assertIn("requirements.txt", result["manifests"])
+            self.assertEqual(result["extensions"][".py"], 1)
+            self.assertEqual(result["extensions"][".txt"], 1)
+            self.assertIn("windows", result)
+            self.assertIn("git_branch", result)
+            self.assertIn("git_status", result)
+
     def test_recovery_cycle_after_failed_command(self):
         with tempfile.TemporaryDirectory() as tmp:
             activity = Activity()
