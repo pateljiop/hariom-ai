@@ -15,7 +15,8 @@ Windows-first personal AI workstation.
 Use **Run Agent** for tasks that should interact with the selected workspace.
 
 Current agent tools:
-- `project_context`
+- `project_context
+- vscode_context`
 - `list_workspace`
 - `read_file`
 - `write_file`
