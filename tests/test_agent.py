@@ -14,6 +14,16 @@ class Activity:
         self.events.append(message)
 
 
+class Approval:
+    def __init__(self, allowed):
+        self.allowed = allowed
+        self.calls = []
+
+    def __call__(self, action, detail):
+        self.calls.append((action, detail))
+        return self.allowed
+
+
 class Router:
     def __init__(self):
         self.calls = 0
@@ -48,6 +58,12 @@ class AgentRecoveryTests(unittest.TestCase):
             self.assertIn("exit_code", result)
             with self.assertRaises(PermissionError):
                 agent._execute("git_commit", {"message": "test"})
+
+            approval = Approval(True)
+            agent = Agent(Router(), ws, activity, approval_callback=approval)
+            with self.assertRaises(Exception):
+                agent._execute("git_commit", {"message": "test"})
+            self.assertEqual(approval.calls[0][0], "git_commit")
 
     def test_recovery_cycle_after_failed_command(self):
         with tempfile.TemporaryDirectory() as tmp:
