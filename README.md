@@ -17,6 +17,12 @@ Use **Run Agent** for tasks that should interact with the selected workspace.
 Current agent tools:
 - `project_context`
 - `vscode_context`
+- `github_repo_context`
+- `github_issues`
+- `github_prs`
+- `github_branches`
+- `github_commits`
+- `github_pr_reviews`
 - `list_workspace`
 - `read_file`
 - `write_file`
@@ -28,7 +34,7 @@ Current agent tools:
 - `git_log`
 - `git_branch`
 
-`project_context` is a read-only project inspection tool. It reports the selected workspace, bounded file inventory, common project manifests, file-extension counts, Git branch/status when available, and Windows/VS Code availability. `vscode_context` adds read-only VS Code window titles plus best-effort active file/project detection from the Windows VS Code window title.
+`project_context` is a read-only project inspection tool. It reports the selected workspace, bounded file inventory, common project manifests, file-extension counts, Git branch/status when available, and Windows/VS Code availability. `vscode_context` adds read-only VS Code window titles plus best-effort active file/project detection from the Windows VS Code window title. GitHub tools are read-only and use the selected workspace's `origin` remote; `GITHUB_TOKEN` is optional for public repositories and can be supplied locally for higher API limits/private repository access.
 
 The agent asks the configured AI provider for a structured plan, executes only the supported tools, records operational activity in the UI, and then produces a factual completion report.
 
@@ -36,8 +42,9 @@ Safety boundaries:
 - File paths are restricted to the selected workspace.
 - Terminal commands run with the workspace as their working directory.
 - Existing terminal risky-command checks remain active.
-- Project context and Git context tools are read-only.
+- Project context, Git context, and GitHub tools are read-only.
 - Destructive Git operations are not planner tools.
+- GitHub write actions are intentionally deferred until the read-only integration is verified.
 - Protected actions use the approval mechanism where applicable.
 
 ## Run
