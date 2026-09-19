@@ -30,8 +30,11 @@ class AIRouter:
                 self.activity.emit(f'AI FAILED -> {name}')
         raise RuntimeError('No working provider. Configure a key and check quota/network. '+ ' | '.join(errors))
 
-    def plan(self,prompt,system):
-        order=[n for n in PROVIDERS if PROVIDERS[n].get('key')]
+    def plan(self,prompt,system,preferred=None):
+        order=[]
+        if preferred in PROVIDERS and PROVIDERS[preferred].get('key'):
+            order.append(preferred)
+        order += [n for n in PROVIDERS if n not in order and PROVIDERS[n].get('key')]
         errors=[]
         for name in order:
             cfg=PROVIDERS[name]
