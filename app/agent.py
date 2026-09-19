@@ -8,6 +8,7 @@ class Agent:
     MAX_STEPS = 8
     MAX_READ_CHARS = 20000
     MAX_RESULT_CHARS = 6000
+    MAX_ITERATIONS = 3
 
     def __init__(self, router, workspace, activity):
         self.router = router
@@ -16,37 +17,80 @@ class Agent:
 
     def run(self, task, preferred=None):
         self.activity.emit("AGENT -> planning task")
-        plan, provider = self.router.plan(task, self._planner_system(), preferred=preferred)
-        self.activity.emit(f"AGENT -> plan ready ({provider})")
+        all_results = []
+        current_task = task
+        provider = preferred
+        final_plan = {}
 
-        steps = plan.get("steps")
-        if not isinstance(steps, list):
-            raise ValueError("Agent plan is missing a steps list.")
-        if len(steps) > self.MAX_STEPS:
-            raise ValueError(f"Agent plan has too many steps (max {self.MAX_STEPS}).")
+        for cycle in range(1, self.MAX_ITERATIONS + 1):
+            plan, provider_name = self.router.plan(
+                current_task,
+                self._planner_system(),
+                preferred=provider,
+            )
+            provider = provider_name
+            final_plan = plan
+            self.activity.emit(f"AGENT -> plan ready ({provider}) cycle {cycle}")
 
-        results = []
-        for index, step in enumerate(steps, start=1):
-            if not isinstance(step, dict):
-                results.append({"step": index, "error": "Invalid step object."})
-                continue
+            steps = plan.get("steps")
+            if not isinstance(steps, list):
+                raise ValueError("Agent plan is missing a steps list.")
+            if len(steps) > self.MAX_STEPS:
+                raise ValueError(f"Agent plan has too many steps (max {self.MAX_STEPS}).")
 
-            tool = step.get("tool")
-            args = step.get("args") or {}
-            self.activity.emit(f"AGENT -> step {index}/{len(steps)}: {tool}")
+            cycle_results = []
+            for index, step in enumerate(steps, start=1):
+                if not isinstance(step, dict):
+                    cycle_results.append({"step": index, "error": "Invalid step object."})
+                    continue
 
-            try:
-                result = self._execute(tool, args)
-                results.append({"step": index, "tool": tool, "result": result})
-                self.activity.emit(f"AGENT OK -> {tool}")
-            except Exception as exc:
-                error = str(exc)
-                results.append({"step": index, "tool": tool, "error": error})
-                self.activity.emit(f"AGENT BLOCKED/FAILED -> {tool}: {error}")
+                tool = step.get("tool")
+                args = step.get("args") or {}
+                self.activity.emit(f"AGENT -> step {index}/{len(steps)}: {tool}")
 
-        summary = self._summarize(task, plan, results, preferred=provider)
+                try:
+                    result = self._execute(tool, args)
+                    entry = {"cycle": cycle, "step": index, "tool": tool, "result": result}
+                    cycle_results.append(entry)
+                    self.activity.emit(f"AGENT OK -> {tool}")
+                except Exception as exc:
+                    error = str(exc)
+                    entry = {"cycle": cycle, "step": index, "tool": tool, "error": error}
+                    cycle_results.append(entry)
+                    self.activity.emit(f"AGENT BLOCKED/FAILED -> {tool}: {error}")
+
+            all_results.extend(cycle_results)
+            failure = self._find_failure(cycle_results)
+            if not failure:
+                break
+
+            if cycle >= self.MAX_ITERATIONS:
+                self.activity.emit("AGENT -> max recovery cycles reached")
+                break
+
+            self.activity.emit(f"AGENT -> recovering from cycle {cycle} failure")
+            current_task = f"""Original task:
+{task}
+
+The previous agent cycle failed or produced a non-zero test/command result.
+Previous cycle results:
+{json.dumps(cycle_results, ensure_ascii=False)}
+
+Create the next minimal corrective plan. Inspect relevant files before changing them.
+Do not repeat a failed action unless the new plan changes the cause.
+"""
+        summary = self._summarize(task, final_plan, all_results, preferred=provider)
         self.activity.emit("AGENT -> task complete")
-        return summary, results
+        return summary, all_results
+
+    def _find_failure(self, results):
+        for entry in results:
+            if "error" in entry:
+                return entry
+            result = entry.get("result")
+            if isinstance(result, dict) and result.get("exit_code", 0) != 0:
+                return entry
+        return None
 
     def _execute(self, tool, args):
         if tool == "list_workspace":
