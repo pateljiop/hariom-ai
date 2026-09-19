@@ -141,6 +141,24 @@ Inspect relevant files when that is useful.
             if key != "content" and not args[key].strip():
                 return f"{tool} requires a non-empty '{key}'."
 
+        if tool in {"github_issues", "github_prs"}:
+            state = args.get("state", "open")
+            limit = args.get("limit", 20)
+            if state not in {"open", "closed", "all"}:
+                return f"{tool} state must be open, closed, or all."
+            if not isinstance(limit, int) or not 1 <= limit <= 20:
+                return f"{tool} limit must be an integer from 1 to 20."
+
+        if tool in {"github_branches", "github_commits"}:
+            limit = args.get("limit", 20)
+            if not isinstance(limit, int) or not 1 <= limit <= 20:
+                return f"{tool} limit must be an integer from 1 to 20."
+
+        if tool == "github_pr_reviews":
+            number = args.get("number")
+            if not isinstance(number, int) or number < 1:
+                return "github_pr_reviews requires a positive integer 'number'."
+
         if tool == "patch_file":
             expected = args.get("expected_replacements", 1)
             if not isinstance(expected, int) or expected < 1:
@@ -180,7 +198,7 @@ Inspect relevant files when that is useful.
             return self.github.repo_context()
 
         if tool == "github_issues":
-            return self.github.issues(state=args.get("state", "open"), limit=args.get("limit", self.github.DEFAULT_LIMIT))
+            return self.github.issues(state=args.get("state", "open"), limit=args.get("limit", 20))
 
         if tool == "github_prs":
             return self.github.pull_requests(state=args.get("state", "open"), limit=args.get("limit", self.github.DEFAULT_LIMIT))
