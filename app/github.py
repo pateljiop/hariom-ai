@@ -15,14 +15,16 @@ MAX_BODY = 6000
 class GitHubClient:
     """Read-only GitHub context for the local agent."""
 
+    DEFAULT_LIMIT = DEFAULT_LIMIT
+
     def __init__(self, root, activity=None):
         self.root = root
         self.activity = activity
         self.token = os.getenv("GITHUB_TOKEN", "").strip()
 
-    def repo_context(self):
-        remote = self._remote_url()
-        owner, name = self._parse_remote(remote)
+    def repo_context(self, repo_full_name=None):
+        remote = self._remote_url() if not repo_full_name else ""
+        owner, name = self._parse_remote(remote) if not repo_full_name else self._parse_full_name(repo_full_name)
         result = {
             "configured": bool(owner and name),
             "owner": owner,
@@ -43,8 +45,8 @@ class GitHubClient:
             })
         return result
 
-    def issues(self, state="open", limit=DEFAULT_LIMIT):
-        owner, name = self._repo_parts()
+    def issues(self, state="open", limit=DEFAULT_LIMIT, repo_full_name=None):
+        owner, name = self._repo_parts(repo_full_name)
         limit = self._limit(limit)
         items = self._request(
             f"/repos/{owner}/{name}/issues",
@@ -52,8 +54,8 @@ class GitHubClient:
         )
         return [self._issue_item(item) for item in items if "pull_request" not in item]
 
-    def pull_requests(self, state="open", limit=DEFAULT_LIMIT):
-        owner, name = self._repo_parts()
+    def pull_requests(self, state="open", limit=DEFAULT_LIMIT, repo_full_name=None):
+        owner, name = self._repo_parts(repo_full_name)
         limit = self._limit(limit)
         items = self._request(
             f"/repos/{owner}/{name}/pulls",
@@ -61,8 +63,8 @@ class GitHubClient:
         )
         return [self._pr_item(item) for item in items]
 
-    def branches(self, limit=DEFAULT_LIMIT):
-        owner, name = self._repo_parts()
+    def branches(self, limit=DEFAULT_LIMIT, repo_full_name=None):
+        owner, name = self._repo_parts(repo_full_name)
         items = self._request(
             f"/repos/{owner}/{name}/branches",
             params={"per_page": self._limit(limit)},
@@ -76,8 +78,8 @@ class GitHubClient:
             for item in items
         ]
 
-    def commits(self, limit=DEFAULT_LIMIT):
-        owner, name = self._repo_parts()
+    def commits(self, limit=DEFAULT_LIMIT, repo_full_name=None):
+        owner, name = self._repo_parts(repo_full_name)
         items = self._request(
             f"/repos/{owner}/{name}/commits",
             params={"per_page": self._limit(limit)},
@@ -93,10 +95,10 @@ class GitHubClient:
             for item in items
         ]
 
-    def pull_request_reviews(self, number):
+    def pull_request_reviews(self, number, repo_full_name=None):
         if not isinstance(number, int) or number < 1:
             raise ValueError("Pull request number must be a positive integer.")
-        owner, name = self._repo_parts()
+        owner, name = self._repo_parts(repo_full_name)
         items = self._request(f"/repos/{owner}/{name}/pulls/{number}/reviews")
         return [
             {
@@ -110,7 +112,9 @@ class GitHubClient:
             for item in items
         ]
 
-    def _repo_parts(self):
+    def _repo_parts(self, repo_full_name=None):
+        if repo_full_name:
+            return self._parse_full_name(repo_full_name)
         remote = self._remote_url()
         owner, name = self._parse_remote(remote)
         if not owner or not name:
@@ -132,6 +136,13 @@ class GitHubClient:
         if result.returncode != 0:
             raise ValueError("No git remote.origin.url found in the selected workspace.")
         return result.stdout.strip()
+
+    @staticmethod
+    def _parse_full_name(full_name):
+        parts = (full_name or "").strip().strip("/").split("/")
+        if len(parts) != 2 or not all(parts):
+            raise ValueError("GitHub repository must be in owner/name form.")
+        return parts[0], parts[1]
 
     @staticmethod
     def _parse_remote(remote):
