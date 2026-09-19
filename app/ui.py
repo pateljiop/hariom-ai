@@ -596,9 +596,7 @@ class App(tk.Tk):
     def show_automation_info(self):
         messagebox.showinfo(
             "Automation",
-            "Background and scheduled tasks are planned for the next agent phase.
-
-"
+            "Background and scheduled tasks are planned for the next agent phase.\n\n"
             "Current v1 focuses on reliable local execution."
         )
 
@@ -606,13 +604,7 @@ class App(tk.Tk):
         providers = ", ".join(self.router.available()) or "none"
         messagebox.showinfo(
             "Hariom AI Settings",
-            f"Workspace:
-{self.ws.root}
-
-Available providers:
-{providers}
-
-"
+            f"Workspace:\n{self.ws.root}\n\nAvailable providers:\n{providers}\n\n"
             "API keys remain local in .env."
         )
 
