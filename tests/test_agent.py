@@ -189,5 +189,33 @@ class AgentRecoveryTests(unittest.TestCase):
             self.assertTrue(any("recovering from cycle 1 failure" in event for event in activity.events))
 
 
+    def test_github_request_cannot_complete_without_github_evidence(self):
+        class IncompleteGitHubRouter:
+            def plan(self, prompt, system, preferred=None):
+                return {
+                    "steps": [{"tool": "list_workspace", "args": {}}],
+                    "goal": "inspect workspace",
+                }, "fake"
+
+            def chat(self, prompt, system="", preferred=None):
+                return "incomplete", "fake"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            activity = Activity()
+            ws = Workspace(tmp)
+            agent = Agent(IncompleteGitHubRouter(), ws, activity)
+            summary, _ = agent.run("Check the GitHub repository and tell me the open issues.")
+            self.assertEqual(summary, "incomplete")
+            self.assertTrue(any("task ended with failures" in event for event in activity.events))
+
+    def test_set_workspace_rebinds_github_client(self):
+        with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
+            activity = Activity()
+            agent = Agent(Router(), Workspace(first), activity)
+            agent.set_workspace(Workspace(second))
+            self.assertEqual(agent.workspace.root, Workspace(second).root)
+            self.assertEqual(agent.github.root, Workspace(second).root)
+
+
 if __name__ == "__main__":
     unittest.main()
