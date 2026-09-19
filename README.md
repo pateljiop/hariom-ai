@@ -15,8 +15,8 @@ Windows-first personal AI workstation.
 Use **Run Agent** for tasks that should interact with the selected workspace.
 
 Current agent tools:
-- `project_context
-- vscode_context`
+- `project_context`
+- `vscode_context`
 - `list_workspace`
 - `read_file`
 - `write_file`
@@ -28,7 +28,7 @@ Current agent tools:
 - `git_log`
 - `git_branch`
 
-`project_context` is a read-only project inspection tool. It reports the selected workspace, bounded file inventory, common project manifests, file-extension counts, Git branch/status when available, and whether the agent is running on Windows.
+`project_context` is a read-only project inspection tool. It reports the selected workspace, bounded file inventory, common project manifests, file-extension counts, Git branch/status when available, and Windows/VS Code availability. `vscode_context` adds read-only VS Code window titles plus best-effort active file/project detection from the Windows VS Code window title.
 
 The agent asks the configured AI provider for a structured plan, executes only the supported tools, records operational activity in the UI, and then produces a factual completion report.
 
