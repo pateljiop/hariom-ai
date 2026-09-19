@@ -38,6 +38,14 @@ Safety boundaries:
 5. Copy `.env.example` to `.env` and add your own keys
 6. `python -m app`
 
+## Run automated tests
+
+From the repository root with the virtual environment activated:
+
+`python -m unittest discover -s tests -v`
+
+The v1 test suite covers provider retry behavior, workspace path safety, file read/write, and terminal safety.
+
 Never commit `.env` or API keys.
 
 ## First agent test
