@@ -195,10 +195,10 @@ Inspect relevant files when that is useful.
             return self.workspace.project_context()
 
         if tool == "github_repo_context":
-            return self.github.repo_context()
+            return self.github.repo_context(args.get("repo_full_name") or None)
 
         if tool == "github_issues":
-            return self.github.issues(state=args.get("state", "open"), limit=args.get("limit", 20))
+            return self.github.issues(state=args.get("state", "open"), limit=args.get("limit", 20), repo_full_name=args.get("repo_full_name") or None)
 
         if tool == "github_prs":
             return self.github.pull_requests(state=args.get("state", "open"), limit=args.get("limit", self.github.DEFAULT_LIMIT))
@@ -213,7 +213,7 @@ Inspect relevant files when that is useful.
             number = args.get("number")
             if not isinstance(number, int) or number < 1:
                 raise ValueError("github_pr_reviews requires a positive integer 'number'.")
-            return self.github.pull_request_reviews(number)
+            return self.github.pull_request_reviews(number, repo_full_name=args.get("repo_full_name") or None)
 
         if tool == "vscode_context":
             return self.workspace.project_context().get("vscode", {})
@@ -351,12 +351,12 @@ Return ONLY valid JSON matching this exact shape:
 
 Tool argument requirements:
 - project_context: {}
-- github_repo_context: {} (read-only; inspect the GitHub repository linked to the selected workspace)
-- github_issues: {"state": "open|closed|all", "limit": 20}
-- github_prs: {"state": "open|closed|all", "limit": 20}
-- github_branches: {"limit": 20}
-- github_commits: {"limit": 20}
-- github_pr_reviews: {"number": 123}
+- github_repo_context: {} or {"repo_full_name":"owner/name"} (read-only; inspect the GitHub repository linked to the selected workspace or the explicitly supplied repository)
+- github_issues: {"state": "open|closed|all", "limit": 20, "repo_full_name": "owner/name" optional}
+- github_prs: {"state": "open|closed|all", "limit": 20, "repo_full_name": "owner/name" optional}
+- github_branches: {"limit": 20, "repo_full_name": "owner/name" optional}
+- github_commits: {"limit": 20, "repo_full_name": "owner/name" optional}
+- github_pr_reviews: {"number": 123, "repo_full_name": "owner/name" optional}
 - vscode_context: {} (read-only; inspect active VS Code windows/file/project when relevant)
 - read_file: {"path": "..."}
 - write_file: {"path": "...", "content": "..."}
