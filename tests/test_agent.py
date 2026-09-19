@@ -61,8 +61,8 @@ class AgentRecoveryTests(unittest.TestCase):
 
             approval = Approval(True)
             agent = Agent(Router(), ws, activity, approval_callback=approval)
-            with self.assertRaises(Exception):
-                agent._execute("git_commit", {"message": "test"})
+            result = agent._execute("git_commit", {"message": "test"})
+            self.assertEqual(result["exit_code"], 0)
             self.assertEqual(approval.calls[0][0], "git_commit")
 
     def test_recovery_cycle_after_failed_command(self):
