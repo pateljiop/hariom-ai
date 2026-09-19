@@ -11,7 +11,7 @@ from .agent import Agent
 class App(tk.Tk):
     def __init__(self):
         super().__init__(); self.title('Hariom AI - Personal Workstation'); self.geometry('1200x760'); self.minsize(900,600)
-        self.activity=ActivityBus(); self.router=AIRouter(self.activity); self.ws=Workspace(); self.agent=Agent(self.router,self.ws,self.activity); self.build(); self.activity.subscribe(self.log_line)
+        self.activity=ActivityBus(); self.router=AIRouter(self.activity); self.ws=Workspace(); self.agent=Agent(self.router,self.ws,self.activity,approval_callback=self.request_approval); self.build(); self.activity.subscribe(self.log_line)
         self.activity.emit('SYSTEM -> workspace: '+str(self.ws.root)); self.activity.emit('SYSTEM -> providers: '+(', '.join(self.router.available()) or 'none'))
 
     def build(self):
@@ -25,6 +25,25 @@ class App(tk.Tk):
         ttk.Label(right,text='Live Activity').pack(anchor='w'); self.log=tk.Text(right,wrap='word',state='disabled'); self.log.pack(fill='both',expand=True,pady=6)
         row=ttk.Frame(right); row.pack(fill='x'); self.command=tk.Entry(row); self.command.pack(side='left',fill='x',expand=True); ttk.Button(row,text='Run',command=self.run).pack(side='left',padx=5)
         self.status=tk.StringVar(value='Ready'); ttk.Label(self,textvariable=self.status,relief='sunken',anchor='w').pack(fill='x',side='bottom')
+
+    def request_approval(self, action, detail):
+        event = threading.Event()
+        decision = {"approved": False}
+
+        def ask():
+            decision["approved"] = messagebox.askyesno(
+                "Hariom AI - Approval Required",
+                f"{detail}\n\nAllow this action?",
+                parent=self,
+            )
+            event.set()
+
+        self.after(0, ask)
+        event.wait()
+        self.activity.emit(
+            f"APPROVAL -> {'allowed' if decision['approved'] else 'denied'}: {action}"
+        )
+        return decision["approved"]
 
     def log_line(self,line):
         self.after(0,lambda:self.append(self.log,line)); self.after(0,lambda:self.status.set(line))
