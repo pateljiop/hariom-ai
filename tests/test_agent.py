@@ -141,7 +141,7 @@ class AgentRecoveryTests(unittest.TestCase):
             def plan(self, prompt, system, preferred=None):
                 self.calls += 1
                 if self.calls == 1:
-                    return {"steps": [{"tool": "run_tests", "args": {"command": "python -c \\\"raise SystemExit(1)\\\""}}], "goal": "run tests"}, "fake"
+                    return {"steps": [{"tool": "run_tests", "args": {"command": "python -c \"raise SystemExit(1)\""}}], "goal": "run tests"}, "fake"
                 return {"steps": [{"tool": "write_file", "args": {"path": "fixed.txt", "content": "fixed"}}], "goal": "recover"}, "fake"
 
             def chat(self, prompt, system="", preferred=None):
