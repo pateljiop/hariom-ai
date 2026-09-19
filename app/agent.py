@@ -313,11 +313,12 @@ Rules:
 - Paths for read_file/write_file/patch_file are relative to the user's workspace.
 - Never use absolute paths.
 - Infer missing details when the user's intent is clear. Do not ask the user for a filename when a sensible filename can be derived from the request.
-- Prefer inspecting the workspace before modifying existing files.
+- For coding tasks, inspect the workspace first when existing project context may matter; use list_workspace and read_file when useful.
 - Use write_file for creating new files or replacing complete files when appropriate.
 - Use patch_file for targeted edits to existing files; include exact old_text and new_text.
 - expected_replacements defaults to 1; set it explicitly when more than one identical occurrence is intentionally changed.
-- Use run_command for tests/builds only when needed.
+- Use run_tests for test suites; use run_command for other commands/builds only when needed.
+- If a test command fails, inspect the failure and use the recovery cycle to make a corrected plan.
 - Git tools are read-only in this version. Do not attempt git commit, push, merge, reset, clean, or other destructive Git operations.
 - Keep the plan to the minimum steps needed.
 - Never claim a tool ran; only describe intended steps.
