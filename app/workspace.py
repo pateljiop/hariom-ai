@@ -2,10 +2,12 @@ from pathlib import Path
 import os
 import subprocess
 
+from . import config
+
 
 class Workspace:
     def __init__(self, root=None):
-        self.root = Path(root or __import__("app.config", fromlist=["WORKSPACE"]).WORKSPACE).expanduser().resolve()
+        self.root = Path(root or config.WORKSPACE).expanduser().resolve()
         self.root.mkdir(parents=True, exist_ok=True)
 
     def list_files(self):
@@ -72,9 +74,10 @@ class Workspace:
             "build.gradle.kts",
             "composer.json",
         }
+        manifest_lookup = {item.lower() for item in manifest_names}
         manifests = [
             name for name in relative_files
-            if Path(name).name.lower() in {item.lower() for item in manifest_names}
+            if Path(name).name.lower() in manifest_lookup
         ]
 
         extensions = {}
