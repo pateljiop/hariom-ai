@@ -3,6 +3,7 @@ from .terminal import run_command
 import subprocess
 import re
 from .terminal import RISKY_PATTERNS
+from .github import GitHubClient
 
 
 class Agent:
@@ -19,6 +20,7 @@ class Agent:
         self.workspace = workspace
         self.activity = activity
         self.approval_callback = approval_callback
+        self.github = GitHubClient(workspace.root, activity)
 
     def run(self, task, preferred=None):
         self.activity.emit("AGENT -> planning task")
@@ -115,6 +117,7 @@ Inspect relevant files when that is useful.
     def _validate_step(self, tool, args):
         if tool not in {
             "project_context", "vscode_context",
+            "github_repo_context", "github_issues", "github_prs", "github_branches", "github_commits", "github_pr_reviews",
             "list_workspace", "read_file", "write_file", "patch_file",
             "run_command", "run_tests", "git_status", "git_diff", "git_log", "git_branch",
         }:
@@ -172,6 +175,27 @@ Inspect relevant files when that is useful.
 
         if tool == "project_context":
             return self.workspace.project_context()
+
+        if tool == "github_repo_context":
+            return self.github.repo_context()
+
+        if tool == "github_issues":
+            return self.github.issues(state=args.get("state", "open"), limit=args.get("limit", self.github.DEFAULT_LIMIT))
+
+        if tool == "github_prs":
+            return self.github.pull_requests(state=args.get("state", "open"), limit=args.get("limit", self.github.DEFAULT_LIMIT))
+
+        if tool == "github_branches":
+            return self.github.branches(limit=args.get("limit", self.github.DEFAULT_LIMIT))
+
+        if tool == "github_commits":
+            return self.github.commits(limit=args.get("limit", self.github.DEFAULT_LIMIT))
+
+        if tool == "github_pr_reviews":
+            number = args.get("number")
+            if not isinstance(number, int) or number < 1:
+                raise ValueError("github_pr_reviews requires a positive integer 'number'.")
+            return self.github.pull_request_reviews(number)
 
         if tool == "vscode_context":
             return self.workspace.project_context().get("vscode", {})
@@ -302,13 +326,19 @@ Infer the intended filename, implementation, tests, and minimal execution steps 
 Return ONLY valid JSON matching this exact shape:
 {
   "steps": [
-    {"tool": "project_context|vscode_context|list_workspace|read_file|write_file|patch_file|run_command|run_tests|git_status|git_diff|git_log|git_branch", "args": {}}
+    {"tool": "project_context|vscode_context|github_repo_context|github_issues|github_prs|github_branches|github_commits|github_pr_reviews|list_workspace|read_file|write_file|patch_file|run_command|run_tests|git_status|git_diff|git_log|git_branch", "args": {}}
   ],
   "goal": "short description"
 }
 
 Tool argument requirements:
 - project_context: {}
+- github_repo_context: {} (read-only; inspect the GitHub repository linked to the selected workspace)
+- github_issues: {"state": "open|closed|all", "limit": 20}
+- github_prs: {"state": "open|closed|all", "limit": 20}
+- github_branches: {"limit": 20}
+- github_commits: {"limit": 20}
+- github_pr_reviews: {"number": 123}
 - vscode_context: {} (read-only; inspect active VS Code windows/file/project when relevant)
 - read_file: {"path": "..."}
 - write_file: {"path": "...", "content": "..."}
@@ -318,7 +348,7 @@ Tool argument requirements:
 - git_diff: {"paths": ["relative/path"]} or {"paths": []}
 
 Rules:
-- Use only the twelve listed tools.
+- Use only the eighteen listed tools.
 - Paths for read_file/write_file/patch_file are relative to the user's workspace.
 - Never use absolute paths.
 - Infer missing details when the user's intent is clear. Do not ask the user for a filename when a sensible filename can be derived from the request.
@@ -330,6 +360,8 @@ Rules:
 - Use run_tests for test suites; use run_command for other commands/builds only when needed.
 - If a test command fails, inspect the failure and use the recovery cycle to make a corrected plan.
 - Git tools are read-only in this version. Do not attempt git commit, push, merge, reset, clean, or other destructive Git operations.
+- GitHub tools are read-only in this version. Do not attempt to create issues, create branches, commit, push, merge, close issues/PRs, or post reviews/comments.
+- For GitHub requests, use github_repo_context first to identify the repository. Use issues, PRs, branches, commits, and PR reviews only when relevant.
 - Keep the plan to the minimum steps needed.
 - Never claim a tool ran; only describe intended steps.
 """
