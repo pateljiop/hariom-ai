@@ -18,7 +18,8 @@ class App(tk.Tk):
         top=ttk.Frame(self,padding=10); top.pack(fill='x'); ttk.Label(top,text='HARIOM AI',font=('Segoe UI',20,'bold')).pack(side='left'); ttk.Button(top,text='Refresh',command=self.refresh).pack(side='right')
         panes=ttk.PanedWindow(self,orient='horizontal'); panes.pack(fill='both',expand=True,padx=10,pady=10)
         left=ttk.Frame(panes,padding=8); right=ttk.Frame(panes,padding=8); panes.add(left,weight=3); panes.add(right,weight=2)
-        ttk.Label(left,text='Task / Chat').pack(anchor='w'); self.prompt=tk.Text(left,height=7,wrap='word'); self.prompt.pack(fill='x',pady=6); self.prompt.insert('1.0','Describe what you want Hariom AI to do...')
+        ttk.Label(left,text='Task / Chat').pack(anchor='w');
+        provider_row=ttk.Frame(left); provider_row.pack(fill='x'); ttk.Label(provider_row,text='Provider:').pack(side='left'); self.provider=tk.StringVar(value='Auto'); self.provider_box=ttk.Combobox(provider_row,textvariable=self.provider,state='readonly',values=['Auto','Gemini','Mistral','OpenAI','Groq','OpenRouter','Cerebras'],width=14); self.provider_box.pack(side='left',padx=6); self.prompt=tk.Text(left,height=7,wrap='word'); self.prompt.pack(fill='x',pady=6); self.prompt.insert('1.0','Describe what you want Hariom AI to do...')
         b=ttk.Frame(left); b.pack(fill='x'); ttk.Button(b,text='Ask AI',command=self.ask).pack(side='left'); ttk.Button(b,text='Run Agent',command=self.run_agent).pack(side='left',padx=6); ttk.Button(b,text='List Workspace',command=self.list_workspace).pack(side='left'); ttk.Button(b,text='Choose Workspace',command=self.choose_workspace).pack(side='left',padx=6)
         ttk.Label(left,text='Response').pack(anchor='w',pady=(12,4)); self.response=tk.Text(left,wrap='word',state='disabled'); self.response.pack(fill='both',expand=True)
         ttk.Label(right,text='Live Activity').pack(anchor='w'); self.log=tk.Text(right,wrap='word',state='disabled'); self.log.pack(fill='both',expand=True,pady=6)
@@ -41,11 +42,15 @@ class App(tk.Tk):
 
     def ask_worker(self,p):
         try:
-            text,provider=self.router.chat(p,system='You are Hariom AI, a transparent local workstation assistant. Give actionable plans. Never claim an action was performed unless a tool actually performed it.')
+            text,provider=self.router.chat(p,preferred=self._selected_provider(),system='You are Hariom AI, a transparent local workstation assistant. Give actionable plans. Never claim an action was performed unless a tool actually performed it.')
             self.after(0,lambda:self.append(self.response,f'Hariom AI ({provider}):\n{text}'))
         except Exception as e:
             err=str(e)
             self.after(0,lambda err=err: messagebox.showerror('AI error',err))
+
+    def _selected_provider(self):
+        value=self.provider.get().strip().lower()
+        return None if value == 'auto' else value
 
     def run_agent(self):
         p=self.prompt.get('1.0','end').strip()
@@ -56,7 +61,7 @@ class App(tk.Tk):
 
     def agent_worker(self,p):
         try:
-            summary,results=self.agent.run(p)
+            summary,results=self.agent.run(p,preferred=self._selected_provider())
             self.after(0,lambda:self.append(self.response,f'Hariom AI Agent:\n{summary}'))
         except Exception as e:
             err=str(e)
