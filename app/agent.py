@@ -1,7 +1,8 @@
 import json
 from .terminal import run_command
 import subprocess
-import threading
+import re
+from .terminal import RISKY_PATTERNS
 
 
 class Agent:
@@ -103,7 +104,7 @@ Do not repeat a failed action unless the new plan changes the cause.
                 raise ValueError("git_commit requires a commit message.")
             if not self._request_approval("git_commit", f"Create Git commit: {message}"):
                 raise PermissionError("Git commit denied by user.")
-            return self._git("add", ".") if False else self._git_commit(message)
+            return self._git_commit(message)
 
         if tool == "list_workspace":
             files = self.workspace.list_files()
@@ -154,7 +155,7 @@ Do not repeat a failed action unless the new plan changes the cause.
             command = args.get("command")
             if not isinstance(command, str) or not command.strip():
                 raise ValueError("run_command requires a command.")
-            risky = any(__import__("re").search(pattern, command.lower()) for pattern in __import__("app.terminal", fromlist=["RISKY_PATTERNS"]).RISKY_PATTERNS)
+            risky = any(re.search(pattern, command.lower()) for pattern in RISKY_PATTERNS)
             approved = False
             if risky:
                 approved = self._request_approval("terminal", f"Run risky command: {command}")
