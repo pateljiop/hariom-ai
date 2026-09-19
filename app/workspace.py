@@ -3,6 +3,7 @@ import os
 import subprocess
 
 from . import config
+from . import vscode
 
 
 class Workspace:
@@ -114,6 +115,7 @@ class Workspace:
             pass
 
         vscode_running = self._is_vscode_running()
+        vscode_context = vscode.context(self.root)
 
         return {
             "workspace": str(self.root),
@@ -125,6 +127,7 @@ class Workspace:
             "git_status": git_status,
             "windows": os.name == "nt",
             "vscode_running": vscode_running,
+            "vscode": vscode_context,
         }
 
     @staticmethod
