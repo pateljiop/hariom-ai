@@ -15,14 +15,15 @@
 - [ ] Improve README setup/troubleshooting
 - [ ] Document tested Windows/Python versions
 
-## NEXT — Agent execution
-- [ ] Structured tool calling
-- [ ] Task planning/execution loop
-- [ ] Reliable file patch/edit operations
-- [ ] Test runner integration
-- [ ] Structured action results
-- [ ] Git integration
-- [ ] Permission/approval UI
+## V2 — Agent execution (implementation complete; pending full test verification)
+- [x] Structured tool calling
+- [x] Task planning/execution loop
+- [x] Reliable file patch/edit operations
+- [x] Test runner integration
+- [x] Structured action results
+- [x] Git read-only integration
+- [x] Permission/approval UI
+- [ ] Full end-to-end V2 verification
 
 ## LATER — Developer integrations
 - [ ] VS Code/project context
