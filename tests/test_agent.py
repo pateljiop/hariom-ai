@@ -119,6 +119,20 @@ class AgentRecoveryTests(unittest.TestCase):
             self.assertGreaterEqual(len(results), 2)
             self.assertTrue(any("recovering" in event for event in activity.events))
 
+    def test_run_tests_tool_returns_structured_result(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            activity = Activity()
+            ws = Workspace(tmp)
+            agent = Agent(Router(), ws, activity)
+            (ws.root / "test_sample.py").write_text(
+                "import unittest\n\nclass SampleTests(unittest.TestCase):\n    def test_ok(self):\n        self.assertEqual(2 + 2, 4)\n",
+                encoding="utf-8",
+            )
+            result = agent._execute("run_tests", {"command": "python -m unittest discover -v"})
+            self.assertEqual(result["action"], "run_tests")
+            self.assertEqual(result["exit_code"], 0)
+            self.assertIn("OK", result["output"])
+
     def test_malformed_tool_plan_is_replanned(self):
         with tempfile.TemporaryDirectory() as tmp:
             activity = Activity()
