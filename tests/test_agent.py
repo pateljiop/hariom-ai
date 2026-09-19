@@ -1,9 +1,9 @@
-import unittest
+import subprocess
 import tempfile
+import unittest
 
 from app.agent import Agent
 from app.workspace import Workspace
-
 
 
 class Activity:
@@ -58,6 +58,21 @@ class AgentRecoveryTests(unittest.TestCase):
             self.assertIn("exit_code", result)
             with self.assertRaises(PermissionError):
                 agent._execute("git_commit", {"message": "test"})
+
+            subprocess.run(["git", "init"], cwd=tmp, check=True, capture_output=True)
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.com"],
+                cwd=tmp,
+                check=True,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Test User"],
+                cwd=tmp,
+                check=True,
+                capture_output=True,
+            )
+            (ws.root / "approval.txt").write_text("approved", encoding="utf-8")
 
             approval = Approval(True)
             agent = Agent(Router(), ws, activity, approval_callback=approval)
