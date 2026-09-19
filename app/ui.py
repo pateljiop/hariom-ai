@@ -584,8 +584,7 @@ class App(tk.Tk):
         try:
             code, output = run_command("git status --short", self.activity, cwd=self.ws.root)
             text = output.strip() or "Working tree clean."
-            self.append(self.response, "GIT STATUS
-" + text)
+            self.append(self.response, "GIT STATUS\n" + text)
             self.status.set(f"Git status • exit code {code}")
         except Exception as error:
             messagebox.showwarning("Git", str(error))
