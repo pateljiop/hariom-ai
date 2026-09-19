@@ -58,6 +58,7 @@ class Agent:
 
                 tool = step.get("tool")
                 args = step.get("args") or {}
+                self._normalize_args(tool, args)
                 self.activity.emit(f"AGENT -> step {index}/{len(steps)}: {tool}")
 
                 validation_error = self._validate_step(tool, args)
@@ -118,6 +119,7 @@ Create a corrected minimal plan for the original task.
 Use the exact required arguments for every tool.
 Do not repeat a malformed or failed action unless you have fixed its cause.
 Inspect relevant files when that is useful.
+For GitHub tasks, never read .git/config or any .git internal file; use github_repo_context.
 """
 
         summary = self._summarize(
@@ -128,6 +130,25 @@ Inspect relevant files when that is useful.
         else:
             self.activity.emit("AGENT -> task ended with failures")
         return summary, all_results
+
+    @staticmethod
+    def _normalize_args(tool, args):
+        if tool in {"github_issues", "github_prs", "github_branches", "github_commits"}:
+            if "limit" not in args or args.get("limit") is None:
+                args["limit"] = 20
+            elif isinstance(args.get("limit"), str) and args["limit"].strip().isdigit():
+                args["limit"] = int(args["limit"].strip())
+
+        if tool == "github_pr_reviews":
+            if isinstance(args.get("number"), str) and args["number"].strip().isdigit():
+                args["number"] = int(args["number"].strip())
+
+        if tool == "patch_file" and "expected_replacements" not in args:
+            args["expected_replacements"] = 1
+        elif tool == "patch_file" and isinstance(args.get("expected_replacements"), str):
+            value = args["expected_replacements"].strip()
+            if value.isdigit():
+                args["expected_replacements"] = int(value)
 
     def _validate_step(self, tool, args):
         if tool not in {
@@ -155,6 +176,11 @@ Inspect relevant files when that is useful.
                 return f"{tool} requires '{key}' to be a string."
             if key != "content" and not args[key].strip():
                 return f"{tool} requires a non-empty '{key}'."
+
+        if tool == "read_file":
+            normalized_path = args["path"].replace("\\", "/").lstrip("./")
+            if normalized_path == ".git" or normalized_path.startswith(".git/"):
+                return "read_file cannot inspect .git internal files; use git or GitHub tools instead."
 
         if tool in {"github_issues", "github_prs"}:
             state = args.get("state", "open")
@@ -417,6 +443,8 @@ Rules:
 - Infer missing details when the user's intent is clear. Do not ask the user for a filename when a sensible filename can be derived from the request.
 - For coding tasks, use project_context first when project structure, framework, Git state, or development environment may matter. Use vscode_context when the request refers to the currently open VS Code file/project or when active editor context would reduce ambiguity.
 - Use list_workspace/read_file when specific existing content is needed.
+- Never use read_file on .git, .git/config, or any .git internal path. Use git_* tools for local Git state and github_repo_context for GitHub repository metadata.
+- If a GitHub task is requested and the selected workspace has no GitHub remote, report that clearly; do not try to discover the remote by reading .git files. If the user supplied an explicit owner/name repository, use repo_full_name.
 - Use write_file for creating new files or replacing complete files when appropriate.
 - Use patch_file for targeted edits to existing files; include exact old_text and new_text.
 - expected_replacements defaults to 1; set it explicitly when more than one identical occurrence is intentionally changed.
