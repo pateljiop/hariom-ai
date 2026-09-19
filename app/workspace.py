@@ -28,6 +28,28 @@ class Workspace:
         target.write_text(content, encoding="utf-8")
         return target
 
+    def patch_file(self, path, old_text, new_text, expected_replacements=1):
+        if not isinstance(old_text, str) or not old_text:
+            raise ValueError("patch_file requires non-empty old_text.")
+        if not isinstance(new_text, str):
+            raise ValueError("patch_file requires string new_text.")
+        if not isinstance(expected_replacements, int) or expected_replacements < 1:
+            raise ValueError("expected_replacements must be a positive integer.")
+
+        target = self._safe_path(path)
+        if not target.is_file():
+            raise FileNotFoundError(f"File does not exist: {path}")
+
+        content = target.read_text(encoding="utf-8")
+        count = content.count(old_text)
+        if count != expected_replacements:
+            raise ValueError(
+                f"Patch expected {expected_replacements} replacement(s), found {count}."
+            )
+
+        target.write_text(content.replace(old_text, new_text), encoding="utf-8")
+        return target, count
+
     def _safe_path(self, path):
         target = (self.root / path).resolve()
 
