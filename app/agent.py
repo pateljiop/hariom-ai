@@ -1,6 +1,7 @@
 import json
 from .terminal import run_command
 import subprocess
+import threading
 
 
 class Agent:
@@ -12,10 +13,11 @@ class Agent:
     MAX_ITERATIONS = 3
     GIT_TIMEOUT = 30
 
-    def __init__(self, router, workspace, activity):
+    def __init__(self, router, workspace, activity, approval_callback=None):
         self.router = router
         self.workspace = workspace
         self.activity = activity
+        self.approval_callback = approval_callback
 
     def run(self, task, preferred=None):
         self.activity.emit("AGENT -> planning task")
@@ -96,7 +98,12 @@ Do not repeat a failed action unless the new plan changes the cause.
 
     def _execute(self, tool, args):
         if tool == "git_commit":
-            raise PermissionError("git_commit requires explicit approval and is not available to the autonomous planner yet.")
+            message = args.get("message")
+            if not isinstance(message, str) or not message.strip():
+                raise ValueError("git_commit requires a commit message.")
+            if not self._request_approval("git_commit", f"Create Git commit: {message}"):
+                raise PermissionError("Git commit denied by user.")
+            return self._git("add", ".") if False else self._git_commit(message)
 
         if tool == "list_workspace":
             files = self.workspace.list_files()
@@ -147,7 +154,13 @@ Do not repeat a failed action unless the new plan changes the cause.
             command = args.get("command")
             if not isinstance(command, str) or not command.strip():
                 raise ValueError("run_command requires a command.")
-            code, output = run_command(command, self.activity, cwd=self.workspace.root)
+            risky = any(__import__("re").search(pattern, command.lower()) for pattern in __import__("app.terminal", fromlist=["RISKY_PATTERNS"]).RISKY_PATTERNS)
+            approved = False
+            if risky:
+                approved = self._request_approval("terminal", f"Run risky command: {command}")
+                if not approved:
+                    raise PermissionError("Risky command denied by user.")
+            code, output = run_command(command, self.activity, approved=approved, cwd=self.workspace.root)
             return {
                 "exit_code": code,
                 "output": output[-self.MAX_RESULT_CHARS:],
@@ -161,6 +174,17 @@ Do not repeat a failed action unless the new plan changes the cause.
         if not isinstance(paths, list) or not all(isinstance(path, str) and path.strip() for path in paths):
             raise ValueError("Git paths must be a list of relative path strings.")
         return paths
+
+    def _request_approval(self, action, detail):
+        if self.approval_callback is None:
+            return False
+        return bool(self.approval_callback(action, detail))
+
+    def _git_commit(self, message):
+        add = subprocess.run(["git", "add", "-A"], cwd=str(self.workspace.root), capture_output=True, text=True, timeout=self.GIT_TIMEOUT, shell=False)
+        if add.returncode != 0:
+            return {"exit_code": add.returncode, "output": (add.stdout or "") + (add.stderr or "")}
+        return self._git("commit", "-m", message)
 
     def _git(self, *args):
         command = ["git", *args]
