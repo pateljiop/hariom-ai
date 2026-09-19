@@ -1,11 +1,11 @@
 from pathlib import Path
-
-from . import config
+import os
+import subprocess
 
 
 class Workspace:
     def __init__(self, root=None):
-        self.root = Path(root or config.WORKSPACE).expanduser().resolve()
+        self.root = Path(root or __import__("app.config", fromlist=["WORKSPACE"]).WORKSPACE).expanduser().resolve()
         self.root.mkdir(parents=True, exist_ok=True)
 
     def list_files(self):
@@ -49,6 +49,77 @@ class Workspace:
 
         target.write_text(content.replace(old_text, new_text), encoding="utf-8")
         return target, count
+
+    def project_context(self):
+        """Return bounded, read-only context about the selected project/workspace."""
+        files = self.list_files()
+        relative_files = [
+            str(path.relative_to(self.root))
+            for path in files[:300]
+        ]
+
+        manifest_names = {
+            "requirements.txt",
+            "pyproject.toml",
+            "package.json",
+            "package-lock.json",
+            "yarn.lock",
+            "pnpm-lock.yaml",
+            "Cargo.toml",
+            "go.mod",
+            "pom.xml",
+            "build.gradle",
+            "build.gradle.kts",
+            "composer.json",
+        }
+        manifests = [
+            name for name in relative_files
+            if Path(name).name.lower() in {item.lower() for item in manifest_names}
+        ]
+
+        extensions = {}
+        for path in files[:500]:
+            suffix = path.suffix.lower()
+            if suffix:
+                extensions[suffix] = extensions.get(suffix, 0) + 1
+
+        git_branch = ""
+        git_status = ""
+        try:
+            branch = subprocess.run(
+                ["git", "branch", "--show-current"],
+                cwd=str(self.root),
+                capture_output=True,
+                text=True,
+                timeout=5,
+                shell=False,
+            )
+            if branch.returncode == 0:
+                git_branch = branch.stdout.strip()
+
+            status = subprocess.run(
+                ["git", "status", "--short"],
+                cwd=str(self.root),
+                capture_output=True,
+                text=True,
+                timeout=5,
+                shell=False,
+            )
+            if status.returncode == 0:
+                git_status = status.stdout.strip()[:2000]
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+        return {
+            "workspace": str(self.root),
+            "file_count": len(files),
+            "files": relative_files,
+            "manifests": manifests,
+            "extensions": dict(sorted(extensions.items())),
+            "git_branch": git_branch,
+            "git_status": git_status,
+            "windows": os.name == "nt",
+        }
 
     def _safe_path(self, path):
         target = (self.root / path).resolve()
