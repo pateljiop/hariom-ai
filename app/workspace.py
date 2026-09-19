@@ -147,6 +147,13 @@ class Workspace:
             return False
 
     def _safe_path(self, path):
+        if not isinstance(path, str) or not path.strip():
+            raise ValueError("Workspace path must be a non-empty string.")
+
+        normalized = path.replace("\\\\", "/").replace("\\\\", "/").lstrip("./")
+        if normalized == ".git" or normalized.startswith(".git/"):
+            raise ValueError("Workspace cannot access .git internal files.")
+
         target = (self.root / path).resolve()
 
         if target != self.root and self.root not in target.parents:
