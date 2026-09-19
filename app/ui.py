@@ -1,5 +1,6 @@
 import threading
 import tkinter as tk
+import webbrowser
 from tkinter import ttk, messagebox, filedialog
 
 from .config import WORKSPACE, PROVIDERS
@@ -45,6 +46,7 @@ class App(tk.Tk):
         self._configure_styles()
         self.build()
         self.activity.subscribe(self.log_line)
+        self._set_agent_running(False)
 
         self.activity.emit("SYSTEM -> workspace: " + str(self.ws.root))
         self.activity.emit(
@@ -191,8 +193,19 @@ class App(tk.Tk):
             font=("Segoe UI", 8, "bold")
         ).pack(anchor="w", padx=16, pady=(18, 12))
 
-        for label in ("⌁  Command Center", "▣  Workspace", "▤  Projects", "□  Files",
-                      ">_  Terminal", "◆  Git", "◎  Browser", "⌘  Automation", "⚙  Settings"):
+        nav_items = [
+            ("⌁  Command Center", self.focus_prompt),
+            ("▣  Workspace", self.choose_workspace),
+            ("▤  Projects", self.refresh_files),
+            ("□  Files", self.list_workspace),
+            (">_  Terminal", self.focus_terminal),
+            ("◆  Git", self.show_git_status),
+            ("◎  Browser", self.open_project_browser),
+            ("⌘  Automation", self.show_automation_info),
+            ("⚙  Settings", self.show_settings),
+        ]
+        self.nav_buttons = {}
+        for label, command in nav_items:
             active = label.startswith("⌁")
             b = tk.Button(
                 nav, text=label, anchor="w",
@@ -203,8 +216,10 @@ class App(tk.Tk):
                 relief="flat", bd=0, padx=14, pady=10,
                 font=("Segoe UI", 9, "bold" if active else "normal"),
                 cursor="hand2",
+                command=command,
             )
             b.pack(fill="x", padx=8, pady=2)
+            self.nav_buttons[label] = b
 
         tk.Frame(nav, bg=BORDER, height=1).pack(fill="x", padx=12, pady=12)
 
@@ -285,6 +300,8 @@ class App(tk.Tk):
         )
         self.prompt.pack(fill="x")
         self.prompt.insert("1.0", "Describe what you want Hariom AI to do...")
+        self.prompt.bind("<FocusIn>", self._clear_prompt_placeholder)
+        self.prompt.bind("<Control-Return>", lambda _event: self.run_agent())
 
         actions = tk.Frame(card, bg=PANEL)
         actions.pack(fill="x", padx=12, pady=(0, 12))
@@ -324,10 +341,11 @@ class App(tk.Tk):
             head, text="  understands natural language and acts on your workspace",
             bg=PANEL, fg=MUTED, font=("Segoe UI", 8)
         ).pack(side="left")
-        tk.Label(
+        self.agent_badge = tk.Label(
             head, text="●  READY", bg="#0C241A", fg=GREEN,
             font=("Segoe UI", 8, "bold"), padx=8, pady=5
-        ).pack(side="right")
+        )
+        self.agent_badge.pack(side="right")
 
         split = tk.Frame(execution, bg=PANEL)
         split.pack(fill="both", expand=True, padx=12, pady=(0, 12))
@@ -361,11 +379,23 @@ class App(tk.Tk):
         )
         self.agent_file_label.pack(side="left")
         tk.Button(
+            result_head, text="Clear", bg=PANEL_2, fg=MUTED,
+            activebackground=PANEL_3, activeforeground=TEXT,
+            relief="flat", bd=0, padx=10, pady=4,
+            command=self.clear_response
+        ).pack(side="right")
+        tk.Button(
             result_head, text="Copy", bg=PANEL_2, fg=MUTED,
             activebackground=PANEL_3, activeforeground=TEXT,
             relief="flat", bd=0, padx=10, pady=4,
             command=self.copy_response
-        ).pack(side="right")
+        ).pack(side="right", padx=(0, 5))
+        tk.Button(
+            result_head, text="Refresh", bg=PANEL_2, fg=MUTED,
+            activebackground=PANEL_3, activeforeground=TEXT,
+            relief="flat", bd=0, padx=10, pady=4,
+            command=self.refresh
+        ).pack(side="right", padx=(0, 5))
 
         self.response = tk.Text(
             result_panel, wrap="word", state="disabled",
@@ -413,6 +443,7 @@ class App(tk.Tk):
             relief="flat", bd=0, height=8, font=("Segoe UI", 8)
         )
         self.file_list.pack(fill="x", padx=12)
+        self.file_list.bind("<Double-Button-1>", self.open_selected_file)
         self.refresh_files()
 
         quick = tk.Frame(parent, bg=PANEL)
@@ -421,6 +452,8 @@ class App(tk.Tk):
                    command=self.choose_workspace).pack(side="left", fill="x", expand=True)
         ttk.Button(quick, text="Open Folder", style="Secondary.TButton",
                    command=self.choose_workspace).pack(side="left", fill="x", expand=True, padx=(6, 0))
+        ttk.Button(quick, text="Refresh", style="Secondary.TButton",
+                   command=self.refresh_files).pack(side="left", fill="x", expand=True, padx=(6, 0))
 
         tk.Label(
             parent, text="APPROVAL  •  FILES  •  TERMINAL  •  AI  •  GIT",
@@ -531,6 +564,74 @@ class App(tk.Tk):
         )
         self.refresh_files()
 
+    def _clear_prompt_placeholder(self, _event=None):
+        if self.prompt.get("1.0", "end").strip() == "Describe what you want Hariom AI to do...":
+            self.prompt.delete("1.0", "end")
+
+    def focus_prompt(self):
+        self.prompt.focus_set()
+
+    def focus_terminal(self):
+        self.command.focus_set()
+
+    def clear_response(self):
+        self.response.configure(state="normal")
+        self.response.delete("1.0", "end")
+        self.response.configure(state="disabled")
+        self.status.set("Output cleared")
+
+    def show_git_status(self):
+        try:
+            code, output = run_command("git status --short", self.activity, cwd=self.ws.root)
+            text = output.strip() or "Working tree clean."
+            self.append(self.response, "GIT STATUS
+" + text)
+            self.status.set(f"Git status • exit code {code}")
+        except Exception as error:
+            messagebox.showwarning("Git", str(error))
+
+    def open_project_browser(self):
+        webbrowser.open("https://github.com/pateljiop/hariom-ai")
+        self.status.set("Opened Hariom AI repository in browser")
+
+    def show_automation_info(self):
+        messagebox.showinfo(
+            "Automation",
+            "Background and scheduled tasks are planned for the next agent phase.
+
+"
+            "Current v1 focuses on reliable local execution."
+        )
+
+    def show_settings(self):
+        providers = ", ".join(self.router.available()) or "none"
+        messagebox.showinfo(
+            "Hariom AI Settings",
+            f"Workspace:
+{self.ws.root}
+
+Available providers:
+{providers}
+
+"
+            "API keys remain local in .env."
+        )
+
+    def open_selected_file(self, _event=None):
+        selection = self.file_list.curselection()
+        if not selection:
+            return
+        value = self.file_list.get(selection[0]).strip()
+        if not value or value.startswith("(") or value.startswith("Unable"):
+            return
+        path = self.ws.root / value
+        try:
+            if path.is_file():
+                webbrowser.open(path.as_uri())
+                self.status.set(f"Opened {value}")
+        except Exception as error:
+            messagebox.showwarning("File", str(error))
+
     def copy_response(self):
         try:
             text = self.response.get("1.0", "end").strip()
@@ -573,6 +674,7 @@ class App(tk.Tk):
     def run_agent(self):
         prompt = self.prompt.get("1.0", "end").strip()
         if not prompt or prompt == "Describe what you want Hariom AI to do...":
+            self.focus_prompt()
             return
         self.append(self.response, "YOU  /  AGENT  >  " + prompt)
         self.activity.emit("AGENT -> starting")
@@ -606,12 +708,29 @@ class App(tk.Tk):
                 return result
         return "Execution output"
 
+    def _reset_progress(self):
+        if not hasattr(self, "step_labels"):
+            return
+        for dot, label in self.step_labels:
+            dot.config(text="○", fg=MUTED)
+            label.config(fg=MUTED)
+
     def _set_agent_running(self, running):
-        # Keep the first v1 UI simple: status is visual, execution remains in the worker thread.
-        color = BLUE if running else GREEN
-        text = "●  AGENT WORKING" if running else "●  READY"
-        for widget in self.winfo_children():
-            pass
+        if not hasattr(self, "agent_badge"):
+            return
+        if running:
+            self.agent_badge.config(
+                text="●  AGENT WORKING",
+                bg="#17253B",
+                fg=BLUE,
+            )
+            self.status.set("Agent is working...")
+        else:
+            self.agent_badge.config(
+                text="●  READY",
+                bg="#0C241A",
+                fg=GREEN,
+            )
 
     def list_workspace(self):
         try:
