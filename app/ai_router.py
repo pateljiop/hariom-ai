@@ -130,7 +130,7 @@ class AIRouter:
                     'items':{
                         'type':'OBJECT',
                         'properties':{
-                            'tool':{'type':'STRING','enum':['list_workspace','read_file','write_file','patch_file','run_command','run_tests','git_status','git_diff','git_log','git_branch']},
+                            'tool':{'type':'STRING','enum':['project_context','list_workspace','read_file','write_file','patch_file','run_command','run_tests','git_status','git_diff','git_log','git_branch']},
                             'args':{'type':'OBJECT'},
                         },
                         'required':['tool','args'],
