@@ -27,7 +27,7 @@ class AIRouter:
                 return text,name
             except Exception as e:
                 errors.append(f'{name}: {e}')
-                self.activity.emit(f'AI FAILED -> {name}')
+                self.activity.emit(f'AI FAILED -> {name}: {self._safe_error(e)}')
         raise RuntimeError('No working provider. Configure a key and check quota/network. '+ ' | '.join(errors))
 
     def plan(self,prompt,system,preferred=None):
@@ -50,6 +50,12 @@ class AIRouter:
                 errors.append(f'{name}: {e}')
                 self.activity.emit(f'AI FAILED -> planner {name}')
         raise RuntimeError('No working planner provider. '+ ' | '.join(errors))
+
+    def _safe_error(self, error):
+        if isinstance(error, requests.HTTPError) and error.response is not None:
+            body=(error.response.text or '').replace('\\n',' ')[:500]
+            return f'HTTP {error.response.status_code}: {body}'
+        return str(error)[:500]
 
     def _compatible(self,cfg,prompt,system):
         messages=[]
