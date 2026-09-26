@@ -20,5 +20,6 @@ PROVIDERS={
 'mistral':{'key':os.getenv('MISTRAL_API_KEY',''),'model':os.getenv('MISTRAL_MODEL','mistral-small-latest'),'base':'https://api.mistral.ai/v1/chat/completions'},
 'groq':{'key':os.getenv('GROQ_API_KEY',''),'model':os.getenv('GROQ_MODEL','openai/gpt-oss-120b'),'base':'https://api.groq.com/openai/v1/chat/completions'},
 'openrouter':{'key':os.getenv('OPENROUTER_API_KEY',''),'model':os.getenv('OPENROUTER_MODEL','openrouter/free'),'base':'https://openrouter.ai/api/v1/chat/completions'},
-'cerebras':{'key':os.getenv('CEREBRAS_API_KEY',''),'model':os.getenv('CEREBRAS_MODEL','llama-3.3-70b'),'base':'https://api.cerebras.ai/v1/chat/completions'}
+'cerebras':{'key':os.getenv('CEREBRAS_API_KEY',''),'model':os.getenv('CEREBRAS_MODEL','llama-3.3-70b'),'base':'https://api.cerebras.ai/v1/chat/completions'},
+'freellmapi':{'key':os.getenv('FREELLMAPI_API_KEY',''),'model':os.getenv('FREELLMAPI_MODEL','auto'),'base':os.getenv('FREELLMAPI_BASE_URL','http://127.0.0.1:3001/v1').rstrip('/')+'/chat/completions'}
 }
