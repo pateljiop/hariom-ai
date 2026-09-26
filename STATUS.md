@@ -1,33 +1,56 @@
 # Current Status
 
 ## Overall
-MVP foundation exists. V1 stabilization is the active goal.
+Core Windows desktop MVP and Agent V2 are implemented and verified through automated tests and a real Windows end-to-end workflow.
 
-## Implemented foundation
-- Python Windows-first project structure
-- Desktop UI foundation
-- Multi-provider AI router foundation
-- Workspace/file operations
-- Terminal runner foundation
-- Activity/event system
-- Local .env configuration
-- Git-safe secret handling
+## Verified foundation
+- Windows desktop UI launches successfully
+- Local `.env` configuration works
+- Multi-provider AI router and fallback work in the tested configuration
+- Workspace/file operations work
+- Terminal runner works
+- Risky-command protection works
+- Activity/status reporting works
+- Agent planning and execution loop works
+- File creation and patching tools work
+- Structured test execution works
+- Git read-only context tools work
+- Permission/approval infrastructure exists for protected Git actions
 
-## Tested
-- Repository structure and README presence have been inspected through GitHub.
-- Full Windows runtime/end-to-end behavior still needs verification on the user's machine.
+## Verification
+- Automated regression suite: **12/12 passed**
+- Real Agent calculator task: **passed**
+- Agent created `calculator.py` and `test_calculator.py` in `A:\project`
+- Agent ran `python -m unittest discover -v` with exit code 0
+- Independent Windows verification: **5/5 calculator tests passed**
+- Real provider fallback observed: Gemini and Mistral temporarily failed after retry; Groq successfully completed the planner and task
 
-## Not yet proven
-- Clean Windows launch
-- Real API calls with the user's keys
-- Provider fallback under failure
-- Full file-edit workflow
-- Terminal workflow end-to-end
-- Automated test suite
-- Complete end-to-end task execution
+## V2 status
+**IMPLEMENTED + TESTED.**
 
-## Immediate goal
-Get v1 running reliably on Windows and verify each core component before adding major features.
+The tested workflow is:
+```
+Natural-language task
+  ↓
+Provider selection/fallback
+  ↓
+Agent planning
+  ↓
+Workspace inspection
+  ↓
+File creation/editing
+  ↓
+Test execution
+  ↓
+Result verification
+  ↓
+Final task summary
+```
 
-## Deferred
-Floating corner agent and desktop awareness come after v1 success.
+## Next goal
+Move to the next development phase: developer integrations, beginning with VS Code/project context and then GitHub/browser capabilities.
+
+The floating corner agent remains deferred until the core integrations are sufficiently stable.
+
+## Important limitation
+The current verification proves the tested Windows workflow; it does not prove every future provider, every possible tool plan, or every future integration.
