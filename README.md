@@ -66,3 +66,15 @@ After starting the app, select a test workspace and use **Run Agent** with:
 > Create a file named `agent_test.txt` containing exactly `Hariom AI agent works`, then run a command to print the file and report the result.
 
 Check the **Live Activity** panel and the created file before considering the agent workflow verified.
+
+## Optional FreeLLMAPI gateway
+
+Hariom AI can use a local FreeLLMAPI instance as an OpenAI-compatible provider. FreeLLMAPI exposes a unified endpoint at `http://127.0.0.1:3001/v1` and can route across configured provider keys with automatic fallback. Configure the generated unified key locally:
+
+```env
+FREELLMAPI_API_KEY=your_unified_key
+FREELLMAPI_MODEL=auto
+FREELLMAPI_BASE_URL=http://127.0.0.1:3001/v1
+```
+
+The gateway is optional; direct providers remain available. FreeLLMAPI is intended for personal experimentation and its free upstream tiers have variable limits and availability.
