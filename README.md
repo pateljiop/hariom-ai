@@ -78,3 +78,7 @@ FREELLMAPI_BASE_URL=http://127.0.0.1:3001/v1
 ```
 
 The gateway is optional; direct providers remain available. FreeLLMAPI is intended for personal experimentation and its free upstream tiers have variable limits and availability.
+
+## Free AI provider discovery
+
+See [`docs/FREE_AI_PROVIDERS.md`](docs/FREE_AI_PROVIDERS.md) for the current audited catalog of recurring free tiers, trials/promotional credits, and media APIs. Provider status and quotas change, so the catalog is refreshed separately from the core router.
