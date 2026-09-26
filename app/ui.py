@@ -229,7 +229,7 @@ class App(tk.Tk):
         self.provider = tk.StringVar(value="Auto")
         self.provider_box = ttk.Combobox(
             nav, textvariable=self.provider, state="readonly",
-            values=["Auto", "Gemini", "Mistral", "OpenAI", "Groq", "OpenRouter", "Cerebras"],
+            values=["Auto", "Gemini", "Mistral", "FreeLLMAPI", "Cavoti", "OpenAI", "Groq", "OpenRouter", "Cerebras"],
         )
         self.provider_box.pack(fill="x", padx=12)
         self.provider_box.bind("<<ComboboxSelected>>", self._provider_changed)
