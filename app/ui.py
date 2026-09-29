@@ -10,6 +10,7 @@ from .computer import ComputerController
 from .github_tools import GitHubTools
 from .tools import ToolRegistry
 from .voice import VoiceController
+from .public_apis import PublicAPIs
 from .workspace import Workspace
 
 
@@ -40,9 +41,11 @@ class App(tk.Tk):
         self.computer = ComputerController(self.activity, locator=self.router.locate_on_screen)
         self.github = GitHubTools(self.activity)
         self.voice = VoiceController(self.activity)
+        self.public_apis = PublicAPIs(self.activity)
         self.tools = ToolRegistry(
             self.ws, self.activity, browser=self.browser,
-            computer=self.computer, github=self.github, voice=self.voice
+            computer=self.computer, github=self.github, voice=self.voice,
+            public_apis=self.public_apis
         )
         self.agent = PersonalAgent(self.router, self.ws, self.activity, tools=self.tools)
 
