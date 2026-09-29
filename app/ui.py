@@ -237,7 +237,8 @@ class App(tk.Tk):
             self.after(0, lambda: self.append(self.log, "VISION (" + provider + "):\n" + text))
             self.after(0, lambda: self.status.set("Screen analyzed"))
         except Exception as exc:
-            self.after(0, lambda: messagebox.showerror("Screen Vision", str(exc)))
+            error = str(exc)
+            self.after(0, lambda error=error: messagebox.showerror("Screen Vision", error))
 
     def ask(self):
         prompt = self.get_prompt()
