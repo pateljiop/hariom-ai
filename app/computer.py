@@ -1,3 +1,4 @@
+import io
 import platform
 from pathlib import Path
 
@@ -45,6 +46,13 @@ class ComputerController:
         image = pg.screenshot(str(target) if target else None)
         self.activity.emit("COMPUTER -> screenshot")
         return str(target) if target else image
+
+    def screenshot_bytes(self, image_format="PNG"):
+        image = self._pyautogui().screenshot()
+        buffer = io.BytesIO()
+        image.save(buffer, format=str(image_format).upper())
+        self.activity.emit("COMPUTER -> screenshot for vision")
+        return buffer.getvalue()
 
     def _check_point(self, x, y):
         size = self.screen_size()
