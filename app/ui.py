@@ -140,9 +140,10 @@ class App(tk.Tk):
         actions = tk.Frame(command, bg=self.PANEL)
         actions.pack(fill="x", pady=(8, 0))
         self.action_button(actions, "Ask", self.ask).pack(side="left")
-        self.action_button(actions, "Run Task", self.run_task).pack(side="left", padx=5)
+        self.action_button(actions, "Run", self.run_task).pack(side="left", padx=4)
         self.action_button(actions, "🎙 Voice", self.voice_command).pack(side="left")
-        self.action_button(actions, "Approve", self.approve_task).pack(side="left", padx=5)
+        self.action_button(actions, "👁 Screen", self.see_screen).pack(side="left", padx=4)
+        self.action_button(actions, "Approve", self.approve_task).pack(side="left")
         self.action_button(actions, "Resume", self.resume_saved).pack(side="right")
 
         tk.Label(outer, text="LIVE ACTIVITY", bg=self.BG, fg=self.MUTED, font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=16)
@@ -157,7 +158,7 @@ class App(tk.Tk):
         tk.Button(footer, text="Workspace", command=self.list_workspace, bg=self.PANEL, fg=self.MUTED, activebackground=self.PANEL, activeforeground=self.TEXT, relief="flat", bd=0, font=("Segoe UI", 8)).pack(side="right", padx=8)
 
     def action_button(self, parent, text, command):
-        return tk.Button(parent, text=text, command=command, bg="#222936", fg=self.TEXT, activebackground="#303a4b", activeforeground=self.TEXT, relief="flat", bd=0, padx=9, pady=5, font=("Segoe UI", 8, "bold"), cursor="hand2")
+        return tk.Button(parent, text=text, command=command, bg="#222936", fg=self.TEXT, activebackground="#303a4b", activeforeground=self.TEXT, relief="flat", bd=0, padx=8, pady=5, font=("Segoe UI", 8, "bold"), cursor="hand2")
 
     def start_drag(self, event):
         self._drag_x, self._drag_y = event.x, event.y
@@ -205,8 +206,6 @@ class App(tk.Tk):
         widget.configure(state="disabled")
 
     def voice_command(self):
-        if not self._expanded:
-            return
         self.status.set("Listening...")
         threading.Thread(target=self.voice_worker, daemon=True).start()
 
@@ -218,9 +217,27 @@ class App(tk.Tk):
                 return
             self.after(0, lambda: self.prompt.delete("1.0", "end"))
             self.after(0, lambda: self.prompt.insert("1.0", prompt))
-            self.after(0, lambda: self.status.set("Voice command ready — press Run Task"))
+            self.after(0, lambda: self.status.set("Voice command ready — press Run"))
         except Exception as exc:
             self.after(0, lambda: messagebox.showerror("Voice error", str(exc)))
+
+    def see_screen(self):
+        self.status.set("Looking at your screen...")
+        threading.Thread(target=self.screen_vision_worker, daemon=True).start()
+
+    def screen_vision_worker(self):
+        try:
+            image = self.computer.screenshot_bytes()
+            prompt = self.get_prompt() or (
+                "Analyze this computer screenshot. Describe what is currently visible, "
+                "identify the main application and important UI elements, and mention "
+                "anything that looks like an error or requires attention. Be concise."
+            )
+            text, provider = self.router.vision_chat(prompt, image)
+            self.after(0, lambda: self.append(self.log, "VISION (" + provider + "):\n" + text))
+            self.after(0, lambda: self.status.set("Screen analyzed"))
+        except Exception as exc:
+            self.after(0, lambda: messagebox.showerror("Screen Vision", str(exc)))
 
     def ask(self):
         prompt = self.get_prompt()
