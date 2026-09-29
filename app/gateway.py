@@ -1,9 +1,9 @@
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .ai_router import AIRouter
 from .activity import ActivityBus
-from .config import GATEWAY_API_KEY, GATEWAY_HOST, GATEWAY_PORT
+from .ai_router import AIRouter
+from .config import GATEWAY_API_KEY, GATEWAY_HOST, GATEWAY_PORT, PROVIDERS
 
 
 activity = ActivityBus()
@@ -24,8 +24,9 @@ class Handler(BaseHTTPRequestHandler):
     def _authorized(self):
         if not GATEWAY_API_KEY:
             return True
-        header = self.headers.get('Authorization', '')
-        return header == 'Bearer ' + GATEWAY_API_KEY
+        return self.headers.get('Authorization', '') == (
+            'Bearer ' + GATEWAY_API_KEY
+        )
 
     def _json_body(self):
         length = int(self.headers.get('Content-Length', '0'))
@@ -49,12 +50,14 @@ class Handler(BaseHTTPRequestHandler):
 
             models = []
             for provider in router.available():
-                cfg = router.PROVIDERS[provider] if hasattr(router, 'PROVIDERS') else None
-                models.append({
-                    'id': provider,
-                    'object': 'model',
-                    'owned_by': 'hariom-ai',
-                })
+                cfg = PROVIDERS[provider]
+                for model in (cfg.get('models') or [cfg.get('model')]):
+                    if model:
+                        models.append({
+                            'id': model,
+                            'object': 'model',
+                            'owned_by': provider,
+                        })
             self._send(200, {'object': 'list', 'data': models})
             return
 
@@ -75,10 +78,12 @@ class Handler(BaseHTTPRequestHandler):
             if not messages:
                 raise ValueError('messages is required')
 
-            preferred = None
             requested_model = payload.get('model', '')
-            if requested_model in router.available():
-                preferred = requested_model
+            preferred = (
+                requested_model
+                if requested_model in router.available()
+                else None
+            )
 
             text, provider = router.chat_messages(
                 messages,
