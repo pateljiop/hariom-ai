@@ -13,7 +13,6 @@ WORKSPACE = Path(
 ).resolve()
 WORKSPACE.mkdir(parents=True, exist_ok=True)
 
-# Hariom AI's own provider pool. Empty keys are ignored automatically.
 PROVIDERS = {
     'openai': {
         'key': os.getenv('OPENAI_API_KEY', ''),
@@ -58,7 +57,11 @@ PROVIDERS = {
     },
 }
 
-# Smart-router tuning. These can be overridden without changing code.
 ROUTER_COOLDOWN_SECONDS = int(os.getenv('HARIOM_ROUTER_COOLDOWN', '60'))
 ROUTER_RETRIES = int(os.getenv('HARIOM_ROUTER_RETRIES', '2'))
 ROUTER_TIMEOUT_SECONDS = int(os.getenv('HARIOM_ROUTER_TIMEOUT', '90'))
+
+# Local OpenAI-compatible gateway.
+GATEWAY_HOST = os.getenv('HARIOM_GATEWAY_HOST', '127.0.0.1')
+GATEWAY_PORT = int(os.getenv('HARIOM_GATEWAY_PORT', '8080'))
+GATEWAY_API_KEY = os.getenv('HARIOM_GATEWAY_API_KEY', '')
