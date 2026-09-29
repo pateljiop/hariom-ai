@@ -124,3 +124,18 @@ The personal agent now also has:
 - **Resumable execution**: approval pauses preserve the task state and resume from the blocked step.
 
 These ideas are intentionally implemented as small Python modules so the personal-agent core stays understandable and testable.
+
+
+## Personal modes and controlled evolution
+
+Requests are automatically classified into lightweight modes:
+
+- coding
+- study
+- freelance
+- content
+- general
+
+Mode selection is context for planning, not a separate provider or user-facing gateway.
+
+Hariom AI also has a controlled Evolution Engine. Failed task steps become evidence for upgrade proposals and regression tests. The engine records proposals locally; production changes still require explicit approval. It does not silently rewrite or deploy the running system.
