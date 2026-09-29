@@ -53,6 +53,7 @@ class App(tk.Tk):
 
         self.bind("<Control-space>", lambda _e: self.toggle_visibility())
         self.bind("<Escape>", lambda _e: self.collapse())
+        self.protocol("WM_DELETE_WINDOW", self.quit_app)
         self.after(250, self._animate_robot)
 
     def build_robot(self):
@@ -120,7 +121,8 @@ class App(tk.Tk):
         header.bind("<B1-Motion>", self.drag)
         tk.Label(header, text="🤖  HARIOM AI", bg=self.PANEL, fg=self.TEXT, font=("Segoe UI", 12, "bold")).pack(side="left", padx=14)
         tk.Label(header, text="PERSONAL AI", bg=self.PANEL, fg=self.MUTED, font=("Segoe UI", 8, "bold")).pack(side="left")
-        tk.Button(header, text="—", command=self.collapse, bg=self.PANEL, fg=self.MUTED, activebackground=self.PANEL, activeforeground=self.TEXT, relief="flat", bd=0, font=("Segoe UI", 13), padx=10).pack(side="right")
+        tk.Button(header, text="—", command=self.collapse, bg=self.PANEL, fg=self.MUTED, activebackground=self.PANEL, activeforeground=self.TEXT, relief="flat", bd=0, font=("Segoe UI", 13), padx=8).pack(side="right")
+        tk.Button(header, text="✕", command=self.quit_app, bg=self.PANEL, fg="#ff8f8f", activebackground=self.PANEL, activeforeground="#ffb0b0", relief="flat", bd=0, font=("Segoe UI", 11, "bold"), padx=8).pack(side="right")
 
         orb = tk.Frame(outer, bg=self.BG, height=118)
         orb.pack(fill="x")
@@ -165,6 +167,14 @@ class App(tk.Tk):
 
     def drag(self, event):
         self.geometry("+%d+%d" % (self.winfo_x() + event.x - self._drag_x, self.winfo_y() + event.y - self._drag_y))
+
+    def quit_app(self):
+        try:
+            if self.browser:
+                self.browser.close()
+        except Exception:
+            pass
+        self.destroy()
 
     def toggle_visibility(self):
         if self.state() == "withdrawn":
