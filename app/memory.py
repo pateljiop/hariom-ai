@@ -90,7 +90,14 @@ class MemoryStore:
         return [self._row(r) for r in rows]
 
     def important(self, limit=20):
-        return self.recent(limit=limit)  # ordering is handled by importance in search; recent stays chronological
+        params = [max(1, min(int(limit), 100))]
+        with sqlite3.connect(self.db) as con:
+            rows = con.execute(
+                "SELECT id,kind,content,tags,confidence,importance,updated "
+                "FROM memories ORDER BY importance DESC, updated DESC LIMIT ?",
+                params,
+            ).fetchall()
+        return [self._row(r) for r in rows]
 
     def update(self, memory_id, content=None, tags=None, confidence=None, importance=None):
         fields, params = [], []
