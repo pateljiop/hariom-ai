@@ -13,18 +13,8 @@ WORKSPACE = Path(
 ).resolve()
 WORKSPACE.mkdir(parents=True, exist_ok=True)
 
-# Provider pool. Empty keys are ignored automatically.
+# Hariom AI's own provider pool. Empty keys are ignored automatically.
 PROVIDERS = {
-    # Optional local Manifest meta-router. If it is unavailable, the router
-    # automatically continues with the direct provider pool below.
-    'manifest': {
-        'key': os.getenv('MNFST_API_KEY', ''),
-        'model': os.getenv('MNFST_MODEL', 'manifest/auto'),
-        'base': os.getenv(
-            'MNFST_BASE_URL',
-            'http://localhost:2099/v1/chat/completions',
-        ),
-    },
     'openai': {
         'key': os.getenv('OPENAI_API_KEY', ''),
         'model': os.getenv('OPENAI_MODEL', 'gpt-5-mini'),
@@ -36,7 +26,6 @@ PROVIDERS = {
     },
     'groq': {
         'key': os.getenv('GROQ_API_KEY', ''),
-        'model': os.getenv('GROQ_MODEL', 'openai/gpt-oss-120b'),
         'models': [
             os.getenv('GROQ_MODEL', 'openai/gpt-oss-120b'),
             os.getenv('GROQ_FALLBACK_MODEL', 'openai/gpt-oss-20b'),
@@ -60,8 +49,6 @@ PROVIDERS = {
         'model': os.getenv('MISTRAL_MODEL', 'devstral-small-latest'),
         'base': 'https://api.mistral.ai/v1/chat/completions',
     },
-    # Cloudflare Workers AI has a separate account-scoped OpenAI-compatible
-    # endpoint. It stays disabled until both values are supplied.
     'cloudflare': {
         'key': os.getenv('CLOUDFLARE_API_TOKEN', ''),
         'account_id': os.getenv('CLOUDFLARE_ACCOUNT_ID', ''),
@@ -70,3 +57,8 @@ PROVIDERS = {
         'cloudflare': True,
     },
 }
+
+# Smart-router tuning. These can be overridden without changing code.
+ROUTER_COOLDOWN_SECONDS = int(os.getenv('HARIOM_ROUTER_COOLDOWN', '60'))
+ROUTER_RETRIES = int(os.getenv('HARIOM_ROUTER_RETRIES', '2'))
+ROUTER_TIMEOUT_SECONDS = int(os.getenv('HARIOM_ROUTER_TIMEOUT', '90'))
