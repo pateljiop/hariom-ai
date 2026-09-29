@@ -15,6 +15,16 @@ WORKSPACE.mkdir(parents=True, exist_ok=True)
 
 # Provider pool. Empty keys are ignored automatically.
 PROVIDERS = {
+    # Optional local Manifest meta-router. If it is unavailable, the router
+    # automatically continues with the direct provider pool below.
+    'manifest': {
+        'key': os.getenv('MNFST_API_KEY', ''),
+        'model': os.getenv('MNFST_MODEL', 'manifest/auto'),
+        'base': os.getenv(
+            'MNFST_BASE_URL',
+            'http://localhost:2099/v1/chat/completions',
+        ),
+    },
     'openai': {
         'key': os.getenv('OPENAI_API_KEY', ''),
         'model': os.getenv('OPENAI_MODEL', 'gpt-5-mini'),
