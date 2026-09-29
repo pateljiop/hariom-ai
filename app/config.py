@@ -24,7 +24,7 @@ PROVIDERS = {
     'gemini': {
         'key': os.getenv('GEMINI_API_KEY', ''),
         'model': os.getenv('GEMINI_MODEL', 'gemini-flash-latest'),
-        'supports_tools': True, 'supports_streaming': False, 'supports_json': True,
+        'supports_tools': False, 'supports_streaming': False, 'supports_json': True,
         'supports_vision': True, 'speed': 8, 'coding': 7, 'reasoning': 7,
     },
     'groq': {
