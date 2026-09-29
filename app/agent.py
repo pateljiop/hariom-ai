@@ -72,8 +72,34 @@ class PersonalAgent:
                     )
         if not state.steps:
             state.add_step(message.get("content", "Plan unavailable"))
+
+        # Prevent actionable screen requests from becoming text-only fake success.
+        if self._is_screen_click_request(request):
+            state.steps = [{
+                "description": "Locate the requested visible screen target and click its verified center.",
+                "tool": "computer_click_target",
+                "arguments": {"target": self._screen_click_target(request)},
+                "status": "pending",
+                "output": "",
+            }]
+
         self.activity.emit("AGENT PLAN -> %s step(s) via %s" % (len(state.steps), provider))
         return state
+
+    @staticmethod
+    def _is_screen_click_request(request):
+        text = str(request).lower()
+        return (
+            any(w in text for w in ("click", "tap", "press"))
+            and any(w in text for w in ("screen", "tab", "button", "window", "icon"))
+        )
+
+    @staticmethod
+    def _screen_click_target(request):
+        import re
+        text = str(request).strip()
+        match = re.search(r"(?i)(?:click|tap|press)\s+(?:on\s+)?(.+)$", text)
+        return match.group(1).strip() if match else text
 
     def execute(self, state, approve=False, max_attempts=2):
         was_waiting = state.status == TaskStatus.WAITING_APPROVAL
