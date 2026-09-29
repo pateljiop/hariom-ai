@@ -56,6 +56,7 @@ class App(tk.Tk):
         ttk.Button(buttons, text="Ask AI", command=self.ask).pack(side="left")
         ttk.Button(buttons, text="Run Task", command=self.run_task).pack(side="left", padx=6)
         ttk.Button(buttons, text="Approve & Continue", command=self.approve_task).pack(side="left")
+        ttk.Button(buttons, text="Resume Saved", command=self.resume_saved).pack(side="left", padx=6)
         ttk.Button(buttons, text="Workspace", command=self.list_workspace).pack(side="left", padx=6)
         ttk.Button(buttons, text="Choose", command=self.choose_workspace).pack(side="left")
 
@@ -116,6 +117,25 @@ class App(tk.Tk):
             self.after(0, lambda: self.show_task(state))
         except Exception as exc:
             self.after(0, lambda: messagebox.showerror("Task error", str(exc)))
+
+    def resume_saved(self):
+        saved = self.agent.checkpoints.list()
+        candidates = [(tid, state) for tid, state in saved if state.status.value not in ("completed", "failed")]
+        if not candidates:
+            self.append(self.response, "No resumable saved task found.")
+            return
+        task_id, state = candidates[0]
+        self.current_task = state
+        self.append(self.response, "RESUME: " + task_id + " -> " + state.status.value)
+        threading.Thread(target=self.resume_worker, args=(task_id,), daemon=True).start()
+
+    def resume_worker(self, task_id):
+        try:
+            state = self.agent.resume(task_id, approve=False)
+            self.current_task = state
+            self.after(0, lambda: self.show_task(state))
+        except Exception as exc:
+            self.after(0, lambda: messagebox.showerror("Resume error", str(exc)))
 
     def approve_task(self):
         if not self.current_task:
