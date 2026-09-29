@@ -7,6 +7,7 @@ from .agent import PersonalAgent
 from .ai_router import AIRouter
 from .browser import BrowserController
 from .computer import ComputerController
+from .github_tools import GitHubTools
 from .tools import ToolRegistry
 from .workspace import Workspace
 
@@ -22,7 +23,8 @@ class App(tk.Tk):
         self.ws = Workspace()
         self.browser = BrowserController(self.activity, headless=False)
         self.computer = ComputerController(self.activity)
-        self.tools = ToolRegistry(self.ws, self.activity, browser=self.browser, computer=self.computer)
+        self.github = GitHubTools(self.activity)
+        self.tools = ToolRegistry(self.ws, self.activity, browser=self.browser, computer=self.computer, github=self.github)
         self.agent = PersonalAgent(self.router, self.ws, self.activity, tools=self.tools)
         self.current_task = None
         self.build()
