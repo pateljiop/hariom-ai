@@ -111,3 +111,16 @@ python -m unittest discover -s tests -v
 ```
 
 Never commit API keys or .env.
+
+
+## Agent intelligence layer
+
+The personal agent now also has:
+
+- **Workspace context**: deterministic project snapshot with important files and ignored build/vendor directories.
+- **Skills**: file-backed instructions under `workspace/skills/<name>/SKILL.md`, loaded progressively when relevant.
+- **Recovery loop**: failed tool steps can receive one bounded repair attempt instead of immediately ending the task.
+- **Evidence verification**: completion checks inspect tool status/output and verify common filesystem outcomes.
+- **Resumable execution**: approval pauses preserve the task state and resume from the blocked step.
+
+These ideas are intentionally implemented as small Python modules so the personal-agent core stays understandable and testable.
