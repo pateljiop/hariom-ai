@@ -9,6 +9,7 @@ from .config import APP_DIR
 from .tools import ToolRegistry
 from .verification import Verifier
 from .evolution import EvolutionEngine
+from .modes import detect_mode
 
 
 SYSTEM_PROMPT = """You are Hariom AI, a personal computer/workspace assistant.
@@ -40,6 +41,7 @@ class PersonalAgent:
             "tools": self.tools.describe(),
             "skills": self.skills.catalog(),
             "selected_skill_instructions": self.skills.instructions_for(request),
+            "mode": detect_mode(request),
         }
 
     def plan(self, request):
