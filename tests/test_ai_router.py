@@ -75,3 +75,20 @@ class AIRouterTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+    def test_profiles_include_auto_and_coding(self):
+        self.assertIn('hariom/auto', self.router.profiles())
+        self.assertIn('hariom/coding', self.router.profiles())
+
+    def test_tool_requests_skip_unsupported_provider(self):
+        ai_router.PROVIDERS['fast']['supports_tools'] = False
+        ai_router.PROVIDERS['fallback']['supports_tools'] = True
+        ranked = self.router._rank(tools=[{'type': 'function'}])
+        self.assertTrue(all(name == 'fallback' for name, _ in ranked))
+
+    def test_auth_failure_enters_long_disable_window(self):
+        self.router._failure('fast', RuntimeError('401 Unauthorized'))
+        status = self.router.status()['fast']
+        self.assertGreater(status['disabled_remaining'], 80000)
+
