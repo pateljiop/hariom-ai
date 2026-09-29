@@ -81,6 +81,7 @@ class PersonalAgent:
             if step.get("status") == "completed":
                 continue
             state.start_step(index)
+            self._checkpoint(state)
             tool_name = step.get("tool")
 
             if not tool_name:
@@ -94,11 +95,13 @@ class PersonalAgent:
                 if tool.requires_approval and not approve:
                     state.status = TaskStatus.WAITING_APPROVAL
                     self.activity.emit("AGENT -> approval required for " + tool_name)
+                    self._checkpoint(state)
                     return state
 
                 output = self.tools.execute(tool_name, step.get("arguments"), approved=approve)
                 step["workspace_root"] = str(self.workspace.root)
                 state.finish_step(str(output)[-12000:])
+                self._checkpoint(state)
             except Exception as exc:
                 state.fail_step(exc)
                 state.attempts += 1
@@ -106,12 +109,15 @@ class PersonalAgent:
                 if state.attempts >= max_attempts:
                     state.status = TaskStatus.FAILED
                     state.result = "Task stopped after bounded recovery attempts."
+                    self._checkpoint(state)
                     return state
                 if self.repair(state, index, str(exc)):
                     state.status = TaskStatus.RUNNING
+                    self._checkpoint(state)
                     continue
                 state.status = TaskStatus.FAILED
                 state.result = "Task could not be repaired safely."
+                self._checkpoint(state)
                 return state
 
         state.status = TaskStatus.VERIFYING
@@ -123,6 +129,7 @@ class PersonalAgent:
             state.status = TaskStatus.FAILED
             state.errors.extend(failures)
             state.result = "Task execution finished, but verification failed: " + "; ".join(failures)
+        self._checkpoint(state)
         return state
 
     def repair(self, state, failed_index, error):
