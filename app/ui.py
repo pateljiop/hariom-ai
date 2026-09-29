@@ -87,10 +87,22 @@ class App(tk.Tk):
         self.robot.create_oval(50, 74, 66, 84, fill="#111a24", outline=glow_color, width=1)
 
     def _animate_robot(self):
-        if not self._expanded:
-            self.draw_robot(glow=True)
-            self.after(500, lambda: self.draw_robot(glow=False))
-        self.after(900, self._animate_robot)
+        try:
+            if not self.winfo_exists():
+                return
+            if not self._expanded and hasattr(self, "robot") and self.robot.winfo_exists():
+                self.draw_robot(glow=True)
+                self.after(500, self._safe_robot_glow_off)
+            self.after(900, self._animate_robot)
+        except tk.TclError:
+            return
+
+    def _safe_robot_glow_off(self):
+        try:
+            if not self._expanded and hasattr(self, "robot") and self.robot.winfo_exists():
+                self.draw_robot(glow=False)
+        except tk.TclError:
+            pass
 
     def open_panel(self, _event=None):
         if self._expanded:
