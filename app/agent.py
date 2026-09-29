@@ -8,6 +8,7 @@ from .task_engine import TaskState, TaskStatus, TaskCheckpointStore
 from .config import APP_DIR
 from .tools import ToolRegistry
 from .verification import Verifier
+from .evolution import EvolutionEngine
 
 
 SYSTEM_PROMPT = """You are Hariom AI, a personal computer/workspace assistant.
@@ -28,6 +29,7 @@ class PersonalAgent:
         self.tools = tools or ToolRegistry(workspace, activity)
         self.skills = skills or SkillRegistry(workspace.root / "skills")
         self.verifier = Verifier()
+        self.evolution = EvolutionEngine(APP_DIR, activity)
         self.checkpoints = TaskCheckpointStore(APP_DIR / "tasks")
 
     def context(self, request):
@@ -106,6 +108,7 @@ class PersonalAgent:
                 state.fail_step(exc)
                 state.attempts += 1
                 self.activity.emit("AGENT FAILED -> %s: %s" % (tool_name, exc))
+                self.evolution.record(self.evolution.propose(self.evolution.observe_task(state)))
                 if state.attempts >= max_attempts:
                     state.status = TaskStatus.FAILED
                     state.result = "Task stopped after bounded recovery attempts."
