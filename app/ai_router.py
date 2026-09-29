@@ -1,3 +1,4 @@
+import base64
 import json
 import time
 from collections import defaultdict
@@ -12,7 +13,7 @@ from .config import (
 
 
 class AIRouter:
-    """Native gateway router: profiles, health, quota, circuit breaking, cache and fallback."""
+    """Native gateway router: profiles, health, quota, cache and fallback."""
 
     STATE_FILE = APP_DIR / 'router_state.json'
 
@@ -58,6 +59,67 @@ class AIRouter:
         messages.append({'role': 'user', 'content': prompt})
         result, provider = self.chat_request(messages, preferred=preferred, profile=profile)
         return result.get('content', ''), provider
+
+    def vision_chat(self, prompt, image_bytes, mime_type='image/png'):
+        """Describe/analyze one local screenshot using a configured vision provider."""
+        if not image_bytes:
+            raise ValueError('image_bytes is required')
+        encoded = base64.b64encode(image_bytes).decode('ascii')
+        candidates = self._rank_vision()
+        if not candidates:
+            raise RuntimeError('No configured vision-capable AI provider is available.')
+
+        messages = [{
+            'role': 'user',
+            'content': [
+                {'type': 'text', 'text': str(prompt)},
+                {'type': 'image_url', 'image_url': {
+                    'url': 'data:' + mime_type + ';base64,' + encoded
+                }},
+            ],
+        }]
+
+        errors = []
+        for name, model in candidates:
+            try:
+                self.activity.emit('VISION -> trying ' + name + ' (' + model + ')')
+                started = time.monotonic()
+                if name == 'gemini':
+                    message, usage = self._gemini_request(
+                        PROVIDERS[name], messages, model
+                    )
+                else:
+                    message, usage = self._compatible_request(
+                        name, PROVIDERS[name], messages, model
+                    )
+                latency = time.monotonic() - started
+                self.health[name]['last_usage'] = usage or {}
+                self._success(name, latency)
+                self.activity.emit('VISION OK -> ' + name + ' in %.1fs' % latency)
+                return message.get('content', ''), name
+            except Exception as exc:
+                self._failure(name, exc)
+                errors.append(name + '/' + model + ': ' + str(exc))
+                self.activity.emit('VISION FAILED -> ' + name)
+        raise RuntimeError('All vision providers failed. ' + ' | '.join(errors))
+
+    def _rank_vision(self):
+        now = time.time()
+        candidates = []
+        for name, cfg in PROVIDERS.items():
+            if not self._configured(name, cfg) or not cfg.get('supports_vision'):
+                continue
+            s = self.health[name]
+            if s['cooldown_until'] > now or s['disabled_until'] > now:
+                continue
+            models = cfg.get('models') or [cfg.get('model')]
+            for index, model in enumerate(models):
+                if not model:
+                    continue
+                score = s['successes'] * 5 - s['failures'] * 25 - min(s['latency'], 60) - index * 3
+                candidates.append((score, name, model))
+        candidates.sort(reverse=True)
+        return [(name, model) for _, name, model in candidates]
 
     def chat_messages(self, messages, preferred=None, profile='hariom/auto'):
         return self.chat_request(messages, preferred=preferred, profile=profile)
@@ -113,7 +175,6 @@ class AIRouter:
                 self._failure(name, exc)
                 errors.append(f'{name}/{model}: {exc}')
                 self.activity.emit(f'AI FAILED -> {name} ({model})')
-
         raise RuntimeError('All configured AI providers failed. ' + ' | '.join(errors))
 
     def _rank(self, preferred=None, profile='hariom/auto', tools=None, response_format=None):
@@ -136,10 +197,8 @@ class AIRouter:
                     continue
                 score = (
                     (1000 if name == preferred else 0)
-                    + s['successes'] * 5
-                    - s['failures'] * 25
-                    - min(s['latency'], 60)
-                    - index * 3
+                    + s['successes'] * 5 - s['failures'] * 25
+                    - min(s['latency'], 60) - index * 3
                     + cfg.get('speed', 5) * p.get('speed', 0)
                     + cfg.get('coding', 5) * p.get('coding', 0)
                     + cfg.get('reasoning', 5) * p.get('reasoning', 0)
@@ -175,14 +234,11 @@ class AIRouter:
         s['last_error'] = str(exc)[:500]
         text = str(exc).lower()
         if '401' in text or '403' in text:
-            delay = 86400
-            s['disabled_until'] = time.time() + delay
+            s['disabled_until'] = time.time() + 86400
         elif '429' in text:
-            delay = min(ROUTER_COOLDOWN_SECONDS * (2 ** min(s['failures'] - 1, 4)), 3600)
-            s['cooldown_until'] = time.time() + delay
+            s['cooldown_until'] = time.time() + min(ROUTER_COOLDOWN_SECONDS * (2 ** min(s['failures'] - 1, 4)), 3600)
         else:
-            delay = min(ROUTER_COOLDOWN_SECONDS * (2 ** min(s['failures'] - 1, 4)), 3600)
-            s['cooldown_until'] = time.time() + delay
+            s['cooldown_until'] = time.time() + min(ROUTER_COOLDOWN_SECONDS * (2 ** min(s['failures'] - 1, 4)), 3600)
         self._save_state()
 
     def _record_quota(self, name, headers):
@@ -215,15 +271,11 @@ class AIRouter:
     def _save_state(self):
         try:
             self.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-            self.STATE_FILE.write_text(
-                json.dumps({n: dict(s) for n, s in self.health.items()}, indent=2),
-                encoding='utf-8'
-            )
+            self.STATE_FILE.write_text(json.dumps({n: dict(s) for n, s in self.health.items()}, indent=2), encoding='utf-8')
         except OSError:
             pass
 
-    def _compatible_request(self, name, cfg, messages, model, tools=None,
-                            tool_choice=None, response_format=None):
+    def _compatible_request(self, name, cfg, messages, model, tools=None, tool_choice=None, response_format=None):
         payload = {'model': model, 'messages': messages, 'temperature': 0.2}
         if tools:
             payload['tools'] = tools
@@ -281,9 +333,24 @@ class AIRouter:
                 if isinstance(content, str):
                     system.append(content)
                 continue
-            if isinstance(content, str):
-                contents.append({'role': 'model' if role == 'assistant' else 'user',
-                                 'parts': [{'text': content}]})
+            if isinstance(content, list):
+                parts = []
+                for item in content:
+                    if item.get('type') == 'text':
+                        parts.append({'text': item.get('text', '')})
+                    elif item.get('type') == 'image_url':
+                        url_value = item.get('image_url', {}).get('url', '')
+                        if ';base64,' in url_value:
+                            mime, encoded = url_value.split(';base64,', 1)
+                            parts.append({
+                                'inline_data': {
+                                    'mime_type': mime.replace('data:', ''),
+                                    'data': encoded,
+                                }
+                            })
+                contents.append({'role': 'user', 'parts': parts})
+            elif isinstance(content, str):
+                contents.append({'role': 'model' if role == 'assistant' else 'user', 'parts': [{'text': content}]})
         payload = {'contents': contents}
         if system:
             payload['systemInstruction'] = {'parts': [{'text': '\n'.join(system)}]}
