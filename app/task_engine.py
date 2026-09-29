@@ -103,6 +103,16 @@ class TaskCheckpointStore:
             return None
         return TaskState.from_dict(json.loads(path.read_text(encoding="utf-8")))
 
+    def list(self):
+        items = []
+        for path in sorted(self.root.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                items.append((path.stem, TaskState.from_dict(data)))
+            except (OSError, ValueError, TypeError):
+                continue
+        return items
+
     def delete(self, task_id):
         path = self._path(task_id)
         if path.exists():
