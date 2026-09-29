@@ -1,6 +1,8 @@
 import json
 import time
 from pathlib import Path
+import re
+from .evolution_developer import EvolutionDeveloper
 
 
 class EvolutionEngine:
@@ -67,6 +69,31 @@ class EvolutionEngine:
         self._emit("EVOLUTION -> recorded %s upgrade proposal(s)" % len(proposals))
         return entry
 
+    def develop_candidate(self, router, repo_root, request, weaknesses):
+        """Generate and test a candidate on an isolated branch; never merge it."""
+        if not weaknesses:
+            raise ValueError("weaknesses are required")
+        slug = re.sub(r"[^a-z0-9-]+", "-", str(request).lower()).strip("-")[:40] or "upgrade"
+        branch = "evolution/" + slug + "-" + str(int(time.time()))
+        developer = EvolutionDeveloper(repo_root, self.activity)
+        developer.create_isolated_branch(branch)
+        prompt = ("Act as a careful maintainer. Produce ONLY a unified git diff patch. "
+                  "Fix the documented weakness with the smallest safe change. Add tests when appropriate. "
+                  "Do not modify secrets or deployment credentials.\n\nREQUEST:\n" + str(request) +
+                  "\nWEAKNESSES:\n" + json.dumps(weaknesses, ensure_ascii=False))
+        message, provider = router.chat(prompt, system="You are the Hariom AI evolution developer. Return a unified diff only; no markdown fences.", profile="hariom/coding")
+        developer.apply_patch(message)
+        tests = developer.run_tests()
+        if not tests["passed"]:
+            self.record([{"area":"evolution","evidence":tests["output"],"upgrade":"Repair candidate before review.","production_merge_requires_approval":True}], status="candidate_failed")
+            return {"branch":branch,"provider":provider,"tests":tests,"ready_for_review":False}
+        diff = developer.diff()
+        if not diff.strip():
+            raise RuntimeError("Candidate produced no diff.")
+        commit = developer.commit_candidate("evolution: " + slug)
+        result = {"branch":branch,"provider":provider,"tests":tests,"commit":commit,"ready_for_review":True}
+        self.record([{"area":"evolution","evidence":str(weaknesses),"upgrade":"Candidate tested on isolated branch.","production_merge_requires_approval":True,"candidate":result}], status="candidate_ready")
+        return result
     def review(self):
         return self._load()[-20:]
 
