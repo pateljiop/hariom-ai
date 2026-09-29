@@ -9,6 +9,7 @@ from .browser import BrowserController
 from .computer import ComputerController
 from .github_tools import GitHubTools
 from .tools import ToolRegistry
+from .voice import VoiceController
 from .workspace import Workspace
 
 
@@ -38,9 +39,10 @@ class App(tk.Tk):
         self.browser = BrowserController(self.activity, headless=False)
         self.computer = ComputerController(self.activity)
         self.github = GitHubTools(self.activity)
+        self.voice = VoiceController(self.activity)
         self.tools = ToolRegistry(
             self.ws, self.activity, browser=self.browser,
-            computer=self.computer, github=self.github
+            computer=self.computer, github=self.github, voice=self.voice
         )
         self.agent = PersonalAgent(self.router, self.ws, self.activity, tools=self.tools)
 
@@ -56,23 +58,14 @@ class App(tk.Tk):
     def build_robot(self):
         self.robot_frame = tk.Frame(self, bg=self.BG)
         self.robot_frame.pack(fill="both", expand=True)
-
-        self.robot = tk.Canvas(
-            self.robot_frame, width=116, height=108, bg=self.BG,
-            highlightthickness=0, bd=0
-        )
+        self.robot = tk.Canvas(self.robot_frame, width=116, height=108, bg=self.BG, highlightthickness=0, bd=0)
         self.robot.pack()
         self.draw_robot()
         self.robot.bind("<Button-1>", self.open_panel)
         self.robot.bind("<ButtonPress-3>", self.start_drag)
         self.robot.bind("<B3-Motion>", self.drag)
         self.robot.bind("<Double-Button-1>", lambda _e: self.collapse())
-
-        self.robot_hint = tk.Label(
-            self.robot_frame, text="HARIOM AI", bg=self.BG, fg=self.MUTED,
-            font=("Segoe UI", 7, "bold")
-        )
-        self.robot_hint.pack()
+        tk.Label(self.robot_frame, text="HARIOM AI", bg=self.BG, fg=self.MUTED, font=("Segoe UI", 7, "bold")).pack()
 
     def draw_robot(self, glow=False):
         self.robot.delete("all")
@@ -118,51 +111,27 @@ class App(tk.Tk):
     def build_panel(self):
         for child in list(self.winfo_children()):
             child.destroy()
-
-        outer = tk.Frame(
-            self, bg=self.BG, highlightthickness=1, highlightbackground="#34414f"
-        )
+        outer = tk.Frame(self, bg=self.BG, highlightthickness=1, highlightbackground="#34414f")
         outer.pack(fill="both", expand=True)
 
         header = tk.Frame(outer, bg=self.PANEL, height=48)
         header.pack(fill="x")
         header.bind("<ButtonPress-1>", self.start_drag)
         header.bind("<B1-Motion>", self.drag)
-
-        tk.Label(
-            header, text="🤖  HARIOM AI", bg=self.PANEL, fg=self.TEXT,
-            font=("Segoe UI", 12, "bold")
-        ).pack(side="left", padx=14)
-        tk.Label(
-            header, text="PERSONAL AI", bg=self.PANEL, fg=self.MUTED,
-            font=("Segoe UI", 8, "bold")
-        ).pack(side="left")
-        tk.Button(
-            header, text="—", command=self.collapse, bg=self.PANEL, fg=self.MUTED,
-            activebackground=self.PANEL, activeforeground=self.TEXT,
-            relief="flat", bd=0, font=("Segoe UI", 13), padx=10
-        ).pack(side="right")
+        tk.Label(header, text="🤖  HARIOM AI", bg=self.PANEL, fg=self.TEXT, font=("Segoe UI", 12, "bold")).pack(side="left", padx=14)
+        tk.Label(header, text="PERSONAL AI", bg=self.PANEL, fg=self.MUTED, font=("Segoe UI", 8, "bold")).pack(side="left")
+        tk.Button(header, text="—", command=self.collapse, bg=self.PANEL, fg=self.MUTED, activebackground=self.PANEL, activeforeground=self.TEXT, relief="flat", bd=0, font=("Segoe UI", 13), padx=10).pack(side="right")
 
         orb = tk.Frame(outer, bg=self.BG, height=118)
         orb.pack(fill="x")
-        self.orb = tk.Label(
-            orb, text="◉", bg=self.BG, fg=self.ACCENT,
-            font=("Segoe UI", 54, "bold")
-        )
+        self.orb = tk.Label(orb, text="◉", bg=self.BG, fg=self.ACCENT, font=("Segoe UI", 54, "bold"))
         self.orb.pack(pady=(10, 0))
         self.status = tk.StringVar(value="Ready")
-        tk.Label(
-            orb, textvariable=self.status, bg=self.BG, fg=self.MUTED,
-            font=("Segoe UI", 9)
-        ).pack()
+        tk.Label(orb, textvariable=self.status, bg=self.BG, fg=self.MUTED, font=("Segoe UI", 9)).pack()
 
         command = tk.Frame(outer, bg=self.PANEL, padx=12, pady=10)
         command.pack(fill="x", padx=12, pady=(0, 10))
-        self.prompt = tk.Text(
-            command, height=3, wrap="word", bg=self.ENTRY, fg=self.TEXT,
-            insertbackground=self.ACCENT, relief="flat", bd=0,
-            font=("Segoe UI", 10), padx=10, pady=8
-        )
+        self.prompt = tk.Text(command, height=3, wrap="word", bg=self.ENTRY, fg=self.TEXT, insertbackground=self.ACCENT, relief="flat", bd=0, font=("Segoe UI", 10), padx=10, pady=8)
         self.prompt.pack(fill="x")
         self.prompt.insert("1.0", "Ask Hariom AI...")
         self.prompt.bind("<FocusIn>", self.clear_placeholder)
@@ -171,51 +140,30 @@ class App(tk.Tk):
         actions = tk.Frame(command, bg=self.PANEL)
         actions.pack(fill="x", pady=(8, 0))
         self.action_button(actions, "Ask", self.ask).pack(side="left")
-        self.action_button(actions, "Run Task", self.run_task).pack(side="left", padx=6)
-        self.action_button(actions, "Approve", self.approve_task).pack(side="left")
+        self.action_button(actions, "Run Task", self.run_task).pack(side="left", padx=5)
+        self.action_button(actions, "🎙 Voice", self.voice_command).pack(side="left")
+        self.action_button(actions, "Approve", self.approve_task).pack(side="left", padx=5)
         self.action_button(actions, "Resume", self.resume_saved).pack(side="right")
 
-        tk.Label(
-            outer, text="LIVE ACTIVITY", bg=self.BG, fg=self.MUTED,
-            font=("Segoe UI", 8, "bold")
-        ).pack(anchor="w", padx=16)
-
+        tk.Label(outer, text="LIVE ACTIVITY", bg=self.BG, fg=self.MUTED, font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=16)
         box = tk.Frame(outer, bg=self.ENTRY)
         box.pack(fill="both", expand=True, padx=12, pady=(5, 8))
-        self.log = tk.Text(
-            box, wrap="word", state="disabled", bg=self.ENTRY, fg="#b8c2d1",
-            relief="flat", bd=0, font=("Consolas", 8), padx=9, pady=8
-        )
+        self.log = tk.Text(box, wrap="word", state="disabled", bg=self.ENTRY, fg="#b8c2d1", relief="flat", bd=0, font=("Consolas", 8), padx=9, pady=8)
         self.log.pack(fill="both", expand=True)
 
         footer = tk.Frame(outer, bg=self.PANEL)
         footer.pack(fill="x")
-        tk.Label(
-            footer, text="Click robot to return  •  Ctrl+Space",
-            bg=self.PANEL, fg=self.MUTED, font=("Segoe UI", 8)
-        ).pack(side="left", padx=12, pady=8)
-        tk.Button(
-            footer, text="Workspace", command=self.list_workspace,
-            bg=self.PANEL, fg=self.MUTED, activebackground=self.PANEL,
-            activeforeground=self.TEXT, relief="flat", bd=0,
-            font=("Segoe UI", 8)
-        ).pack(side="right", padx=8)
+        tk.Label(footer, text="Click robot to return  •  Ctrl+Space", bg=self.PANEL, fg=self.MUTED, font=("Segoe UI", 8)).pack(side="left", padx=12, pady=8)
+        tk.Button(footer, text="Workspace", command=self.list_workspace, bg=self.PANEL, fg=self.MUTED, activebackground=self.PANEL, activeforeground=self.TEXT, relief="flat", bd=0, font=("Segoe UI", 8)).pack(side="right", padx=8)
 
     def action_button(self, parent, text, command):
-        return tk.Button(
-            parent, text=text, command=command, bg="#222936", fg=self.TEXT,
-            activebackground="#303a4b", activeforeground=self.TEXT,
-            relief="flat", bd=0, padx=12, pady=5,
-            font=("Segoe UI", 8, "bold"), cursor="hand2"
-        )
+        return tk.Button(parent, text=text, command=command, bg="#222936", fg=self.TEXT, activebackground="#303a4b", activeforeground=self.TEXT, relief="flat", bd=0, padx=9, pady=5, font=("Segoe UI", 8, "bold"), cursor="hand2")
 
     def start_drag(self, event):
         self._drag_x, self._drag_y = event.x, event.y
 
     def drag(self, event):
-        x = self.winfo_x() + event.x - self._drag_x
-        y = self.winfo_y() + event.y - self._drag_y
-        self.geometry("+%d+%d" % (x, y))
+        self.geometry("+%d+%d" % (self.winfo_x() + event.x - self._drag_x, self.winfo_y() + event.y - self._drag_y))
 
     def toggle_visibility(self):
         if self.state() == "withdrawn":
@@ -256,6 +204,24 @@ class App(tk.Tk):
         widget.see("end")
         widget.configure(state="disabled")
 
+    def voice_command(self):
+        if not self._expanded:
+            return
+        self.status.set("Listening...")
+        threading.Thread(target=self.voice_worker, daemon=True).start()
+
+    def voice_worker(self):
+        try:
+            prompt = self.voice.listen()
+            if not prompt:
+                self.after(0, lambda: self.status.set("No speech recognized"))
+                return
+            self.after(0, lambda: self.prompt.delete("1.0", "end"))
+            self.after(0, lambda: self.prompt.insert("1.0", prompt))
+            self.after(0, lambda: self.status.set("Voice command ready — press Run Task"))
+        except Exception as exc:
+            self.after(0, lambda: messagebox.showerror("Voice error", str(exc)))
+
     def ask(self):
         prompt = self.get_prompt()
         if prompt:
@@ -263,10 +229,7 @@ class App(tk.Tk):
 
     def ask_worker(self, prompt):
         try:
-            text, provider = self.router.chat(
-                prompt,
-                system="You are Hariom AI, a personal AI assistant. Be practical and transparent. Never claim an action was performed unless a tool verified it.",
-            )
+            text, provider = self.router.chat(prompt, system="You are Hariom AI, a personal AI assistant. Be practical and transparent. Never claim an action was performed unless a tool verified it.")
             self.after(0, lambda: self.append(self.log, "AI (" + provider + "): " + text))
             self.after(0, lambda: self.status.set("Ready"))
         except Exception as exc:
@@ -288,10 +251,7 @@ class App(tk.Tk):
 
     def resume_saved(self):
         saved = self.agent.checkpoints.list()
-        candidates = [
-            (tid, state) for tid, state in saved
-            if state.status.value not in ("completed", "failed")
-        ]
+        candidates = [(tid, state) for tid, state in saved if state.status.value not in ("completed", "failed")]
         if not candidates:
             self.append(self.log, "No resumable saved task found.")
             return
@@ -334,11 +294,7 @@ class App(tk.Tk):
     def list_workspace(self):
         try:
             items = self.ws.list_files()
-            self.append(
-                self.log,
-                "\n".join(str(p.relative_to(self.ws.root)) for p in items[:100])
-                or "Workspace is empty."
-            )
+            self.append(self.log, "\n".join(str(p.relative_to(self.ws.root)) for p in items[:100]) or "Workspace is empty.")
         except Exception as exc:
             messagebox.showerror("Workspace", str(exc))
 
