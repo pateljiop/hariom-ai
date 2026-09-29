@@ -53,10 +53,11 @@ class PersonalAgent:
             "Do not claim execution or invent results.\n\nREQUEST:\n" + request +
             "\n\nCONTEXT:\n" + json.dumps(ctx, ensure_ascii=False)
         )
+        planning_profile = "hariom/fast" if self._is_screen_click_request(request) else "hariom/reasoning"
         message, provider = self.router.chat_messages(
             [{"role": "system", "content": SYSTEM_PROMPT},
              {"role": "user", "content": prompt}],
-            profile="hariom/reasoning",
+            profile=planning_profile,
             response_format={"type": "json_object"},
         )
         data = self._parse_json(message.get("content", ""))
