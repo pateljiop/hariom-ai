@@ -1,8 +1,12 @@
+import json
 import time
 from collections import defaultdict
+from pathlib import Path
+
 import requests
 
 from .config import (
+    APP_DIR,
     PROVIDERS,
     ROUTER_COOLDOWN_SECONDS,
     ROUTER_RETRIES,
@@ -11,7 +15,9 @@ from .config import (
 
 
 class AIRouter:
-    """Native smart router with health, cooldown, latency and model fallback."""
+    """Native smart router with health, quota, cooldown and model fallback."""
+
+    STATE_FILE = APP_DIR / 'router_state.json'
 
     def __init__(self, activity):
         self.activity = activity
@@ -21,8 +27,12 @@ class AIRouter:
                 'successes': 0,
                 'latency': 0.0,
                 'cooldown_until': 0.0,
+                'remaining_rpm': None,
+                'remaining_tpm': None,
+                'remaining_rpd': None,
             }
         )
+        self._load_state()
 
     def available(self):
         return [
@@ -31,7 +41,6 @@ class AIRouter:
         ]
 
     def status(self):
-        """Return a UI-friendly snapshot of provider health."""
         now = time.time()
         result = {}
         for name, cfg in PROVIDERS.items():
@@ -45,6 +54,9 @@ class AIRouter:
                 'cooldown_remaining': max(
                     0, round(state['cooldown_until'] - now, 1)
                 ),
+                'remaining_rpm': state['remaining_rpm'],
+                'remaining_tpm': state['remaining_tpm'],
+                'remaining_rpd': state['remaining_rpd'],
             }
         return result
 
@@ -81,9 +93,24 @@ class AIRouter:
                 self.activity.emit(f'AI FAILED -> {name} ({model})')
 
         raise RuntimeError(
-            'All configured AI providers failed. '
-            + ' | '.join(errors)
+            'All configured AI providers failed. ' + ' | '.join(errors)
         )
+
+    def chat_messages(self, messages, preferred=None):
+        """OpenAI-style message entry point for the local gateway."""
+        system_parts = [
+            m.get('content', '')
+            for m in messages
+            if m.get('role') == 'system' and isinstance(m.get('content'), str)
+        ]
+        user_parts = [
+            m.get('content', '')
+            for m in messages
+            if m.get('role') in ('user', 'tool') and isinstance(m.get('content'), str)
+        ]
+        system = '\n'.join(system_parts)
+        prompt = '\n\n'.join(user_parts)
+        return self.chat(prompt, system=system, preferred=preferred)
 
     def _rank(self, preferred=None):
         now = time.time()
@@ -106,13 +133,18 @@ class AIRouter:
                 if not model:
                     continue
 
-                # Preferred provider/model gets the first attempt.
                 preferred_bonus = 1000 if name == preferred else 0
-
-                # Healthy providers are preferred; lower recent latency wins.
                 failure_penalty = state['failures'] * 25
                 latency_penalty = min(state['latency'], 60)
                 model_penalty = index * 3
+
+                quota_penalty = 0
+                if state['remaining_rpm'] is not None:
+                    quota_penalty += max(0, 10 - state['remaining_rpm']) * 2
+                if state['remaining_tpm'] is not None:
+                    quota_penalty += max(0, 1000 - state['remaining_tpm']) / 1000
+                if state['remaining_rpd'] is not None:
+                    quota_penalty += max(0, 10 - state['remaining_rpd'])
 
                 score = (
                     preferred_bonus
@@ -120,6 +152,7 @@ class AIRouter:
                     - failure_penalty
                     - latency_penalty
                     - model_penalty
+                    - quota_penalty
                 )
                 candidates.append((score, name, model))
 
@@ -142,11 +175,71 @@ class AIRouter:
         else:
             state['latency'] = (state['latency'] * 0.7) + (latency * 0.3)
         state['cooldown_until'] = 0.0
+        self._save_state()
 
     def _failure(self, name):
         state = self.health[name]
         state['failures'] += 1
-        state['cooldown_until'] = time.time() + ROUTER_COOLDOWN_SECONDS
+        # Exponential cooldown, capped so a transient error does not permanently
+        # remove a provider from the pool.
+        delay = min(
+            ROUTER_COOLDOWN_SECONDS * (2 ** min(state['failures'] - 1, 4)),
+            3600,
+        )
+        state['cooldown_until'] = time.time() + delay
+        self._save_state()
+
+    def _record_quota(self, name, headers):
+        state = self.health[name]
+        mapping = {
+            'remaining_rpm': (
+                'x-ratelimit-remaining-requests',
+                'x-ratelimit-remaining-rpm',
+            ),
+            'remaining_tpm': (
+                'x-ratelimit-remaining-tokens',
+                'x-ratelimit-remaining-tpm',
+            ),
+            'remaining_rpd': (
+                'x-ratelimit-remaining-day-requests',
+                'x-ratelimit-remaining-rpd',
+            ),
+        }
+
+        for field, names in mapping.items():
+            for header_name in names:
+                value = headers.get(header_name)
+                if value is not None:
+                    try:
+                        state[field] = int(float(value))
+                    except (TypeError, ValueError):
+                        pass
+                    break
+
+        self._save_state()
+
+    def _load_state(self):
+        try:
+            if not self.STATE_FILE.exists():
+                return
+            data = json.loads(self.STATE_FILE.read_text(encoding='utf-8'))
+            for name, state in data.items():
+                self.health[name].update(state)
+        except (OSError, ValueError, TypeError):
+            # Corrupt state must never stop the AI router.
+            return
+
+    def _save_state(self):
+        try:
+            payload = {name: dict(state) for name, state in self.health.items()}
+            self.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            self.STATE_FILE.write_text(
+                json.dumps(payload, indent=2),
+                encoding='utf-8',
+            )
+        except OSError:
+            # Health persistence is optional; routing must keep working.
+            return
 
     def _compatible(self, cfg, prompt, system, model):
         messages = []
@@ -174,9 +267,9 @@ class AIRouter:
             base = base.format(account_id=cfg['account_id'])
             headers['cf-aig-gateway-id'] = 'default'
 
-        return self._post_chat(base, headers, payload)
+        return self._post_chat(base, headers, payload, provider=cfg)
 
-    def _post_chat(self, base, headers, payload):
+    def _post_chat(self, base, headers, payload, provider=None):
         last_error = None
 
         for attempt in range(ROUTER_RETRIES + 1):
@@ -187,6 +280,18 @@ class AIRouter:
                     json=payload,
                     timeout=ROUTER_TIMEOUT_SECONDS,
                 )
+
+                if provider is not None:
+                    self._record_quota(
+                        next(
+                            (
+                                name for name, cfg in PROVIDERS.items()
+                                if cfg is provider
+                            ),
+                            'unknown',
+                        ),
+                        response.headers,
+                    )
 
                 if response.status_code == 429 or response.status_code >= 500:
                     retry_after = response.headers.get('Retry-After')
@@ -241,6 +346,16 @@ class AIRouter:
             headers=headers,
             json=payload,
             timeout=ROUTER_TIMEOUT_SECONDS,
+        )
+        self._record_quota(
+            next(
+                (
+                    name for name, cfg_item in PROVIDERS.items()
+                    if cfg_item is cfg
+                ),
+                'gemini',
+            ),
+            response.headers,
         )
         response.raise_for_status()
 
