@@ -44,7 +44,10 @@ class PersonalAgent:
 
     def execute(self, state, approve=False):
         state.status = TaskStatus.RUNNING
-        for index, step in enumerate(state.steps):
+        start = state.current_step if state.status == TaskStatus.WAITING_APPROVAL else 0
+        for index in range(start, len(state.steps)):
+            step = state.steps[index]
+
             state.start_step(index)
             tool_name = step.get("tool")
             if not tool_name:
