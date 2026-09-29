@@ -75,6 +75,7 @@ class AIRouter:
         base = cfg['base']
         if cfg.get('cloudflare'):
             base = base.format(account_id=cfg['account_id'])
+            headers['cf-aig-gateway-id'] = 'default'
 
         last_error = None
         for attempt in range(3):
