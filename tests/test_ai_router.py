@@ -79,6 +79,14 @@ class AIRouterTests(unittest.TestCase):
         self.assertEqual(result["label"], "Save")
 
     @patch.object(ai_router.AIRouter, "vision_chat")
+    def test_locate_on_screen_parses_normalized_bbox(self, vision):
+        vision.return_value = ("<box>[[0, 240, 40, 450]]</box>", "openrouter")
+        result = self.router.locate_on_screen("GitHub tab", b"image", (1280, 720))
+        self.assertTrue(result["found"])
+        self.assertEqual(result["x"], 442)
+        self.assertEqual(result["y"], 14)
+
+    @patch.object(ai_router.AIRouter, "vision_chat")
     def test_locate_on_screen_rejects_low_confidence(self, vision):
         vision.return_value = (
             '{"found":true,"x":100,"y":100,"confidence":0.42}',
