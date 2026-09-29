@@ -99,7 +99,15 @@ class PersonalAgent:
     def _screen_click_target(request):
         import re
         text = str(request).strip()
-        match = re.search(r"(?i)(?:click|tap|press)\s+(?:on\s+)?(.+)$", text)
+        # Handle natural Hinglish forms such as:
+        # "github tab pr click karo", "github tab pe click kar do".
+        match = re.search(
+            r"(?i)^(.+?)\s+(?:pr|par|pe|on)\s+(?:click|tap|press)\\b.*$",
+            text,
+        )
+        if match:
+            return re.sub(r"(?i)\\s+$", "", match.group(1)).strip()
+        match = re.search(r"(?i)(?:click|tap|press)\s+(?:on\s+)?(.+?)(?:\\s+(?:karo|kar do|krdo|please))?$", text)
         return match.group(1).strip() if match else text
 
     def execute(self, state, approve=False, max_attempts=2):
@@ -200,7 +208,17 @@ class PersonalAgent:
             return False
 
     def run(self, request, approve=False):
-        state = self.plan(request)
+        # Simple screen actions do not need a full reasoning/planning round.
+        # Build the deterministic action directly to reduce latency and ambiguity.
+        if self._is_screen_click_request(request):
+            state = TaskState(request=request)
+            state.add_step(
+                "Locate the requested visible screen target and click its verified center.",
+                "computer_click_target",
+                {"target": self._screen_click_target(request)},
+            )
+        else:
+            state = self.plan(request)
         self._checkpoint(state)
         return self.execute(state, approve=approve)
 
