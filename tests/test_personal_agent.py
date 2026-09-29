@@ -36,7 +36,8 @@ class PersonalAgentTests(unittest.TestCase):
             class WriteRouter(FakeRouter):
                 def chat_messages(self,messages,**kwargs):
                     return {"role":"assistant","content":"{\"steps\":[{\"description\":\"Write a file\",\"tool\":\"write_file\",\"arguments\":{\"path\":\"x.txt\",\"content\":\"x\"}}]}"}, "fake"
-            state=PersonalAgent(WriteRouter(),ws,activity,memory=MemoryStore(Path(d)/"memory.sqlite3")).run("write x")
+            agent=PersonalAgent(WriteRouter(),ws,activity,memory=MemoryStore(Path(d)/"memory.sqlite3"))
+            state=agent.run("write x")
             self.assertEqual(state.status,TaskStatus.WAITING_APPROVAL)
             self.assertFalse((Path(d)/"x.txt").exists())
             saved = agent.checkpoints.load(agent.task_id(state))
