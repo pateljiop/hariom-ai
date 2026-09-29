@@ -179,7 +179,13 @@ class AIRouter:
             for index, model in enumerate(models):
                 if not model:
                     continue
-                score = s['successes'] * 5 - s['failures'] * 25 - min(s['latency'], 60) - index * 3
+                score = (
+                    s['successes'] * 5
+                    - s['failures'] * 25
+                    - min(s['latency'], 60)
+                    + cfg.get('speed', 5) * 1.5
+                    - index * 3
+                )
                 candidates.append((score, name, model))
         candidates.sort(reverse=True)
         return [(name, model) for _, name, model in candidates]
