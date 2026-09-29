@@ -13,8 +13,7 @@ WORKSPACE = Path(
 ).resolve()
 WORKSPACE.mkdir(parents=True, exist_ok=True)
 
-# Provider pool. Empty keys are intentionally ignored, so adding a provider
-# here never makes a missing credential break the app.
+# Provider pool. Empty keys are ignored automatically.
 PROVIDERS = {
     'openai': {
         'key': os.getenv('OPENAI_API_KEY', ''),
@@ -28,6 +27,11 @@ PROVIDERS = {
     'groq': {
         'key': os.getenv('GROQ_API_KEY', ''),
         'model': os.getenv('GROQ_MODEL', 'openai/gpt-oss-120b'),
+        'models': [
+            os.getenv('GROQ_MODEL', 'openai/gpt-oss-120b'),
+            os.getenv('GROQ_FALLBACK_MODEL', 'openai/gpt-oss-20b'),
+            os.getenv('GROQ_SECOND_FALLBACK_MODEL', 'qwen/qwen3.8-27b'),
+        ],
         'base': 'https://api.groq.com/openai/v1/chat/completions',
     },
     'cerebras': {
@@ -46,9 +50,13 @@ PROVIDERS = {
         'model': os.getenv('MISTRAL_MODEL', 'devstral-small-latest'),
         'base': 'https://api.mistral.ai/v1/chat/completions',
     },
-    'github_models': {
-        'key': os.getenv('GITHUB_MODELS_TOKEN', ''),
-        'model': os.getenv('GITHUB_MODELS_MODEL', 'gpt-4o-mini'),
-        'base': 'https://models.inference.ai.azure.com/chat/completions',
+    # Cloudflare Workers AI has a separate account-scoped OpenAI-compatible
+    # endpoint. It stays disabled until both values are supplied.
+    'cloudflare': {
+        'key': os.getenv('CLOUDFLARE_API_TOKEN', ''),
+        'account_id': os.getenv('CLOUDFLARE_ACCOUNT_ID', ''),
+        'model': os.getenv('CLOUDFLARE_MODEL', '@cf/openai/gpt-oss-120b'),
+        'base': 'https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1/chat/completions',
+        'cloudflare': True,
     },
 }
