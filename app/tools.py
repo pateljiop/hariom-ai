@@ -41,6 +41,7 @@ class ToolRegistry:
             self.register(Tool("computer_screenshot", "Capture the Windows desktop.", computer.screenshot))
             self.register(Tool("computer_move_mouse", "Move the mouse to screen coordinates.", computer.move_mouse, True))
             self.register(Tool("computer_click", "Click the Windows desktop at coordinates.", computer.click, True))
+            self.register(Tool("computer_click_target", "Freshly locate a visible screen target with AI vision and click its verified center.", computer.click_target, True))
             self.register(Tool("computer_type", "Type text into the active application.", computer.type_text, True))
             self.register(Tool("computer_press_key", "Press one bounded keyboard key.", computer.press_key, True))
             self.register(Tool("computer_hotkey", "Press a bounded keyboard shortcut.", computer.hotkey, True))
