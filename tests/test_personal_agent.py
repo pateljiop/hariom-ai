@@ -39,6 +39,10 @@ class PersonalAgentTests(unittest.TestCase):
             state=PersonalAgent(WriteRouter(),ws,activity,memory=MemoryStore(Path(d)/"memory.sqlite3")).run("write x")
             self.assertEqual(state.status,TaskStatus.WAITING_APPROVAL)
             self.assertFalse((Path(d)/"x.txt").exists())
+            saved = agent.checkpoints.load(agent.task_id(state))
+            self.assertIsNotNone(saved)
+            self.assertEqual(saved.status, TaskStatus.WAITING_APPROVAL)
+            self.assertEqual(saved.current_step, 0)
 
 if __name__=="__main__":
     unittest.main()
