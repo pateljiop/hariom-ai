@@ -14,10 +14,11 @@ class ComputerController:
         "shift", "ctrl", "alt", "win", "capslock",
     }
 
-    def __init__(self, activity):
+    def __init__(self, activity, locator=None):
         self.activity = activity
         self.system = platform.system()
         self._pg = None
+        self.locator = locator
 
     def _pyautogui(self):
         if self.system != "Windows":
@@ -85,6 +86,21 @@ class ComputerController:
         self._pyautogui().moveTo(int(x), int(y), duration=float(duration))
         self.activity.emit(f"COMPUTER -> move mouse ({int(x)}, {int(y)})")
         return {"x": int(x), "y": int(y)}
+
+    def click_target(self, target, button="left", clicks=1):
+        """Freshly locate a visible target and click its verified center."""
+        if not self.locator:
+            raise RuntimeError("Screen locator is not configured.")
+        image = self.screenshot_bytes()
+        size = self.screen_size()
+        location = self.locator(str(target), image, (size["width"], size["height"]))
+        if not location.get("found"):
+            raise RuntimeError("Target not found: " + str(location.get("reason", target)))
+        self.activity.emit(
+            "COMPUTER -> located %s at (%s, %s), confidence %.2f"
+            % (location.get("label", target), location["x"], location["y"], location.get("confidence", 0.0))
+        )
+        return self.click(location["x"], location["y"], button=button, clicks=clicks)
 
     def click(self, x, y, button="left", clicks=1):
         self._check_point(x, y)
