@@ -103,6 +103,58 @@ class AIRouter:
                 self.activity.emit('VISION FAILED -> ' + name)
         raise RuntimeError('All vision providers failed. ' + ' | '.join(errors))
 
+    def locate_on_screen(self, target, image_bytes, screen_size):
+        """Locate a visible UI target and return safe pixel coordinates."""
+        if not target:
+            raise ValueError('target is required')
+        if not image_bytes:
+            raise ValueError('image_bytes is required')
+        if not screen_size or len(screen_size) != 2:
+            raise ValueError('screen_size must be (width, height)')
+        width, height = int(screen_size[0]), int(screen_size[1])
+        if width <= 0 or height <= 0:
+            raise ValueError('screen_size must be positive')
+
+        prompt = (
+            'Locate this exact target on the screenshot: ' + str(target) + '\n'
+            'Return ONLY valid JSON, with no markdown. If clearly visible, use: '
+            '{"found":true,"x":123,"y":456,"label":"...","confidence":0.0}. '
+            'x and y must be the center point in top-left screen pixel coordinates. '
+            'If it is not clearly visible or you would have to guess, use: '
+            '{"found":false,"reason":"..."}. Never guess coordinates. '
+            'Screen size is ' + str(width) + 'x' + str(height) + '.'
+        )
+        text, provider = self.vision_chat(prompt, image_bytes)
+        raw = str(text).strip()
+        if raw.startswith('```'):
+            raw = raw.strip('`').strip()
+            if raw.lower().startswith('json'):
+                raw = raw[4:].strip()
+        try:
+            data = json.loads(raw)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError('Vision locator returned invalid JSON: ' + raw[:500]) from exc
+        if not isinstance(data, dict):
+            raise RuntimeError('Vision locator returned a non-object response.')
+        if not data.get('found'):
+            return {'found': False, 'reason': str(data.get('reason', 'Target not found.')), 'provider': provider}
+        try:
+            x = int(round(float(data['x'])))
+            y = int(round(float(data['y'])))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RuntimeError('Vision locator returned invalid coordinates.') from exc
+        confidence = max(0.0, min(1.0, float(data.get('confidence', 0.0))))
+        if confidence < 0.70:
+            return {'found': False, 'reason': 'Target location confidence is too low.', 'confidence': confidence, 'provider': provider}
+        return {
+            'found': True,
+            'x': max(0, min(width - 1, x)),
+            'y': max(0, min(height - 1, y)),
+            'label': str(data.get('label', target)),
+            'confidence': confidence,
+            'provider': provider,
+        }
+
     def _rank_vision(self):
         now = time.time()
         candidates = []
