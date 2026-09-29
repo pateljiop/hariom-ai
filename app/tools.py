@@ -13,15 +13,17 @@ class Tool:
 class ToolRegistry:
     """Explicit local tool registry for the personal agent."""
 
-    def __init__(self, workspace, activity, browser=None):
+    def __init__(self, workspace, activity, browser=None, computer=None):
         self.workspace = workspace
         self.activity = activity
         self.browser = browser
+        self.computer = computer
         self._tools = {}
         self.register(Tool("list_files", "List files inside the active workspace.", self.list_files))
         self.register(Tool("read_file", "Read a UTF-8 file inside the active workspace.", self.read_file))
         self.register(Tool("write_file", "Create or replace a UTF-8 file inside the active workspace.", self.write_file, True))
         self.register(Tool("run_command", "Run a terminal command.", self.run_command, True))
+
         if browser:
             self.register(Tool("browser_open", "Open a public http/https URL in the controlled browser.", browser.open))
             self.register(Tool("browser_current_page", "Get the current browser URL and title.", browser.current_page))
@@ -30,6 +32,17 @@ class ToolRegistry:
             self.register(Tool("browser_type", "Fill text into a form element selected by CSS.", browser.type_text, True))
             self.register(Tool("browser_screenshot", "Capture the current browser page.", browser.screenshot))
             self.register(Tool("browser_close", "Close the controlled browser session.", browser.close))
+
+        if computer:
+            self.register(Tool("computer_screen_size", "Get the Windows screen dimensions.", computer.screen_size))
+            self.register(Tool("computer_position", "Get the current mouse position.", computer.position))
+            self.register(Tool("computer_screenshot", "Capture the Windows desktop.", computer.screenshot))
+            self.register(Tool("computer_move_mouse", "Move the mouse to screen coordinates.", computer.move_mouse, True))
+            self.register(Tool("computer_click", "Click the Windows desktop at coordinates.", computer.click, True))
+            self.register(Tool("computer_type", "Type text into the active application.", computer.type_text, True))
+            self.register(Tool("computer_press_key", "Press one bounded keyboard key.", computer.press_key, True))
+            self.register(Tool("computer_hotkey", "Press a bounded keyboard shortcut.", computer.hotkey, True))
+            self.register(Tool("computer_wait", "Wait briefly for an application state to settle.", computer.wait))
 
     def register(self, tool):
         self._tools[tool.name] = tool
