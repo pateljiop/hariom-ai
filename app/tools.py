@@ -13,13 +13,14 @@ class Tool:
 class ToolRegistry:
     """Explicit local tool registry for the personal agent."""
 
-    def __init__(self, workspace, activity, browser=None, computer=None, github=None, voice=None):
+    def __init__(self, workspace, activity, browser=None, computer=None, github=None, voice=None, public_apis=None):
         self.workspace = workspace
         self.activity = activity
         self.browser = browser
         self.computer = computer
         self.github = github
         self.voice = voice
+        self.public_apis = public_apis
         self._tools = {}
         self.register(Tool("list_files", "List files inside the active workspace.", self.list_files))
         self.register(Tool("read_file", "Read a UTF-8 file inside the active workspace.", self.read_file))
@@ -53,6 +54,9 @@ class ToolRegistry:
             self.register(Tool("github_list_issues", "List GitHub issues.", github.list_issues))
             self.register(Tool("github_create_issue", "Create a GitHub issue.", github.create_issue, True))
             self.register(Tool("github_create_comment", "Comment on a GitHub issue or pull request.", github.create_comment, True))
+
+        if public_apis:
+            self.register(Tool("public_api", "Call an allowlisted read-only public API that requires no API key.", public_apis.call))
 
         if voice:
             self.register(Tool("voice_listen", "Listen once for a user-spoken command. User must explicitly start this action.", voice.listen))
