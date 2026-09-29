@@ -2,29 +2,20 @@
 
 Windows-first personal AI workstation MVP.
 
-## Current scope
-- Native smart AI router with automatic provider/model fallback
-- Provider health tracking and cooldowns
-- Latency-aware routing
-- Automatic retry for rate limits and server failures
-- Desktop UI with live activity
-- Local workspace read/write tools
-- Terminal runner with risky-command approval gate
-- Git-safe secret handling
-- Free/low-cost provider pool
+## What makes it different
 
-## Native Smart Router
+Hariom AI has its own native smart-router instead of requiring Manifest or another gateway.
 
-Hariom AI now contains its own routing layer. Manifest is not required.
-
-The router:
-
-1. Detects configured providers.
-2. Ranks healthy providers/models using recent success, failure and latency.
-3. Temporarily cools down failed providers instead of repeatedly hitting them.
-4. Retries rate-limit and server errors.
-5. Falls through provider -> model -> next provider automatically.
-6. Exposes live health information through status() for the UI.
+### Router capabilities
+- Automatic provider and model fallback
+- Health-aware ranking using success rate and latency
+- Persistent provider health across restarts
+- Exponential cooldown for repeatedly failing routes
+- Rate-limit and server-error retries
+- Reads common rate-limit headers and tracks remaining request/token budget
+- Local OpenAI-compatible gateway for other apps
+- Provider health endpoint
+- No provider switch required by the user
 
 Example:
 
@@ -34,14 +25,11 @@ Groq 20B -> failed
        ↓
 Cerebras 120B -> success
        ↓
-Next request remembers Cerebras as healthy
-
-No provider switch is required from the user.
+Next request uses the remembered health/quota state
 
 ## Provider pool
 
 Current direct-provider defaults:
-
 - Gemini — gemini-flash-latest
 - Groq — GPT-OSS 120B -> GPT-OSS 20B -> Qwen 3.8 27B
 - Cerebras — GPT-OSS 120B
@@ -50,25 +38,41 @@ Current direct-provider defaults:
 - Cloudflare Workers AI — @cf/openai/gpt-oss-120b
 - OpenAI — gpt-5-mini
 
-Only providers with configured credentials are attempted.
+Only configured providers are attempted.
 
-The free-provider list is a source for discovery, not a credential source.
-Use your own legitimate API keys/tokens and each provider's published terms.
-Free-tier limits can change.
+## Local gateway
 
-### Router tuning
+Hariom AI can expose the router as an OpenAI-compatible local API.
+
+Start it with:
+
+python -m app.gateway
+
+Default endpoint:
+
+http://127.0.0.1:8080/v1/chat/completions
+
+Models:
+
+http://127.0.0.1:8080/v1/models
+
+Health:
+
+http://127.0.0.1:8080/health
+
+Set HARIOM_GATEWAY_API_KEY in .env if another local application should authenticate.
+The gateway binds to 127.0.0.1 by default and is therefore not exposed to the LAN.
+
+## Router tuning
 
 Optional .env settings:
-
 - HARIOM_ROUTER_COOLDOWN=60
 - HARIOM_ROUTER_RETRIES=2
 - HARIOM_ROUTER_TIMEOUT=90
 
-### Cloudflare
+## Inspiration
 
-Cloudflare Workers AI requires both CLOUDFLARE_API_TOKEN and
-CLOUDFLARE_ACCOUNT_ID. The router sends the gateway header required by the
-configured Workers AI OpenAI-compatible endpoint.
+Recent open-source gateways show useful patterns such as health-aware routing, quota-aware fallback, model aliases, circuit breakers, semantic caching, tool calling, streaming, multimodal routing and encrypted key storage. Hariom AI implements the lightweight pieces first and keeps provider credentials local.
 
 ## Run
 
