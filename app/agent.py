@@ -4,7 +4,8 @@ import re
 from .context import WorkspaceContext
 from .memory import MemoryStore
 from .skills import SkillRegistry
-from .task_engine import TaskState, TaskStatus
+from .task_engine import TaskState, TaskStatus, TaskCheckpointStore
+from .config import APP_DIR
 from .tools import ToolRegistry
 from .verification import Verifier
 
@@ -27,6 +28,7 @@ class PersonalAgent:
         self.tools = tools or ToolRegistry(workspace, activity)
         self.skills = skills or SkillRegistry(workspace.root / "skills")
         self.verifier = Verifier()
+        self.checkpoints = TaskCheckpointStore(APP_DIR / "tasks")
 
     def context(self, request):
         return {
@@ -159,7 +161,25 @@ class PersonalAgent:
             return False
 
     def run(self, request, approve=False):
-        return self.execute(self.plan(request), approve=approve)
+        state = self.plan(request)
+        self._checkpoint(state)
+        return self.execute(state, approve=approve)
+
+    def resume(self, task_id, approve=False):
+        state = self.checkpoints.load(task_id)
+        if state is None:
+            raise KeyError("No saved task: " + str(task_id))
+        self.activity.emit("AGENT RESUME -> " + str(task_id))
+        state = self.execute(state, approve=approve)
+        self._checkpoint(state)
+        return state
+
+    def _checkpoint(self, state):
+        self.checkpoints.save(self.task_id(state), state)
+
+    @staticmethod
+    def task_id(state):
+        return "task-" + str(int(state.created_at * 1000))
 
     @staticmethod
     def _parse_json(content):
