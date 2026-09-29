@@ -181,8 +181,19 @@ class AIRouter:
         candidates.sort(reverse=True)
         return [(name, model) for _, name, model in candidates]
 
-    def chat_messages(self, messages, preferred=None, profile='hariom/auto'):
-        return self.chat_request(messages, preferred=preferred, profile=profile)
+    def chat_messages(self, messages, preferred=None, profile='hariom/auto',
+                      tools=None, tool_choice=None, response_format=None,
+                      use_cache=True):
+        """Compatibility wrapper for agent calls with optional request controls."""
+        return self.chat_request(
+            messages,
+            preferred=preferred,
+            profile=profile,
+            tools=tools,
+            tool_choice=tool_choice,
+            response_format=response_format,
+            use_cache=use_cache,
+        )
 
     def chat_request(self, messages, preferred=None, profile='hariom/auto',
                      tools=None, tool_choice=None, response_format=None,
