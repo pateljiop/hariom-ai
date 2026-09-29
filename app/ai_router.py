@@ -102,6 +102,7 @@ class AIRouter:
                         tool_choice=tool_choice, response_format=response_format
                     )
                 latency = time.monotonic() - started
+                self.health[name]['last_usage'] = usage or {}
                 self._success(name, latency)
                 self.activity.emit(f'AI OK -> {name} ({model}) in {latency:.1f}s')
                 result = {'message': message, 'provider': name, 'usage': usage or {}}
