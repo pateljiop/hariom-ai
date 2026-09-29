@@ -1,6 +1,6 @@
 # Free AI Provider Catalog
 
-Last audited: 2026-09-28
+Last audited: 2026-09-29
 
 This catalog is for Hariom AI's personal-use, Windows-first provider router. It separates recurring free tiers from one-time credits/trials.
 
@@ -8,7 +8,7 @@ This catalog is for Hariom AI's personal-use, Windows-first provider router. It 
 
 | Provider | Type | Current free access | Card | Hariom AI use |
 |---|---|---|---|---|
-| Google AI Studio / Gemini | LLM + multimodal + realtime audio | Selected Gemini models and Gemini 3.8 Live variants have a Free Tier; limits vary by model/project | No for AI Studio free access | Primary chat, planning, multimodal, realtime voice |
+| Google AI Studio / Gemini | LLM + multimodal + realtime audio + TTS | Selected Gemini models, Gemini 3.8 Live, and Gemini 3.8 Flash-Lite TTS have Free Tier access; limits vary by model/project | No for AI Studio free access | Primary chat, planning, multimodal, realtime voice, narration |
 | Groq | LLM + STT | Free API tier; limits/models can change | No | Fast coding/chat + speech-to-text fallback |
 | Mistral | LLM | Free API mode with limits | No | Coding/planning fallback |
 | OpenRouter | LLM gateway | Free-model pool/free router; models and limits rotate | No | Large fallback pool |
@@ -38,7 +38,18 @@ This catalog is for Hariom AI's personal-use, Windows-first provider router. It 
 5. Free model names and quotas change; verify before hardcoding.
 6. Card-required services are not automatically considered free; billing controls and account terms must be checked separately.
 
-## Current verified changes — 2026-09-28
+## Current verified changes — 2026-09-29
+
+### Gemini 3.8 Flash-Lite TTS
+Google's current Gemini API pricing lists `gemini-3.8-flash-lite-tts` with **Free Tier input and output**. The same page states it is optimized for high-throughput, low-latency conversational speech. This makes it a strong candidate for Hariom AI narration/voiceover, subject to the account/model rate limits. citeturn0search15
+
+### Google Vids — free video service, not free API
+Google's September 23, 2026 announcement confirms free HD video creation with Gemini Omni 1.1 Flash in Google Vids for Google/Workspace accounts. Because this is a Vids product capability rather than a documented free public video API, keep it outside the automated API router. citeturn1search11
+
+### Gemini 3.8 Flash agent availability
+Google's current Antigravity agent documentation lists Gemini 3.8 Flash as the default model for `antigravity-preview-09-2026`. This is relevant to future managed-agent integration, but the catalog must not label the managed agent itself as permanently free without a confirmed pricing entitlement. citeturn1search12
+
+### Previous verified changes — 2026-09-28
 
 ### Gemini 3.8 Live family
 Google's current Gemini API pricing lists Gemini 3.8 Live variants with Free Tier input/output pricing. These are audio-to-audio models intended for realtime voice agents and live dialogue. This makes the Live family relevant to a future voice-controlled Hariom AI agent.
@@ -61,7 +72,11 @@ Groq remains relevant not only for LLM fallback but also for speech-to-text. Tre
 
 ## Video-generation finding
 
-No new recurring-free, sufficiently verified hosted video-generation API was identified in this audit. Do not add a provider merely because a website advertises free generations or temporary credits.
+**New service-level finding (not an API): Google Vids.** Google announced on September 23, 2026 that anyone with a Google or Google Workspace account can create HD videos for free in Google Vids using Gemini Omni 1.1 Flash; generated clips include an imperceptible SynthID watermark. Google also says Gemini 3.8 Flash-Lite TTS voiceover is coming to Vids. This is useful for manual/assisted video production, but Google has not established a recurring-free public video-generation API in the announcement, so it is **not** added as an API provider or automatic router target. citeturn1search11
+
+Google had also announced on April 2, 2026 that Google Vids could generate free video clips with Veo 3.1 (10 free generations/month at that time). Treat current Vids quotas as product-level and subject to change; do not infer API quota from them. citeturn1search14
+
+No new recurring-free, sufficiently verified **hosted video-generation API** was identified in this audit. Do not add a provider merely because a website advertises free generations or temporary credits.
 
 ## Router policy
 
