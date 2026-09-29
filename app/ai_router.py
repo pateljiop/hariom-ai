@@ -4,13 +4,16 @@ from .config import PROVIDERS
 
 
 class AIRouter:
-    """Try configured providers in order and fall back on transient/provider errors."""
+    """Try configured providers/models and fall back automatically."""
 
     def __init__(self, activity):
         self.activity = activity
 
     def available(self):
-        return [name for name, cfg in PROVIDERS.items() if cfg.get('key')]
+        return [
+            name for name, cfg in PROVIDERS.items()
+            if cfg.get('key') and (not cfg.get('cloudflare') or cfg.get('account_id'))
+        ]
 
     def chat(self, prompt, system='', preferred=None):
         order = []
@@ -23,36 +26,43 @@ class AIRouter:
             cfg = PROVIDERS[name]
             if not cfg.get('key'):
                 continue
+            if cfg.get('cloudflare') and not cfg.get('account_id'):
+                continue
 
-            try:
-                self.activity.emit(f'AI -> trying {name} ({cfg["model"]})')
-                text = (
-                    self._gemini(cfg, prompt, system)
-                    if name == 'gemini'
-                    else self._compatible(cfg, prompt, system)
-                )
-                self.activity.emit(f'AI OK -> {name}')
-                return text, name
-            except Exception as exc:
-                errors.append(f'{name}: {exc}')
-                self.activity.emit(f'AI FAILED -> {name}')
+            models = cfg.get('models') or [cfg.get('model')]
+            for model in models:
+                if not model:
+                    continue
+                try:
+                    self.activity.emit(f'AI -> trying {name} ({model})')
+                    text = (
+                        self._gemini(cfg, prompt, system, model)
+                        if name == 'gemini'
+                        else self._compatible(cfg, prompt, system, model)
+                    )
+                    self.activity.emit(f'AI OK -> {name} ({model})')
+                    return text, name
+                except Exception as exc:
+                    errors.append(f'{name}/{model}: {exc}')
+                    self.activity.emit(f'AI FAILED -> {name} ({model})')
 
         raise RuntimeError(
             'No working provider. Configure a key and check quota/network. '
             + ' | '.join(errors)
         )
 
-    def _compatible(self, cfg, prompt, system):
+    def _compatible(self, cfg, prompt, system, model):
         messages = []
         if system:
             messages.append({'role': 'system', 'content': system})
         messages.append({'role': 'user', 'content': prompt})
 
         payload = {
-            'model': cfg['model'],
+            'model': model,
             'messages': messages,
             'temperature': 0.2,
         }
+
         headers = {
             'Authorization': 'Bearer ' + cfg['key'],
             'Content-Type': 'application/json',
@@ -62,11 +72,15 @@ class AIRouter:
             headers['HTTP-Referer'] = 'https://github.com/pateljiop/hariom-ai'
             headers['X-Title'] = 'Hariom AI'
 
+        base = cfg['base']
+        if cfg.get('cloudflare'):
+            base = base.format(account_id=cfg['account_id'])
+
         last_error = None
         for attempt in range(3):
             try:
                 response = requests.post(
-                    cfg['base'],
+                    base,
                     headers=headers,
                     json=payload,
                     timeout=90,
@@ -98,8 +112,8 @@ class AIRouter:
 
         raise RuntimeError(str(last_error))
 
-    def _gemini(self, cfg, prompt, system):
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{cfg['model']}:generateContent"
+    def _gemini(self, cfg, prompt, system, model):
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         headers = {
             'x-goog-api-key': cfg['key'],
             'Content-Type': 'application/json',
