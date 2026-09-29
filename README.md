@@ -1,86 +1,93 @@
 # Hariom AI
 
-Windows-first personal AI workstation MVP.
+Windows-first personal AI workstation with a native OpenAI-compatible AI gateway.
 
-## What makes it different
+## Smart router
 
-Hariom AI has its own native smart-router instead of requiring Manifest or another gateway.
+Hariom AI does not require Manifest. It contains its own routing layer:
 
-### Router capabilities
-- Automatic provider and model fallback
-- Health-aware ranking using success rate and latency
-- Persistent provider health across restarts
-- Exponential cooldown for repeatedly failing routes
-- Rate-limit and server-error retries
-- Reads common rate-limit headers and tracks remaining request/token budget
-- Local OpenAI-compatible gateway for other apps
-- Provider health endpoint
-- No provider switch required by the user
+- Automatic provider/model fallback
+- Persistent health and latency memory
+- Quota-aware ranking from provider rate-limit headers
+- Exponential cooldowns and circuit-breaker behavior
+- Long disable window for authentication failures
+- Capability-aware routing for tools and JSON responses
+- Routing profiles: `hariom/auto`, `hariom/fast`, `hariom/coding`, `hariom/reasoning`, `hariom/free`
+- Exact local response cache with configurable TTL
+- Provider credentials stay in local `.env`
 
-Example:
+### Example profiles
 
-Groq 120B -> 429
-       ↓
-Groq 20B -> failed
-       ↓
-Cerebras 120B -> success
-       ↓
-Next request uses the remembered health/quota state
+Use `hariom/auto` for normal requests.
 
-## Provider pool
+Use `hariom/fast` when latency matters.
 
-Current direct-provider defaults:
-- Gemini — gemini-flash-latest
-- Groq — GPT-OSS 120B -> GPT-OSS 20B -> Qwen 3.8 27B
-- Cerebras — GPT-OSS 120B
-- OpenRouter — openrouter/free
-- Mistral — devstral-small-latest
-- Cloudflare Workers AI — @cf/openai/gpt-oss-120b
-- OpenAI — gpt-5-mini
+Use `hariom/coding` for programming work.
 
-Only configured providers are attempted.
+Use `hariom/reasoning` for harder reasoning tasks.
+
+Use `hariom/free` to bias routing toward providers commonly used without paid OpenAI/Anthropic billing.
 
 ## Local gateway
 
-Hariom AI can expose the router as an OpenAI-compatible local API.
+Start:
 
-Start it with:
-
+```bash
 python -m app.gateway
+```
 
 Default endpoint:
 
+```
 http://127.0.0.1:8080/v1/chat/completions
+```
 
-Models:
+The gateway supports:
 
-http://127.0.0.1:8080/v1/models
+- `/health`
+- `/v1/models`
+- OpenAI-style chat completions
+- routing profiles as model aliases
+- tool payload pass-through on compatible providers
+- JSON response-format pass-through
+- OpenAI-compatible SSE-style `stream=true` responses
+- optional Bearer authentication
+- automatic refusal to bind publicly without an API key
 
-Health:
+Example request:
 
-http://127.0.0.1:8080/health
+```json
+{
+  "model": "hariom/coding",
+  "messages": [
+    {"role": "user", "content": "Explain this Python function"}
+  ]
+}
+```
 
-Set HARIOM_GATEWAY_API_KEY in .env if another local application should authenticate.
-The gateway binds to 127.0.0.1 by default and is therefore not exposed to the LAN.
+## Cache
 
-## Router tuning
+Pure text requests can use the local SQLite response cache. Requests containing tools/tool messages or explicit `no_cache=true` bypass it.
 
-Optional .env settings:
-- HARIOM_ROUTER_COOLDOWN=60
-- HARIOM_ROUTER_RETRIES=2
-- HARIOM_ROUTER_TIMEOUT=90
+Settings:
 
-## Inspiration
+- `HARIOM_CACHE_ENABLED=1`
+- `HARIOM_CACHE_TTL=300`
 
-Recent open-source gateways show useful patterns such as health-aware routing, quota-aware fallback, model aliases, circuit breakers, semantic caching, tool calling, streaming, multimodal routing and encrypted key storage. Hariom AI implements the lightweight pieces first and keeps provider credentials local.
+## Provider pool
 
-## Run
+Current defaults include Gemini, Groq, Cerebras, OpenRouter, Mistral, Cloudflare Workers AI and OpenAI. Only providers with valid local credentials are attempted.
 
-1. Python 3.11+
-2. python -m venv .venv
-3. .venv\\Scripts\\activate
-4. pip install -r requirements.txt
-5. Copy .env.example to .env and add your own keys
-6. python -m app
+Provider/model availability can change, so the router treats the configured pool as dynamic and falls back when a route fails.
 
-Never commit .env or API keys.
+## Development
+
+```bash
+python -m venv .venv
+.venv\\Scripts\\activate
+pip install -r requirements.txt
+python -m unittest discover -s tests -v
+python -m compileall -q app tests
+```
+
+Never commit API keys or `.env`.
