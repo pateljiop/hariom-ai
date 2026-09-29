@@ -6,6 +6,7 @@ from .activity import ActivityBus
 from .agent import PersonalAgent
 from .ai_router import AIRouter
 from .browser import BrowserController
+from .tools import ToolRegistry
 from .workspace import Workspace
 
 
@@ -19,59 +20,8 @@ class App(tk.Tk):
         self.router = AIRouter(self.activity)
         self.ws = Workspace()
         self.browser = BrowserController(self.activity, headless=False)
-        self.agent = PersonalAgent(self.router, self.ws, self.activity)
-        self.agent.tools.browser = self.browser
-        self.agent.tools.register(
-            __import__("app.tools", fromlist=["Tool"]).Tool(
-                "browser_open",
-                "Open a public http/https URL in the controlled browser.",
-                self.browser.open,
-            )
-        )
-        self.agent.tools.register(
-            __import__("app.tools", fromlist=["Tool"]).Tool(
-                "browser_current_page",
-                "Get the current browser URL and title.",
-                self.browser.current_page,
-            )
-        )
-        self.agent.tools.register(
-            __import__("app.tools", fromlist=["Tool"]).Tool(
-                "browser_read",
-                "Read visible text from a browser page.",
-                self.browser.read_text,
-            )
-        )
-        self.agent.tools.register(
-            __import__("app.tools", fromlist=["Tool"]).Tool(
-                "browser_click",
-                "Click an element selected by CSS.",
-                self.browser.click,
-                True,
-            )
-        )
-        self.agent.tools.register(
-            __import__("app.tools", fromlist=["Tool"]).Tool(
-                "browser_type",
-                "Fill text into a form element selected by CSS.",
-                self.browser.type_text,
-                True,
-            )
-        )
-        self.agent.tools.register(
-            __import__("app.tools", fromlist=["Tool"]).Tool(
-                "browser_screenshot",
-                "Capture the current browser page.",
-                self.browser.screenshot,
-            )
-        )
-        self.agent.tools.register(
-            __import__("app.tools", fromlist=["Tool"]).Tool(
-                "browser_close",
-                "Close the controlled browser session.",
-                self.browser.close,
-            )
-        )
+        self.tools = ToolRegistry(self.ws, self.activity, browser=self.browser)
+        self.agent = PersonalAgent(self.router, self.ws, self.activity, tools=self.tools)
         self.current_task = None
         self.build()
         self.activity.subscribe(self.log_line)
