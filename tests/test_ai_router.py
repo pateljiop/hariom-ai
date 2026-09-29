@@ -72,11 +72,6 @@ class AIRouterTests(unittest.TestCase):
             'key-fallback',
         )
 
-
-if __name__ == '__main__':
-    unittest.main()
-
-
     def test_profiles_include_auto_and_coding(self):
         self.assertIn('hariom/auto', self.router.profiles())
         self.assertIn('hariom/coding', self.router.profiles())
@@ -92,3 +87,6 @@ if __name__ == '__main__':
         status = self.router.status()['fast']
         self.assertGreater(status['disabled_remaining'], 80000)
 
+
+if __name__ == '__main__':
+    unittest.main()
