@@ -112,57 +112,60 @@ class AIRouter:
             raise ValueError("screen_size must be positive")
         prompt = (
             "Locate this exact target on the screenshot: " + str(target) + "\n"
-            "Return ONLY one JSON object: {\"found\":true,\"x\":123,\"y\":456,\"confidence\":0.0,\"label\":\"...\"}. "
-            "x/y are the target center in top-left pixel coordinates. Never guess. "
-            "If not clearly visible return {\"found\":false,\"reason\":\"...\"}."
+            "Return ONLY JSON with found, x/y center pixels, confidence, and label. "
+            "If clearly visible you may instead return bbox as [x1,y1,x2,y2] in pixels. "
+            "Never guess. If not clearly visible return found=false with a reason."
         )
         text, provider = self.vision_chat(prompt, image_bytes)
         raw = str(text).strip()
         if raw.startswith("```"):
             raw = raw.strip("`").strip()
-            if raw.lower().startswith("json"): raw = raw[4:].strip()
+            if raw.lower().startswith("json"):
+                raw = raw[4:].strip()
         data = None
         try:
             data = json.loads(raw)
         except (TypeError, ValueError):
             import re
-            match = re.search(r"\[\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*\]", raw)
-            if not match:
-                match = re.search(r"<box>\s*\[\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*\]\s*</box>", raw, re.I)
+            tag = re.search(r"<box>\s*\[\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\]\s*</box>", raw, re.I)
+            bare = re.search(r"\[\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\]", raw)
+            match = tag or bare
             if match:
                 vals = [float(x) for x in match.groups()]
-                ymin, xmin, ymax, xmax = vals
-                data = {"found": True, "bbox_norm": [ymin, xmin, ymax, xmax], "confidence": 0.85, "label": str(target)}
+                if tag:
+                    data = {"found": True, "bbox_norm": vals, "confidence": 0.85, "label": str(target)}
+                else:
+                    data = {"found": True, "bbox_pixels": vals, "confidence": 0.85, "label": str(target)}
         if not isinstance(data, dict):
             raise RuntimeError("Vision locator returned an unsupported response format.")
         if not data.get("found"):
             return {"found": False, "reason": str(data.get("reason", "Target not found.")), "provider": provider}
         confidence = max(0.0, min(1.0, float(data.get("confidence", 0.0))))
-        if "bbox_norm" in data:
+        if "bbox_pixels" in data:
+            b = data["bbox_pixels"]
+            if not isinstance(b, (list, tuple)) or len(b) != 4:
+                raise RuntimeError("Vision locator returned an invalid pixel bounding box.")
+            x1, y1, x2, y2 = [float(v) for v in b]
+            if not (0 <= x1 < x2 <= width and 0 <= y1 < y2 <= height):
+                raise RuntimeError("Vision locator returned out-of-screen pixel bounds.")
+            x, y = (x1 + x2) / 2.0, (y1 + y2) / 2.0
+        elif "bbox_norm" in data:
             b = data["bbox_norm"]
             if not isinstance(b, (list, tuple)) or len(b) != 4:
                 raise RuntimeError("Vision locator returned an invalid bounding box.")
             ymin, xmin, ymax, xmax = [float(v) for v in b]
-            if max(ymin, xmin, ymax, xmax) <= 1000:
-                x = ((xmin + xmax) / 2000.0) * width
-                y = ((ymin + ymax) / 2000.0) * height
-            else:
-                x = (xmin + xmax) / 2.0
-                y = (ymin + ymax) / 2.0
+            if not (0 <= ymin <= ymax <= 1000 and 0 <= xmin <= xmax <= 1000):
+                raise RuntimeError("Vision locator returned invalid normalized bounds.")
+            x = ((xmin + xmax) / 2000.0) * width
+            y = ((ymin + ymax) / 2000.0) * height
         else:
             try:
-                x = float(data["x"]); y = float(data["y"])
+                x, y = float(data["x"]), float(data["y"])
             except (KeyError, TypeError, ValueError) as exc:
                 raise RuntimeError("Vision locator returned invalid coordinates.") from exc
         if confidence < 0.70:
             return {"found": False, "reason": "Target location confidence is too low.", "confidence": confidence, "provider": provider}
-        return {
-            "found": True, "x": max(0, min(width - 1, int(round(x)))),
-            "y": max(0, min(height - 1, int(round(y)))),
-            "label": str(data.get("label", target)),
-            "confidence": confidence, "provider": provider,
-        }
-
+        return {"found": True, "x": max(0, min(width - 1, int(round(x)))), "y": max(0, min(height - 1, int(round(y)))), "label": str(data.get("label", target)), "confidence": confidence, "provider": provider}
     def _rank_vision(self):
         now = time.time()
         candidates = []
