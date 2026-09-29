@@ -43,8 +43,9 @@ class PersonalAgent:
         return state
 
     def execute(self, state, approve=False):
+        was_waiting = state.status == TaskStatus.WAITING_APPROVAL
         state.status = TaskStatus.RUNNING
-        start = state.current_step if state.status == TaskStatus.WAITING_APPROVAL else 0
+        start = state.current_step if was_waiting else 0
         for index in range(start, len(state.steps)):
             step = state.steps[index]
 
