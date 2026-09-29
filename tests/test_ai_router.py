@@ -65,6 +65,39 @@ class AIRouterTests(unittest.TestCase):
         ranked=self.router._rank(tools=[{"type":"function"}])
         self.assertTrue(all(name=="fallback" for name,_ in ranked))
 
+
+    @patch.object(ai_router.AIRouter, "vision_chat")
+    def test_locate_on_screen_parses_and_clamps(self, vision):
+        vision.return_value = (
+            '{"found":true,"x":9999,"y":-20,"label":"Save","confidence":0.91}',
+            "openai",
+        )
+        result = self.router.locate_on_screen("Save button", b"image", (800, 600))
+        self.assertTrue(result["found"])
+        self.assertEqual(result["x"], 799)
+        self.assertEqual(result["y"], 0)
+        self.assertEqual(result["label"], "Save")
+
+    @patch.object(ai_router.AIRouter, "vision_chat")
+    def test_locate_on_screen_rejects_low_confidence(self, vision):
+        vision.return_value = (
+            '{"found":true,"x":100,"y":100,"confidence":0.42}',
+            "openai",
+        )
+        result = self.router.locate_on_screen("Save button", b"image", (800, 600))
+        self.assertFalse(result["found"])
+        self.assertIn("confidence", result["reason"])
+
+    @patch.object(ai_router.AIRouter, "vision_chat")
+    def test_locate_on_screen_accepts_not_found(self, vision):
+        vision.return_value = (
+            '{"found":false,"reason":"Not visible"}',
+            "openai",
+        )
+        result = self.router.locate_on_screen("Save button", b"image", (800, 600))
+        self.assertFalse(result["found"])
+        self.assertEqual(result["reason"], "Not visible")
+
     def test_auth_failure_enters_long_disable_window(self):
         self.router._failure("fast",RuntimeError("401 Unauthorized"))
         self.assertGreater(self.router.status()["fast"]["disabled_remaining"],80000)
