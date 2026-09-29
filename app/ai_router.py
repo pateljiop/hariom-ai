@@ -1,376 +1,302 @@
 import json
 import time
 from collections import defaultdict
-from pathlib import Path
 
 import requests
 
+from .cache import get as cache_get, key_for as cache_key, put as cache_put
 from .config import (
-    APP_DIR,
-    PROVIDERS,
-    ROUTER_COOLDOWN_SECONDS,
-    ROUTER_RETRIES,
-    ROUTER_TIMEOUT_SECONDS,
+    APP_DIR, CACHE_ENABLED, PROVIDERS, ROUTING_PROFILES,
+    ROUTER_COOLDOWN_SECONDS, ROUTER_RETRIES, ROUTER_TIMEOUT_SECONDS,
 )
 
 
 class AIRouter:
-    """Native smart router with health, quota, cooldown and model fallback."""
+    """Native gateway router: profiles, health, quota, circuit breaking, cache and fallback."""
 
     STATE_FILE = APP_DIR / 'router_state.json'
 
     def __init__(self, activity):
         self.activity = activity
-        self.health = defaultdict(
-            lambda: {
-                'failures': 0,
-                'successes': 0,
-                'latency': 0.0,
-                'cooldown_until': 0.0,
-                'remaining_rpm': None,
-                'remaining_tpm': None,
-                'remaining_rpd': None,
-            }
-        )
+        self.health = defaultdict(lambda: {
+            'failures': 0, 'successes': 0, 'latency': 0.0,
+            'cooldown_until': 0.0, 'disabled_until': 0.0,
+            'last_error': '', 'remaining_rpm': None,
+            'remaining_tpm': None, 'remaining_rpd': None,
+        })
         self._load_state()
 
     def available(self):
-        return [
-            name for name, cfg in PROVIDERS.items()
-            if self._configured(name, cfg)
-        ]
+        return [n for n, c in PROVIDERS.items() if self._configured(n, c)]
+
+    def profiles(self):
+        return list(ROUTING_PROFILES)
 
     def status(self):
         now = time.time()
-        result = {}
+        out = {}
         for name, cfg in PROVIDERS.items():
-            state = self.health[name]
-            result[name] = {
+            s = self.health[name]
+            out[name] = {
                 'configured': self._configured(name, cfg),
-                'healthy': state['cooldown_until'] <= now,
-                'failures': state['failures'],
-                'successes': state['successes'],
-                'latency': round(state['latency'], 3),
-                'cooldown_remaining': max(
-                    0, round(state['cooldown_until'] - now, 1)
-                ),
-                'remaining_rpm': state['remaining_rpm'],
-                'remaining_tpm': state['remaining_tpm'],
-                'remaining_rpd': state['remaining_rpd'],
+                'healthy': s['cooldown_until'] <= now and s['disabled_until'] <= now,
+                'failures': s['failures'], 'successes': s['successes'],
+                'latency': round(s['latency'], 3),
+                'cooldown_remaining': max(0, round(s['cooldown_until'] - now, 1)),
+                'disabled_remaining': max(0, round(s['disabled_until'] - now, 1)),
+                'last_error': s['last_error'],
+                'remaining_rpm': s['remaining_rpm'],
+                'remaining_tpm': s['remaining_tpm'],
+                'remaining_rpd': s['remaining_rpd'],
             }
-        return result
+        return out
 
-    def chat(self, prompt, system='', preferred=None):
-        candidates = self._rank(preferred)
-        errors = []
-
-        if not candidates:
-            raise RuntimeError(
-                'No AI provider is configured. Add at least one API key to .env.'
-            )
-
-        for name, model in candidates:
-            try:
-                self.activity.emit(f'AI -> trying {name} ({model})')
-                started = time.monotonic()
-
-                text = (
-                    self._gemini(PROVIDERS[name], prompt, system, model)
-                    if name == 'gemini'
-                    else self._compatible(PROVIDERS[name], prompt, system, model)
-                )
-
-                latency = time.monotonic() - started
-                self._success(name, latency)
-                self.activity.emit(
-                    f'AI OK -> {name} ({model}) in {latency:.1f}s'
-                )
-                return text, name
-
-            except Exception as exc:
-                self._failure(name)
-                errors.append(f'{name}/{model}: {exc}')
-                self.activity.emit(f'AI FAILED -> {name} ({model})')
-
-        raise RuntimeError(
-            'All configured AI providers failed. ' + ' | '.join(errors)
-        )
-
-    def chat_messages(self, messages, preferred=None):
-        """OpenAI-style message entry point for the local gateway."""
-        system_parts = [
-            m.get('content', '')
-            for m in messages
-            if m.get('role') == 'system' and isinstance(m.get('content'), str)
-        ]
-        user_parts = [
-            m.get('content', '')
-            for m in messages
-            if m.get('role') in ('user', 'tool') and isinstance(m.get('content'), str)
-        ]
-        system = '\n'.join(system_parts)
-        prompt = '\n\n'.join(user_parts)
-        return self.chat(prompt, system=system, preferred=preferred)
-
-    def _rank(self, preferred=None):
-        now = time.time()
-        candidates = []
-
-        for name, cfg in PROVIDERS.items():
-            if not self._configured(name, cfg):
-                continue
-
-            state = self.health[name]
-            if state['cooldown_until'] > now:
-                self.activity.emit(
-                    f'AI -> skipping {name} '
-                    f'({state["cooldown_until"] - now:.0f}s cooldown)'
-                )
-                continue
-
-            models = cfg.get('models') or [cfg.get('model')]
-            for index, model in enumerate(models):
-                if not model:
-                    continue
-
-                preferred_bonus = 1000 if name == preferred else 0
-                failure_penalty = state['failures'] * 25
-                latency_penalty = min(state['latency'], 60)
-                model_penalty = index * 3
-
-                quota_penalty = 0
-                if state['remaining_rpm'] is not None:
-                    quota_penalty += max(0, 10 - state['remaining_rpm']) * 2
-                if state['remaining_tpm'] is not None:
-                    quota_penalty += max(0, 1000 - state['remaining_tpm']) / 1000
-                if state['remaining_rpd'] is not None:
-                    quota_penalty += max(0, 10 - state['remaining_rpd'])
-
-                score = (
-                    preferred_bonus
-                    + state['successes'] * 5
-                    - failure_penalty
-                    - latency_penalty
-                    - model_penalty
-                    - quota_penalty
-                )
-                candidates.append((score, name, model))
-
-        candidates.sort(key=lambda item: item[0], reverse=True)
-        return [(name, model) for _, name, model in candidates]
-
-    def _configured(self, name, cfg):
-        if not cfg.get('key'):
-            return False
-        if cfg.get('cloudflare') and not cfg.get('account_id'):
-            return False
-        return True
-
-    def _success(self, name, latency):
-        state = self.health[name]
-        state['successes'] += 1
-        state['failures'] = max(0, state['failures'] - 1)
-        if state['latency'] == 0:
-            state['latency'] = latency
-        else:
-            state['latency'] = (state['latency'] * 0.7) + (latency * 0.3)
-        state['cooldown_until'] = 0.0
-        self._save_state()
-
-    def _failure(self, name):
-        state = self.health[name]
-        state['failures'] += 1
-        # Exponential cooldown, capped so a transient error does not permanently
-        # remove a provider from the pool.
-        delay = min(
-            ROUTER_COOLDOWN_SECONDS * (2 ** min(state['failures'] - 1, 4)),
-            3600,
-        )
-        state['cooldown_until'] = time.time() + delay
-        self._save_state()
-
-    def _record_quota(self, name, headers):
-        state = self.health[name]
-        mapping = {
-            'remaining_rpm': (
-                'x-ratelimit-remaining-requests',
-                'x-ratelimit-remaining-rpm',
-            ),
-            'remaining_tpm': (
-                'x-ratelimit-remaining-tokens',
-                'x-ratelimit-remaining-tpm',
-            ),
-            'remaining_rpd': (
-                'x-ratelimit-remaining-day-requests',
-                'x-ratelimit-remaining-rpd',
-            ),
-        }
-
-        for field, names in mapping.items():
-            for header_name in names:
-                value = headers.get(header_name)
-                if value is not None:
-                    try:
-                        state[field] = int(float(value))
-                    except (TypeError, ValueError):
-                        pass
-                    break
-
-        self._save_state()
-
-    def _load_state(self):
-        try:
-            if not self.STATE_FILE.exists():
-                return
-            data = json.loads(self.STATE_FILE.read_text(encoding='utf-8'))
-            for name, state in data.items():
-                self.health[name].update(state)
-        except (OSError, ValueError, TypeError):
-            # Corrupt state must never stop the AI router.
-            return
-
-    def _save_state(self):
-        try:
-            payload = {name: dict(state) for name, state in self.health.items()}
-            self.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-            self.STATE_FILE.write_text(
-                json.dumps(payload, indent=2),
-                encoding='utf-8',
-            )
-        except OSError:
-            # Health persistence is optional; routing must keep working.
-            return
-
-    def _compatible(self, cfg, prompt, system, model):
+    def chat(self, prompt, system='', preferred=None, profile='hariom/auto'):
         messages = []
         if system:
             messages.append({'role': 'system', 'content': system})
         messages.append({'role': 'user', 'content': prompt})
+        result, provider = self.chat_request(messages, preferred=preferred, profile=profile)
+        return result.get('content', ''), provider
 
-        payload = {
-            'model': model,
-            'messages': messages,
-            'temperature': 0.2,
+    def chat_messages(self, messages, preferred=None, profile='hariom/auto'):
+        return self.chat_request(messages, preferred=preferred, profile=profile)
+
+    def chat_request(self, messages, preferred=None, profile='hariom/auto',
+                     tools=None, tool_choice=None, response_format=None,
+                     use_cache=True):
+        if not messages:
+            raise ValueError('messages is required')
+        if profile not in ROUTING_PROFILES:
+            profile = 'hariom/auto'
+
+        cacheable = (
+            CACHE_ENABLED and use_cache and not tools and not tool_choice
+            and not response_format
+            and all(m.get('role') != 'tool' for m in messages)
+        )
+        key = cache_key(messages, profile)
+        if cacheable:
+            cached = cache_get(key)
+            if cached:
+                self.activity.emit('AI CACHE -> hit')
+                return cached['message'], cached['provider']
+
+        candidates = self._rank(preferred=preferred, profile=profile, tools=tools, response_format=response_format)
+        errors = []
+        if not candidates:
+            raise RuntimeError('No AI provider is configured or compatible with this request.')
+
+        for name, model in candidates:
+            try:
+                self.activity.emit(f'AI -> trying {name} ({model}) [{profile}]')
+                started = time.monotonic()
+                if name == 'gemini':
+                    message, usage = self._gemini_request(
+                        PROVIDERS[name], messages, model, tools=tools,
+                        response_format=response_format
+                    )
+                else:
+                    message, usage = self._compatible_request(
+                        name, PROVIDERS[name], messages, model, tools=tools,
+                        tool_choice=tool_choice, response_format=response_format
+                    )
+                latency = time.monotonic() - started
+                self._success(name, latency)
+                self.activity.emit(f'AI OK -> {name} ({model}) in {latency:.1f}s')
+                result = {'message': message, 'provider': name, 'usage': usage or {}}
+                if cacheable and message.get('content'):
+                    cache_put(key, result)
+                return message, name
+            except Exception as exc:
+                self._failure(name, exc)
+                errors.append(f'{name}/{model}: {exc}')
+                self.activity.emit(f'AI FAILED -> {name} ({model})')
+
+        raise RuntimeError('All configured AI providers failed. ' + ' | '.join(errors))
+
+    def _rank(self, preferred=None, profile='hariom/auto', tools=None, response_format=None):
+        now = time.time()
+        p = ROUTING_PROFILES.get(profile, {})
+        candidates = []
+        for name, cfg in PROVIDERS.items():
+            if not self._configured(name, cfg):
+                continue
+            s = self.health[name]
+            if s['cooldown_until'] > now or s['disabled_until'] > now:
+                continue
+            if tools and not cfg.get('supports_tools', False):
+                continue
+            if response_format and not cfg.get('supports_json', False):
+                continue
+            models = cfg.get('models') or [cfg.get('model')]
+            for index, model in enumerate(models):
+                if not model:
+                    continue
+                score = (
+                    (1000 if name == preferred else 0)
+                    + s['successes'] * 5
+                    - s['failures'] * 25
+                    - min(s['latency'], 60)
+                    - index * 3
+                    + cfg.get('speed', 5) * p.get('speed', 0)
+                    + cfg.get('coding', 5) * p.get('coding', 0)
+                    + cfg.get('reasoning', 5) * p.get('reasoning', 0)
+                    - s['latency'] * p.get('latency', 0)
+                )
+                if p.get('free_first'):
+                    score += 20 if name in {'groq', 'cerebras', 'openrouter', 'cloudflare', 'gemini'} else 0
+                if s['remaining_rpm'] is not None:
+                    score -= max(0, 10 - s['remaining_rpm']) * 2
+                if s['remaining_tpm'] is not None:
+                    score -= max(0, 1000 - s['remaining_tpm']) / 1000
+                if s['remaining_rpd'] is not None:
+                    score -= max(0, 10 - s['remaining_rpd'])
+                candidates.append((score, name, model))
+        candidates.sort(reverse=True)
+        return [(n, m) for _, n, m in candidates]
+
+    def _configured(self, name, cfg):
+        return bool(cfg.get('key')) and not (cfg.get('cloudflare') and not cfg.get('account_id'))
+
+    def _success(self, name, latency):
+        s = self.health[name]
+        s['successes'] += 1
+        s['failures'] = max(0, s['failures'] - 1)
+        s['latency'] = latency if not s['latency'] else s['latency'] * .7 + latency * .3
+        s['cooldown_until'] = 0.0
+        s['last_error'] = ''
+        self._save_state()
+
+    def _failure(self, name, exc):
+        s = self.health[name]
+        s['failures'] += 1
+        s['last_error'] = str(exc)[:500]
+        text = str(exc).lower()
+        if '401' in text or '403' in text:
+            delay = 86400
+            s['disabled_until'] = time.time() + delay
+        elif '429' in text:
+            delay = min(ROUTER_COOLDOWN_SECONDS * (2 ** min(s['failures'] - 1, 4)), 3600)
+            s['cooldown_until'] = time.time() + delay
+        else:
+            delay = min(ROUTER_COOLDOWN_SECONDS * (2 ** min(s['failures'] - 1, 4)), 3600)
+            s['cooldown_until'] = time.time() + delay
+        self._save_state()
+
+    def _record_quota(self, name, headers):
+        s = self.health[name]
+        mapping = {
+            'remaining_rpm': ('x-ratelimit-remaining-requests', 'x-ratelimit-remaining-rpm'),
+            'remaining_tpm': ('x-ratelimit-remaining-tokens', 'x-ratelimit-remaining-tpm'),
+            'remaining_rpd': ('x-ratelimit-remaining-day-requests', 'x-ratelimit-remaining-rpd'),
         }
+        for field, names in mapping.items():
+            for h in names:
+                value = headers.get(h)
+                if value is not None:
+                    try:
+                        s[field] = int(float(value))
+                    except (TypeError, ValueError):
+                        pass
+                    break
+        self._save_state()
 
-        headers = {
-            'Authorization': 'Bearer ' + cfg['key'],
-            'Content-Type': 'application/json',
-        }
+    def _load_state(self):
+        try:
+            if self.STATE_FILE.exists():
+                data = json.loads(self.STATE_FILE.read_text(encoding='utf-8'))
+                for n, state in data.items():
+                    self.health[n].update(state)
+        except (OSError, ValueError, TypeError):
+            pass
 
+    def _save_state(self):
+        try:
+            self.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            self.STATE_FILE.write_text(
+                json.dumps({n: dict(s) for n, s in self.health.items()}, indent=2),
+                encoding='utf-8'
+            )
+        except OSError:
+            pass
+
+    def _compatible_request(self, name, cfg, messages, model, tools=None,
+                            tool_choice=None, response_format=None):
+        payload = {'model': model, 'messages': messages, 'temperature': 0.2}
+        if tools:
+            payload['tools'] = tools
+        if tool_choice:
+            payload['tool_choice'] = tool_choice
+        if response_format:
+            payload['response_format'] = response_format
+        headers = {'Authorization': 'Bearer ' + cfg['key'], 'Content-Type': 'application/json'}
         if cfg.get('openrouter'):
             headers['HTTP-Referer'] = 'https://github.com/pateljiop/hariom-ai'
             headers['X-Title'] = 'Hariom AI'
-
         base = cfg['base']
         if cfg.get('cloudflare'):
             base = base.format(account_id=cfg['account_id'])
             headers['cf-aig-gateway-id'] = 'default'
+        return self._post_chat(name, base, headers, payload)
 
-        return self._post_chat(base, headers, payload, provider=cfg)
-
-    def _post_chat(self, base, headers, payload, provider=None):
-        last_error = None
-
+    def _post_chat(self, name, base, headers, payload):
+        last = None
         for attempt in range(ROUTER_RETRIES + 1):
             try:
-                response = requests.post(
-                    base,
-                    headers=headers,
-                    json=payload,
-                    timeout=ROUTER_TIMEOUT_SECONDS,
-                )
-
-                if provider is not None:
-                    self._record_quota(
-                        next(
-                            (
-                                name for name, cfg in PROVIDERS.items()
-                                if cfg is provider
-                            ),
-                            'unknown',
-                        ),
-                        response.headers,
-                    )
-
-                if response.status_code == 429 or response.status_code >= 500:
-                    retry_after = response.headers.get('Retry-After')
+                r = requests.post(base, headers=headers, json=payload, timeout=ROUTER_TIMEOUT_SECONDS)
+                self._record_quota(name, r.headers)
+                if r.status_code == 429 or r.status_code >= 500:
                     if attempt < ROUTER_RETRIES:
-                        delay = float(retry_after) if retry_after else 2 ** attempt
-                        time.sleep(min(delay, 10))
+                        retry_after = r.headers.get('Retry-After')
+                        time.sleep(min(float(retry_after) if retry_after else 2 ** attempt, 10))
                         continue
-
-                response.raise_for_status()
-                data = response.json()
+                r.raise_for_status()
+                data = r.json()
                 choices = data.get('choices') or []
-
                 if not choices:
-                    raise RuntimeError(
-                        'Provider returned no choices: ' + str(data)[:500]
-                    )
-
+                    raise RuntimeError('Provider returned no choices: ' + str(data)[:500])
                 message = choices[0].get('message') or {}
-                text = message.get('content')
-                if not text:
-                    raise RuntimeError(
-                        'Provider returned empty content: ' + str(data)[:500]
-                    )
-                return text
-
+                if not message.get('content') and not message.get('tool_calls'):
+                    raise RuntimeError('Provider returned empty message: ' + str(data)[:500])
+                return message, data.get('usage') or {}
             except (requests.RequestException, ValueError, KeyError) as exc:
-                last_error = exc
+                last = exc
                 if attempt < ROUTER_RETRIES:
                     time.sleep(2 ** attempt)
                     continue
-                raise RuntimeError(str(last_error)) from last_error
+                raise RuntimeError(str(last)) from last
+        raise RuntimeError(str(last))
 
-        raise RuntimeError(str(last_error))
-
-    def _gemini(self, cfg, prompt, system, model):
-        url = (
-            'https://generativelanguage.googleapis.com/v1beta/'
-            f'models/{model}:generateContent'
-        )
-        headers = {
-            'x-goog-api-key': cfg['key'],
-            'Content-Type': 'application/json',
-        }
-        payload = {
-            'contents': [{'role': 'user', 'parts': [{'text': prompt}]}]
-        }
+    def _gemini_request(self, cfg, messages, model, tools=None, response_format=None):
+        url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent'
+        headers = {'x-goog-api-key': cfg['key'], 'Content-Type': 'application/json'}
+        contents = []
+        system = []
+        for m in messages:
+            role = m.get('role')
+            content = m.get('content')
+            if role == 'system':
+                if isinstance(content, str):
+                    system.append(content)
+                continue
+            if isinstance(content, str):
+                contents.append({'role': 'model' if role == 'assistant' else 'user',
+                                 'parts': [{'text': content}]})
+        payload = {'contents': contents}
         if system:
-            payload['systemInstruction'] = {'parts': [{'text': system}]}
-
-        response = requests.post(
-            url,
-            headers=headers,
-            json=payload,
-            timeout=ROUTER_TIMEOUT_SECONDS,
-        )
-        self._record_quota(
-            next(
-                (
-                    name for name, cfg_item in PROVIDERS.items()
-                    if cfg_item is cfg
-                ),
-                'gemini',
-            ),
-            response.headers,
-        )
-        response.raise_for_status()
-
-        data = response.json()
+            payload['systemInstruction'] = {'parts': [{'text': '\n'.join(system)}]}
+        if response_format and response_format.get('type') == 'json_object':
+            payload['generationConfig'] = {'responseMimeType': 'application/json'}
+        r = requests.post(url, headers=headers, json=payload, timeout=ROUTER_TIMEOUT_SECONDS)
+        self._record_quota('gemini', r.headers)
+        r.raise_for_status()
+        data = r.json()
         candidates = data.get('candidates') or []
         if not candidates:
-            raise RuntimeError(
-                'Gemini returned no candidates: '
-                + str(data.get('promptFeedback', data))
-            )
-
+            raise RuntimeError('Gemini returned no candidates: ' + str(data.get('promptFeedback', data)))
         parts = candidates[0].get('content', {}).get('parts', [])
-        text = ''.join(
-            part.get('text', '') for part in parts if part.get('text')
-        )
+        text = ''.join(p.get('text', '') for p in parts if p.get('text'))
         if not text:
             raise RuntimeError('Gemini returned no text: ' + str(data))
-        return text
+        return {'role': 'assistant', 'content': text}, data.get('usageMetadata') or {}
