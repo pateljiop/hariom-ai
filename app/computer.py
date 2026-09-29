@@ -1,3 +1,4 @@
+import ctypes
 import io
 import platform
 from pathlib import Path
@@ -24,15 +25,25 @@ class ComputerController:
         if self._pg is None:
             try:
                 import pyautogui
-            except ImportError as exc:
-                raise RuntimeError("PyAutoGUI is required for computer control.") from exc
+            except Exception as exc:
+                raise RuntimeError(
+                    "PyAutoGUI could not be imported: %s: %s" % (type(exc).__name__, exc)
+                ) from exc
             pyautogui.FAILSAFE = True
             self._pg = pyautogui
         return self._pg
 
     def screen_size(self):
-        size = self._pyautogui().size()
-        return {"width": size.width, "height": size.height}
+        try:
+            size = self._pyautogui().size()
+            return {"width": size.width, "height": size.height}
+        except RuntimeError:
+            if self.system == "Windows":
+                return {
+                    "width": ctypes.windll.user32.GetSystemMetrics(0),
+                    "height": ctypes.windll.user32.GetSystemMetrics(1),
+                }
+            raise
 
     def position(self):
         point = self._pyautogui().position()
@@ -48,7 +59,15 @@ class ComputerController:
         return str(target) if target else image
 
     def screenshot_bytes(self, image_format="PNG"):
-        image = self._pyautogui().screenshot()
+        if self.system != "Windows":
+            raise RuntimeError("Screen capture is supported only on Windows.")
+        try:
+            from PIL import ImageGrab
+            image = ImageGrab.grab()
+        except Exception as exc:
+            raise RuntimeError(
+                "Windows screen capture failed: %s: %s" % (type(exc).__name__, exc)
+            ) from exc
         buffer = io.BytesIO()
         image.save(buffer, format=str(image_format).upper())
         self.activity.emit("COMPUTER -> screenshot for vision")
