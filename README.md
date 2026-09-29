@@ -1,36 +1,92 @@
 # Hariom AI
 
-Windows-first personal AI workstation with a native OpenAI-compatible AI gateway.
+Hariom AI is a Windows-first **personal AI workstation / Personal AI OS**.
+
+The provider router is internal infrastructure. The product is the personal agent that can understand a request, use local tools, verify the result and keep useful local memory.
+
+## Personal AI architecture
+
+- Brain: multi-provider routing with automatic fallback
+- Memory: local SQLite facts, preferences and project notes
+- Agent: plan -> execute -> verify
+- Tools: workspace files and terminal actions
+- Safety: approval gate for writes and terminal commands
+- Workspace: active project directory with path containment
+- UI: chat mode plus task execution mode
+- Health: persistent provider health, cooldown and quota-aware routing
+
+## Current agent flow
+
+A task follows:
+
+1. Understand the request
+2. Build a structured execution plan
+3. Execute available tools
+4. Pause when an approval-gated action is required
+5. Resume from the blocked step after approval
+6. Verify that every executed step produced a result
+7. Report the actual task state
+
+The agent never treats a planned action as completed.
+
+## Local memory
+
+Memory is stored locally in SQLite under the Hariom AI runtime directory.
+
+Memory categories are intended for useful information such as:
+
+- preferences
+- project notes
+- recurring facts
+- task context
+
+Do not store passwords, API keys or other secrets in memory.
+
+## Local tools
+
+The first tool set is intentionally small:
+
+- list files
+- read files
+- write files
+- run terminal commands
+
+Write and terminal actions require explicit approval when invoked by the agent.
 
 ## Smart router
 
-Hariom AI does not require Manifest. It contains its own routing layer:
+Hariom AI has its own routing layer:
 
-- Automatic provider/model fallback
-- Persistent health and latency memory
-- Quota-aware ranking from provider rate-limit headers
-- Exponential cooldowns and circuit-breaker behavior
-- Long disable window for authentication failures
-- Capability-aware routing for tools and JSON responses
-- Routing profiles: `hariom/auto`, `hariom/fast`, `hariom/coding`, `hariom/reasoning`, `hariom/free`
-- Exact local response cache with configurable TTL
-- Provider credentials stay in local `.env`
+- automatic provider/model fallback
+- persistent health and latency memory
+- quota-aware ranking from provider headers
+- exponential cooldowns and circuit-breaker behavior
+- capability-aware routing
+- profiles: hariom/auto, hariom/fast, hariom/coding, hariom/reasoning, hariom/free
+- exact local response cache
+- local credentials from .env
 
-### Example profiles
+Provider availability changes over time, so only configured and compatible providers are attempted.
 
-Use `hariom/auto` for normal requests.
+## Desktop app
 
-Use `hariom/fast` when latency matters.
+Start the personal AI UI with:
 
-Use `hariom/coding` for programming work.
+```bash
+python -m app
+```
 
-Use `hariom/reasoning` for harder reasoning tasks.
+The UI provides:
 
-Use `hariom/free` to bias routing toward providers commonly used without paid OpenAI/Anthropic billing.
+- Ask AI for normal conversation
+- Run Task for tool-using work
+- approval and resume for protected actions
+- active workspace selection
+- live activity log
 
 ## Local gateway
 
-Start:
+The OpenAI-compatible gateway remains available as an infrastructure component:
 
 ```bash
 python -m app.gateway
@@ -42,43 +98,7 @@ Default endpoint:
 http://127.0.0.1:8080/v1/chat/completions
 ```
 
-The gateway supports:
-
-- `/health`
-- `/v1/models`
-- OpenAI-style chat completions
-- routing profiles as model aliases
-- tool payload pass-through on compatible providers
-- JSON response-format pass-through
-- OpenAI-compatible SSE-style `stream=true` responses
-- optional Bearer authentication
-- automatic refusal to bind publicly without an API key
-
-Example request:
-
-```json
-{
-  "model": "hariom/coding",
-  "messages": [
-    {"role": "user", "content": "Explain this Python function"}
-  ]
-}
-```
-
-## Cache
-
-Pure text requests can use the local SQLite response cache. Requests containing tools/tool messages or explicit `no_cache=true` bypass it.
-
-Settings:
-
-- `HARIOM_CACHE_ENABLED=1`
-- `HARIOM_CACHE_TTL=300`
-
-## Provider pool
-
-Current defaults include Gemini, Groq, Cerebras, OpenRouter, Mistral, Cloudflare Workers AI and OpenAI. Only providers with valid local credentials are attempted.
-
-Provider/model availability can change, so the router treats the configured pool as dynamic and falls back when a route fails.
+It supports profiles, compatible tool payload pass-through, JSON response-format pass-through and a simple SSE-style response. It is not the main product identity.
 
 ## Development
 
@@ -86,8 +106,8 @@ Provider/model availability can change, so the router treats the configured pool
 python -m venv .venv
 .venv\\Scripts\\activate
 pip install -r requirements.txt
-python -m unittest discover -s tests -v
 python -m compileall -q app tests
+python -m unittest discover -s tests -v
 ```
 
-Never commit API keys or `.env`.
+Never commit API keys or .env.
