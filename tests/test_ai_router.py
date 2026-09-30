@@ -128,6 +128,17 @@ class AIRouterTests(unittest.TestCase):
         self.assertEqual(vision.call_args.args[1], b"image")
 
     @patch.object(ai_router.AIRouter, "vision_chat")
+    def test_locate_on_screen_maps_normalized_bbox_to_cropped_tab_image(self, vision):
+        vision.return_value = (
+            '{"found":true,"bbox_norm":[0,0,1000,1000],"confidence":0.91,"label":"GitHub tab"}',
+            "openrouter",
+        )
+        result = self.router.locate_on_screen("GitHub tab", b"image", (1280, 1000))
+        self.assertTrue(result["found"])
+        self.assertEqual(result["x"], 640)
+        self.assertEqual(result["y"], 90)
+
+    @patch.object(ai_router.AIRouter, "vision_chat")
     def test_locate_on_screen_uses_top_crop_for_real_image(self, vision):
         from PIL import Image
         import io
