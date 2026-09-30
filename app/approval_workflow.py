@@ -28,7 +28,7 @@ class ApprovalRequest:
     test_target: str
     test_result: dict
     diff: str
-    approved: bool = False
+    approved: bool = False\n    task_id: str = ""\n    created_at: str = ""\n    expires_at: str = ""\n    rejected: bool = False
 
 
 class ApprovalWorkflow:
@@ -37,7 +37,7 @@ class ApprovalWorkflow:
         self.git = git or self.executor.registry.git
         self._requests: Dict[str, ApprovalRequest] = {}
 
-    def prepare(self, actions, test_target="tests"):
+    def prepare(self, actions, test_target="tests", task_id=""):
         if actions is None:
             raise ApprovalWorkflowError("Actions are required.")
         actions = tuple(actions)
@@ -98,7 +98,7 @@ class ApprovalWorkflow:
             diff=request.diff,
             approved=True,
         )
-        return {"ok": True, "request_id": request_id, "commit": result}
+        if self.store:\n            self.store.save_approval(request_id, {"task_id": request.task_id, "actions": [{"tool": a.tool, "arguments": dict(a.arguments), "approved": a.approved} for a in request.actions], "test_target": request.test_target, "test_result": request.test_result, "diff": request.diff}, request.created_at, request.expires_at, "approved")\n        return {"ok": True, "request_id": request_id, "commit": result}\n\n    def reject(self, request_id, reason="rejected by user"):\n        request = self._requests.get(request_id)\n        if request is None and self.store:\n            saved = self.store.get_approval(request_id)\n            if saved:\n                request = ApprovalRequest(request_id=request_id, actions=tuple(TaskAction(x["tool"], x.get("arguments", {}), x.get("approved", False)) for x in saved["actions"]), test_target=saved["test_target"], test_result=saved["test_result"], diff=saved["diff"], task_id=saved.get("task_id", ""), created_at=saved["created_at"], expires_at=saved["expires_at"], approved=saved["status"] == "approved", rejected=saved["status"] == "rejected")\n        if request is None:\n            raise ApprovalNotFoundError(f"Unknown approval request: {request_id}")\n        if request.approved or request.rejected:\n            raise ApprovalDeniedError("Approval request has already been consumed.")\n        if self.store:\n            self.store.save_approval(request_id, {"task_id": request.task_id, "actions": [{"tool": a.tool, "arguments": dict(a.arguments), "approved": a.approved} for a in request.actions], "test_target": request.test_target, "test_result": request.test_result, "diff": request.diff}, request.created_at, request.expires_at, "rejected")\n        self._requests[request_id] = ApprovalRequest(**{**request.__dict__, "rejected": True})\n        return {"ok": True, "request_id": request_id, "rejected": True, "reason": reason}
 
     @staticmethod
     def _make_request_id(actions, test_target, diff):
