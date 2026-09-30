@@ -103,6 +103,40 @@ class AIRouter:
                 self.activity.emit('VISION FAILED -> ' + name)
         raise RuntimeError('All vision providers failed. ' + ' | '.join(errors))
 
+    def verify_click_state(self, target, image_bytes, screen_size):
+        """Use fresh vision to verify that a requested UI click produced the expected state."""
+        if not target or not image_bytes or not screen_size or len(screen_size) != 2:
+            raise ValueError("target, image_bytes and screen_size are required")
+        prompt = (
+            "Verify the result of a recent computer click. Target: " + str(target) + "\n"
+            "Inspect the CURRENT screenshot only. Decide whether that target is now visibly "
+            "active/selected/open as expected after a click. For a browser tab, the target tab "
+            "must be visibly selected/active in the browser chrome. Do not treat mere visibility "
+            "as success. Return ONLY JSON: "
+            "{\"verified\":true,\"confidence\":0.0,\"reason\":\"...\"} or "
+            "{\"verified\":false,\"confidence\":0.0,\"reason\":\"...\"}. "
+            "Never guess."
+        )
+        text, provider = self.vision_chat(prompt, image_bytes)
+        raw = str(text).strip()
+        if raw.startswith("```"):
+            raw = raw.strip("`").strip()
+            if raw.lower().startswith("json"):
+                raw = raw[4:].strip()
+        try:
+            data = json.loads(raw)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError("Vision click verification returned invalid JSON.") from exc
+        if not isinstance(data, dict):
+            raise RuntimeError("Vision click verification returned invalid data.")
+        confidence = max(0.0, min(1.0, float(data.get("confidence", 0.0))))
+        verified = bool(data.get("verified")) and confidence >= 0.70
+        return {
+            "verified": verified,
+            "confidence": confidence,
+            "reason": str(data.get("reason", "Verified." if verified else "State not verified.")),
+            "provider": provider,
+        }
     def locate_on_screen(self, target, image_bytes, screen_size):
         """Locate a visible UI target and return safe pixel coordinates."""
         if not target or not image_bytes or not screen_size or len(screen_size) != 2:
@@ -110,11 +144,19 @@ class AIRouter:
         width, height = int(screen_size[0]), int(screen_size[1])
         if width <= 0 or height <= 0:
             raise ValueError("screen_size must be positive")
+        target_text = str(target).strip()
+        region_hint = ""
+        if "tab" in target_text.lower():
+            region_hint = (
+                "Because this target is a browser tab, search ONLY the top 18% of the "
+                "screen/browser chrome. Do not select page content below that region.\n"
+            )
         prompt = (
-            "Locate this exact target on the screenshot: " + str(target) + "\n"
-            "Return ONLY JSON with found, x/y center pixels, confidence, and label. "
-            "If clearly visible you may instead return bbox as [x1,y1,x2,y2] in pixels. "
-            "Never guess. If not clearly visible return found=false with a reason."
+            "Locate this exact target on the screenshot: " + target_text + "\n"
+            + region_hint
+            + "Return ONLY JSON with found, x/y center pixels, confidence, and label. "
+            + "If clearly visible you may instead return bbox as [x1,y1,x2,y2] in pixels. "
+            + "Never guess. If not clearly visible return found=false with a reason."
         )
         text, provider = self.vision_chat(prompt, image_bytes)
         raw = str(text).strip()
