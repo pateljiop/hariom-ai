@@ -3,6 +3,8 @@
 The screenshot is treated as untrusted visual data. The model may propose
 desktop actions but cannot grant itself approval.
 """
+import hashlib
+import json
 import os
 from typing import Callable
 
@@ -58,6 +60,28 @@ class ComputerControlLoop:
             return False
         return bool(self.approval_checker({"tool": tool, "arguments": dict(arguments)}))
 
+    @staticmethod
+    def _fingerprint(path):
+        if not isinstance(path, str) or not path:
+            raise ComputerLoopError("Screenshot path is required for visual verification.")
+        hasher = hashlib.sha256()
+        try:
+            with open(path, "rb") as handle:
+                for chunk in iter(lambda: handle.read(65536), b""):
+                    hasher.update(chunk)
+        except (OSError, TypeError) as exc:
+            raise ComputerLoopError("Unable to fingerprint screenshot.") from exc
+        return hasher.hexdigest()
+
+    @staticmethod
+    def _action_signature(action):
+        return json.dumps(
+            {"tool": action["tool"], "arguments": action["arguments"]},
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        )
+
     def _observe(self):
         geometry = self._screen_geometry()
         approved = self._approved(self.SCREENSHOT_TOOL, {"persist": False})
@@ -73,7 +97,12 @@ class ComputerControlLoop:
                 "error": result.get("error", "Computer screenshot failed."),
             }
         path = result.get("result")
-        return {"image_path": path, "screen": geometry}, None
+        try:
+            fingerprint = self._fingerprint(path)
+        except ComputerLoopError as exc:
+            self._cleanup(path)
+            return None, {"ok": False, "status": "observation_failed", "error": str(exc)}
+        return {"image_path": path, "screen": geometry, "fingerprint": fingerprint}, None
 
     def _validate(self, decision):
         if not isinstance(decision, dict):
@@ -101,8 +130,15 @@ class ComputerControlLoop:
 
         observation = None
         if initial_image:
-            observation = {"image_path": initial_image, "screen": self._screen_geometry()}
+            observation = {
+                "image_path": initial_image,
+                "screen": self._screen_geometry(),
+                "fingerprint": self._fingerprint(initial_image),
+            }
         history = []
+        last_action_signature = None
+        last_before_fingerprint = None
+        repeated_action_count = 0
         for iteration in range(1, self.max_iterations + 1):
             if not observation:
                 observation, failure = self._observe()
@@ -119,6 +155,28 @@ class ComputerControlLoop:
                     "iterations": iteration - 1, "history": history,
                 }
 
+            action_signature = self._action_signature(action)
+            if (
+                action_signature == last_action_signature
+                and observation["fingerprint"] == last_before_fingerprint
+            ):
+                repeated_action_count += 1
+            else:
+                repeated_action_count = 1
+            if repeated_action_count >= 2:
+                self._cleanup(observation["image_path"])
+                return {
+                    "ok": False,
+                    "status": "stagnated",
+                    "iterations": iteration - 1,
+                    "error": "The same desktop action was proposed repeatedly without a visual state change.",
+                    "history": history,
+                    "screen": observation["screen"],
+                }
+
+            before_fingerprint = observation["fingerprint"]
+            last_action_signature = action_signature
+            last_before_fingerprint = before_fingerprint
             result = self.registry.execute(
                 action["tool"], action["arguments"], approved=action["approved"]
             )
@@ -136,6 +194,11 @@ class ComputerControlLoop:
             observation, failure = self._observe()
             if failure:
                 return {"ok": False, "iterations": iteration, "history": history, **failure}
+            event["visual_verification"] = {
+                "before": before_fingerprint,
+                "after": observation["fingerprint"],
+                "changed": before_fingerprint != observation["fingerprint"],
+            }
 
         if observation:
             self._cleanup(observation["image_path"])
