@@ -1,4 +1,5 @@
 from pathlib import Path
+import ast
 
 
 class Verifier:
@@ -20,6 +21,21 @@ class Verifier:
             target = Path(step.get("workspace_root", "")) / path
             if step.get("workspace_root") and not target.is_file():
                 return False, "written file was not found after the tool reported success"
+
+        if tool == "computer_click_target":
+            try:
+                data = ast.literal_eval(str(output))
+            except (ValueError, SyntaxError):
+                return False, "computer_click_target returned an unreadable result"
+            if not isinstance(data, dict):
+                return False, "computer_click_target result is not an object"
+            if not data.get("clicked"):
+                return False, "computer_click_target did not report a click"
+            if not data.get("verified"):
+                return False, "computer_click_target click state was not verified"
+            confidence = float(data.get("verification_confidence", 0.0))
+            if confidence < 0.70:
+                return False, "computer_click_target verification confidence is too low"
 
         return True, "verified"
 
