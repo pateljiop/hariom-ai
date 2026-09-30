@@ -224,8 +224,9 @@ class App(tk.Tk):
         self.provider_label = tk.Label(status_bar, text="Auto", bg="#0b1119", fg="#8fa0b4",
                                         font=("Segoe UI", 8, "bold"))
         self.provider_label.pack(side="right", padx=(8, 16))
-        tk.Label(status_bar, text="Workspace", bg="#0b1119", fg="#596779",
-                 font=("Segoe UI", 7, "bold")).pack(side="right")
+        self.workspace_status_label = tk.Label(status_bar, text=self.ws.root.name, bg="#0b1119", fg="#596779",
+                                               font=("Segoe UI", 7, "bold"))
+        self.workspace_status_label.pack(side="right")
 
         # Assistant identity / breathing area
         hero = tk.Frame(outer, bg="#080c12", height=112)
@@ -304,7 +305,24 @@ class App(tk.Tk):
         self.action_button(action_row, "Run", self.run_task).pack(side="left", padx=5)
         self.action_button(action_row, "Voice", self.voice_command).pack(side="left")
         self.action_button(action_row, "Screen", self.see_screen).pack(side="left", padx=5)
-        self.approval_button = self.action_button(action_row, "Approve", self.approve_task).pack(side="right")
+
+        self.approval_card = tk.Frame(command_card, bg="#17130d", highlightthickness=1,
+                                      highlightbackground="#6f5528")
+        approval_text = tk.Frame(self.approval_card, bg="#17130d")
+        approval_text.pack(side="left", fill="x", expand=True, padx=10, pady=8)
+        self.approval_title = tk.Label(approval_text, text="Approval required", bg="#17130d", fg="#f3d38a",
+                                       font=("Segoe UI", 8, "bold"), anchor="w")
+        self.approval_title.pack(anchor="w")
+        self.approval_detail = tk.Label(approval_text, text="", bg="#17130d", fg="#b9aa8c",
+                                        font=("Segoe UI", 7), justify="left", anchor="w", wraplength=270)
+        self.approval_detail.pack(anchor="w", pady=(2, 0))
+        approval_actions = tk.Frame(self.approval_card, bg="#17130d")
+        approval_actions.pack(side="right", padx=8, pady=8)
+        self.approve_button = self.action_button(approval_actions, "Approve", self.approve_task, primary=True)
+        self.approve_button.pack(side="left")
+        self.cancel_approval_button = self.action_button(approval_actions, "Cancel", self.cancel_approval)
+        self.cancel_approval_button.pack(side="left", padx=(5, 0))
+        self.update_approval_ui(None)
 
         activity_head = tk.Frame(self.chat_surface, bg="#080c12")
         activity_head.pack(fill="x")
@@ -400,7 +418,27 @@ class App(tk.Tk):
             self.prompt.delete("1.0", "end")
             self.prompt.insert("1.0", "Tell Hariom AI what to do…")
         self.set_view("chat")
-        self.status.set("New chat")
+        self.set_status("New chat")
+
+    def set_status(self, value):
+        value = str(value)
+        if not hasattr(self, "status"):
+            return
+        self.status.set(value)
+        if not hasattr(self, "_status_dot"):
+            return
+        lower = value.lower()
+        if "error" in lower or "failed" in lower:
+            color = "#ff6b78"
+        elif "approval" in lower or "waiting" in lower:
+            color = "#f0b35b"
+        elif any(word in lower for word in ("thinking", "planning", "executing", "running", "observing", "listening", "transcribing")):
+            color = "#79dcff"
+        elif "completed" in lower or "ready" in lower:
+            color = "#67e8a5"
+        else:
+            color = "#8d97a8"
+        self._status_dot.configure(fg=color)
 
     def set_mode(self, mode):
         if mode not in ("chat", "agent"):
@@ -408,7 +446,7 @@ class App(tk.Tk):
         self.mode = mode
         self.update_mode_ui()
         if hasattr(self, "status"):
-            self.status.set("Chat mode" if mode == "chat" else "Agent mode")
+            self.set_status("Chat mode" if mode == "chat" else "Agent mode")
 
     def set_view(self, view):
         if view not in ("chat", "history"):
@@ -417,12 +455,12 @@ class App(tk.Tk):
         if view == "chat":
             self.history_surface.pack_forget()
             self.chat_surface.pack(fill="both", expand=True)
-            self.status.set("Ready")
+            self.set_status("Ready")
         else:
             self.chat_surface.pack_forget()
             self.history_surface.pack(fill="both", expand=True)
             self.refresh_history()
-            self.status.set("Chat history")
+            self.set_status("Chat history")
         self.update_view_ui()
 
     def update_view_ui(self):
@@ -488,7 +526,7 @@ class App(tk.Tk):
         for message in conversation:
             label = "YOU" if message["role"] == "user" else "AI"
             self.append(self.log, "%s: %s" % (label, message["content"]))
-        self.status.set("Loaded history")
+        self.set_status("Loaded history")
 
     def update_mode_ui(self):
         if not hasattr(self, "chat_mode_button"):
@@ -554,7 +592,7 @@ class App(tk.Tk):
 
     def _set_status(self, line):
         if hasattr(self, "status") and self._expanded:
-            self.status.set(line[:75])
+            self.set_status(line[:75])
 
     def pulse_orb(self):
         if hasattr(self, "orb") and self._expanded:
@@ -568,23 +606,31 @@ class App(tk.Tk):
         widget.configure(state="disabled")
 
     def voice_command(self):
-        self.status.set("Listening...")
+        self.set_status("Listening...")
         threading.Thread(target=self.voice_worker, daemon=True).start()
 
     def voice_worker(self):
         try:
             prompt = self.voice.listen()
             if not prompt:
-                self.after(0, lambda: self.status.set("No speech recognized"))
+                self.after(0, lambda: self.set_status("No speech recognized"))
                 return
             self.after(0, lambda: self.prompt.delete("1.0", "end"))
             self.after(0, lambda: self.prompt.insert("1.0", prompt))
-            self.after(0, lambda: self.status.set("Voice command ready — press Run"))
+            self.after(0, lambda: self.set_status("Voice command ready — press Run"))
         except Exception as exc:
             self.after(0, lambda: messagebox.showerror("Voice error", str(exc)))
 
     def see_screen(self):
-        self.status.set("Observing screen...")
+        allowed = messagebox.askyesno(
+            "Screen access",
+            "Hariom AI will capture the current screen once for visual analysis.\n\n"
+            "No background monitoring will start. Continue?"
+        )
+        if not allowed:
+            self.set_status("Ready")
+            return
+        self.set_status("Observing screen...")
         threading.Thread(target=self.screen_vision_worker, daemon=True).start()
 
     def screen_vision_worker(self):
@@ -597,7 +643,7 @@ class App(tk.Tk):
             )
             text, provider = self.router.vision_chat(prompt, image)
             self.after(0, lambda: self.append(self.log, "VISION (" + provider + "):\n" + text))
-            self.after(0, lambda: self.status.set("Ready"))
+            self.after(0, lambda: self.set_status("Ready"))
         except Exception as exc:
             error = str(exc)
             self.after(0, lambda error=error: messagebox.showerror("Screen Vision", error))
@@ -626,7 +672,7 @@ class App(tk.Tk):
             self.history.add(conversation_id, "assistant", text)
             self.after(0, lambda: self.append(self.log, "YOU: " + prompt))
             self.after(0, lambda: self.append(self.log, "AI (" + provider + "): " + text))
-            self.after(0, lambda: self.status.set("Ready"))
+            self.after(0, lambda: self.set_status("Ready"))
         except Exception as exc:
             self.after(0, lambda: messagebox.showerror("AI error", str(exc)))
 
@@ -638,7 +684,7 @@ class App(tk.Tk):
     def task_worker(self, prompt):
         try:
             self.task_started_at = time.time()
-            self.after(0, lambda: self.status.set("Planning..."))
+            self.after(0, lambda: self.set_status("Planning..."))
             state = self.agent.run(prompt, approve=False)
             self.current_task = state
             self.after(0, lambda: self.show_task(state))
@@ -664,10 +710,31 @@ class App(tk.Tk):
         except Exception as exc:
             self.after(0, lambda: messagebox.showerror("Resume error", str(exc)))
 
+    def update_approval_ui(self, state):
+        if not hasattr(self, "approval_card"):
+            return
+        waiting = bool(state and state.status.value == "waiting_approval")
+        if waiting:
+            step = state.steps[state.current_step] if 0 <= state.current_step < len(state.steps) else {}
+            tool = step.get("tool") or "protected action"
+            description = step.get("description") or "A protected action is ready to run."
+            self.approval_detail.configure(text="%s\nTool: %s" % (description, tool))
+            self.approval_card.pack(fill="x", padx=8, pady=(0, 8))
+        else:
+            self.approval_card.pack_forget()
+
+    def cancel_approval(self):
+        if not self.current_task or self.current_task.status.value != "waiting_approval":
+            return
+        self.current_task.status = type(self.current_task.status).FAILED
+        self.current_task.result = "Cancelled before the protected action was executed."
+        self.current_task.errors.append("Approval cancelled by user.")
+        self.show_task(self.current_task)
+
     def approve_task(self):
         if not self.current_task or self.current_task.status.value != "waiting_approval":
-            self.append(self.log, "No task is waiting for approval.")
             return
+        self.set_status("Executing...")
         threading.Thread(target=self.approve_worker, daemon=True).start()
 
     def approve_worker(self):
@@ -682,7 +749,8 @@ class App(tk.Tk):
         if self._expanded:
             self.geometry("%dx%d+%d+%d" % (self.panel_width, self.panel_height, self.winfo_x(), self.winfo_y()))
         label = state.status.value.replace("_", " ").title()
-        self.status.set(label)
+        self.set_status(label)
+        self.update_approval_ui(state)
         if hasattr(self, "task_started_at") and not self.task_started_at:
             self.task_started_at = time.time()
         self.log.configure(state="normal")
@@ -698,58 +766,3 @@ class App(tk.Tk):
             self.append(self.log, "Hariom wants to perform the protected action shown above.")
         elif state.status.value == "completed":
             elapsed = time.time() - self.task_started_at if self.task_started_at else 0
-            completed = sum(1 for step in state.steps if step["status"] == "completed")
-            self.append(self.log, "✓ Task completed and verified.")
-            self.append(self.log, "Validation: %d/%d steps verified" % (completed, len(state.steps)))
-            self.append(self.log, "Time: %.1fs" % elapsed)
-            self.refresh_workspace_panel()
-        elif state.status.value == "failed":
-            self.append(self.log, "✕ Task failed")
-            if state.errors:
-                self.append(self.log, "What failed: " + state.errors[-1][:700])
-            self.append(self.log, "Next: review the failed step above, then retry or adjust the request.")
-        if state.result and state.status.value not in ("completed", "failed"):
-            self.append(self.log, state.result)
-
-    def refresh_workspace_panel(self):
-        if not hasattr(self, "workspace_tree"):
-            return
-        try:
-            items = self.ws.list_files()[:12]
-            lines = []
-            for path in items:
-                try:
-                    rel = path.relative_to(self.ws.root)
-                except ValueError:
-                    rel = path.name
-                lines.append("├ " + str(rel))
-            self.workspace_tree.configure(text="\n".join(lines) if lines else "Workspace is empty")
-        except Exception:
-            self.workspace_tree.configure(text="Workspace unavailable")
-
-    def list_workspace(self):
-        try:
-            items = self.ws.list_files()
-            self.append(self.log, "\n".join(str(p.relative_to(self.ws.root)) for p in items[:100]) or "Workspace is empty.")
-        except Exception as exc:
-            messagebox.showerror("Workspace", str(exc))
-
-    def select_browser(self, browser):
-        try:
-            selected = self.browser.set_browser(browser)
-            self.status.set("Browser: " + selected)
-            self.append(self.log, "BROWSER -> selected " + selected)
-        except Exception as exc:
-            messagebox.showerror("Browser", str(exc))
-
-    def choose_workspace(self):
-        path = filedialog.askdirectory(initialdir=str(self.ws.root))
-        if path:
-            self.ws = Workspace(path)
-            self.agent.workspace = self.ws
-            self.agent.tools.workspace = self.ws
-            self.activity.emit("SYSTEM -> workspace changed to " + str(self.ws.root))
-
-
-def launch():
-    App().mainloop()
