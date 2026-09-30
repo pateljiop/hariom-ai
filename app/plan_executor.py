@@ -145,14 +145,12 @@ class PlanExecutor:
         }
 
     def approve(self, request_id, message):
-        approval = self.task_service.store.get_approval(request_id)
-        if approval and approval.get("status") == "approved":
-            result = self.workflow.approve(request_id, message)
-        else:
-            result = self.workflow.approve(request_id, message)
+        result = self.workflow.approve(request_id, message)
         approval = self.task_service.store.get_approval(request_id)
         task_id = approval.get("task_id") if approval else None
         state = self._states.get(task_id) if task_id else None
+        if state is None and task_id:
+            state = self._restore_state(task_id)
         if state is None:
             for candidate in self._states.values():
                 if candidate.result.get("request_id") == request_id:
