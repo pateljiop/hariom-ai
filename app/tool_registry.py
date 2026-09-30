@@ -10,6 +10,7 @@ from .terminal import run_command
 from .workspace import Workspace
 from .workspace_patcher import TextPatch, WorkspacePatcher
 from .test_runner import TestRunner
+from .git_manager import GitManager
 
 
 class ToolError(Exception):
@@ -38,6 +39,7 @@ class ToolRegistry:
         self.activity = activity
         self.patcher = WorkspacePatcher(self.workspace)
         self.test_runner = TestRunner(self.workspace.root)
+        self.git = GitManager(self.workspace.root)
         self._tools: Dict[str, ToolSpec] = {}
         self._register_defaults()
 
@@ -71,6 +73,27 @@ class ToolRegistry:
             "tests.run",
             "Run Python unittest discovery inside the workspace.",
             self._run_tests,
+        ))
+        self.register(ToolSpec(
+            "git.status",
+            "Show workspace Git status.",
+            self.git.status,
+        ))
+        self.register(ToolSpec(
+            "git.diff",
+            "Show the current Git diff.",
+            self.git.diff,
+        ))
+        self.register(ToolSpec(
+            "git.branch",
+            "Create a new isolated Git branch.",
+            self.git.create_branch,
+        ))
+        self.register(ToolSpec(
+            "git.commit",
+            "Commit workspace changes; explicit approval is required.",
+            self.git.commit,
+            requires_approval=True,
         ))
 
     def register(self, spec):
