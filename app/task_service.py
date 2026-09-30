@@ -56,4 +56,4 @@ class TaskService:
     @staticmethod
     def _make_id(user_request, objective):
         digest = hashlib.sha256(f"{user_request}\n{objective}".encode("utf-8")).hexdigest()
-        return f"task-{digest[:16]}"
+        return f"task-{digest[:16]}-{uuid4().hex[:8]}"
