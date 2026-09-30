@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from app import gateway
 from app.browser import BrowserController
 from app.computer import ComputerController
 from app.workspace import Workspace
