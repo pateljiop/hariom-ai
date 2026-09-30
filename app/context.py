@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 
 from .workspace import Workspace
 
@@ -33,7 +34,54 @@ class WorkspaceContext:
 
         return {
             "root": str(self.workspace.root),
+            "project_type": self._project_type(),
+            "git": self._git_context(),
             "file_count": len(files),
             "files": files,
             "important_files": important,
+        }
+
+    def _project_type(self):
+        root = self.workspace.root
+        markers = {
+            "Python": ("pyproject.toml", "requirements.txt", "setup.py"),
+            "Node": ("package.json",),
+            "Rust": ("Cargo.toml",),
+            "Go": ("go.mod",),
+            "Java": ("pom.xml", "build.gradle"),
+        }
+        detected = [
+            name for name, files in markers.items()
+            if any((root / filename).is_file() for filename in files)
+        ]
+        return detected or ["Unknown"]
+
+    def _git_context(self):
+        root = self.workspace.root
+        if not (root / ".git").exists():
+            return {"repository": False}
+
+        def git(*args):
+            try:
+                result = subprocess.run(
+                    ["git", *args],
+                    cwd=root,
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                    check=False,
+                )
+                if result.returncode != 0:
+                    return ""
+                return result.stdout.strip()
+            except (OSError, subprocess.SubprocessError):
+                return ""
+
+        branch = git("branch", "--show-current")
+        status = git("status", "--short")
+        return {
+            "repository": True,
+            "branch": branch or "detached",
+            "dirty": bool(status),
+            "changed_files": status.splitlines()[:40] if status else [],
         }
