@@ -8,7 +8,9 @@ from app.tool_registry import ToolApprovalRequired
 class TaskExecutorStepStateTests(unittest.TestCase):
     def _executor(self, outcomes=None):
         registry = Mock()
-        registry.describe.return_value = [{"name": "tool.a"}, {"name": "tool.b"}]
+        registry.describe.return_value = [{"name": "tool.a"}, {"name": "tool.b"}, {"name": "terminal.run"}]
+        registry.workspace = Mock()
+        registry.workspace.read_file.return_value = "present"
         registry.execute.side_effect = outcomes or [
             {"ok": True, "value": "a"},
             {"ok": True, "value": "b"},
@@ -88,6 +90,43 @@ class TaskExecutorStepStateTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(state["a"]["attempts"], 1)
         self.assertEqual(registry.execute.call_count, 1)
+
+    def test_expected_file_is_verified_before_step_succeeds(self):
+        executor, registry = self._executor()
+        state = {}
+        result = executor.execute(
+            [TaskAction("tool.a", {}, step_id="a", expected_files=("output.txt",))],
+            step_state=state,
+        )
+        self.assertTrue(result["ok"])
+        registry.workspace.read_file.assert_called_once_with("output.txt")
+        self.assertEqual(state["a"]["status"], "succeeded")
+
+    def test_missing_expected_file_fails_step(self):
+        executor, registry = self._executor()
+        registry.workspace.read_file.side_effect = FileNotFoundError("missing")
+        state = {}
+        result = executor.execute(
+            [TaskAction("tool.a", {}, step_id="a", expected_files=("output.txt",))],
+            step_state=state,
+        )
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_type"], "verification_error")
+        self.assertEqual(state["a"]["status"], "failed")
+
+    def test_step_test_command_is_verified(self):
+        executor, registry = self._executor()
+        registry.execute.side_effect = [
+            {"ok": True, "value": "a"},
+            {"ok": True, "result": {"ok": True}},
+        ]
+        state = {}
+        result = executor.execute(
+            [TaskAction("tool.a", {}, step_id="a", test_commands=("python -m unittest tests",), approved=True)],
+            step_state=state,
+        )
+        self.assertTrue(result["ok"])
+        registry.execute.assert_called_with("terminal.run", {"command": "python -m unittest tests", "approved": True}, approved=True)
 
     def test_approval_required_returns_current_step_to_pending(self):
         executor, registry = self._executor()
