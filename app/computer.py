@@ -95,6 +95,41 @@ class ComputerController:
         self.activity.emit(f"COMPUTER -> move mouse ({int(x)}, {int(y)})")
         return {"x": int(x), "y": int(y)}
 
+    def _focus_existing_browser(self):
+        """Bring an existing Chrome/Edge/Firefox window to the foreground."""
+        if self.system != "Windows":
+            return False
+        try:
+            user32 = ctypes.windll.user32
+            matches = []
+            callback_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+            def callback(hwnd, _lparam):
+                if not user32.IsWindowVisible(hwnd):
+                    return True
+                length = user32.GetWindowTextLengthW(hwnd)
+                if length <= 0:
+                    return True
+                buffer = ctypes.create_unicode_buffer(length + 1)
+                user32.GetWindowTextW(hwnd, buffer, length + 1)
+                title = buffer.value.lower()
+                if any(name in title for name in ("google chrome", "microsoft edge", "mozilla firefox")):
+                    matches.append(hwnd)
+                return True
+
+            user32.EnumWindows(callback_type(callback), 0)
+            for hwnd in matches:
+                try:
+                    user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                    user32.SetForegroundWindow(hwnd)
+                    self.activity.emit("COMPUTER -> focused existing browser window")
+                    return True
+                except Exception:
+                    continue
+        except Exception as exc:
+            self.activity.emit("COMPUTER -> browser focus unavailable: " + str(exc))
+        return False
+
     def click_target(self, target, button="left", clicks=1, verify=True):
         """Locate, safely click, then verify the resulting UI state when supported."""
         if not self.locator:
@@ -108,11 +143,17 @@ class ComputerController:
         # behind another foreground window. Perform one bounded Alt+Tab recovery
         # and re-locate from a fresh screenshot before declaring the target absent.
         if not location.get("found") and "tab" in target_text.lower():
-            self.activity.emit("COMPUTER -> tab not visible; trying one Alt+Tab recovery")
-            self.hotkey("alt", "tab")
-            self.wait(0.35)
-            image = self.screenshot_bytes()
-            location = self.locator(target_text, image, (size["width"], size["height"]))
+            self.activity.emit("COMPUTER -> tab not visible; focusing existing browser")
+            if self._focus_existing_browser():
+                self.wait(0.45)
+                image = self.screenshot_bytes()
+                location = self.locator(target_text, image, (size["width"], size["height"]))
+            if not location.get("found"):
+                self.activity.emit("COMPUTER -> browser tab still not visible; trying one Alt+Tab recovery")
+                self.hotkey("alt", "tab")
+                self.wait(0.35)
+                image = self.screenshot_bytes()
+                location = self.locator(target_text, image, (size["width"], size["height"]))
 
         if not location.get("found"):
             raise RuntimeError("Target not found: " + str(location.get("reason", target_text)))
