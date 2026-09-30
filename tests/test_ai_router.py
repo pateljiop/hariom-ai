@@ -9,6 +9,8 @@ class AIRouterTests(unittest.TestCase):
         self.activity = Mock()
         self.router = ai_router.AIRouter(self.activity)
         self.original = ai_router.PROVIDERS.copy()
+        self.cache_enabled = ai_router.CACHE_ENABLED
+        ai_router.CACHE_ENABLED = False
         ai_router.PROVIDERS.clear()
         ai_router.PROVIDERS.update({
             'fast': {
@@ -28,6 +30,7 @@ class AIRouterTests(unittest.TestCase):
     def tearDown(self):
         ai_router.PROVIDERS.clear()
         ai_router.PROVIDERS.update(self.original)
+        ai_router.CACHE_ENABLED = self.cache_enabled
 
     def test_available_only_returns_configured_providers(self):
         ai_router.PROVIDERS['missing'] = {
