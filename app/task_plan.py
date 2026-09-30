@@ -66,7 +66,7 @@ class TaskPlan:
             retryable = raw.get("retryable", False)
             if not isinstance(retryable, bool):
                 raise PlanValidationError(f"Step {index} retryable must be boolean.")
-            actions.append(TaskAction(tool.strip(), arguments, approved, dependencies, step_id.strip(), retryable))
+            actions.append(TaskAction(tool.strip(), arguments, approved, dependencies, step_id.strip(), retryable, step_seq("expected_files"), step_seq("test_commands")))
             steps.append(TaskStep(step_id.strip(), tool.strip(), arguments, step_seq("dependencies"), step_seq("expected_files"), step_seq("test_commands"), RiskLevel(step_risk), step_seq("required_approvals")))
 
         step_ids = [step.step_id for step in steps]
@@ -137,7 +137,7 @@ class TaskPlan:
     def to_dict(self):
         return {
             "actions": [
-                {"tool": action.tool, "arguments": dict(action.arguments), "approved": action.approved, "retryable": action.retryable}
+                {"tool": action.tool, "arguments": dict(action.arguments), "approved": action.approved, "retryable": action.retryable, "expected_files": list(action.expected_files), "test_commands": list(action.test_commands)}
                 for action in self.actions
             ],
             "test_target": self.test_target,
