@@ -31,6 +31,14 @@ class TaskStoreTests(unittest.TestCase):
             events = TaskStore(f"{root}/tasks.sqlite3").events("task-2")
             self.assertEqual(events[-1]["status"], "validating")
 
+    def test_foreign_keys_are_enabled_for_events_and_approvals(self):
+        with tempfile.TemporaryDirectory() as root:
+            store = TaskStore(f"{root}/tasks.sqlite3")
+            with self.assertRaises(Exception):
+                store.append_event("missing-task", {"status": "x", "timestamp": "now"})
+            with self.assertRaises(Exception):
+                store.save_approval("approval-1", {"task_id": "missing-task"}, "now", "later")
+
     def test_duplicate_create_rejected(self):
         with tempfile.TemporaryDirectory() as root:
             store = TaskStore(f"{root}/tasks.sqlite3")
