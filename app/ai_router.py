@@ -168,9 +168,35 @@ class AIRouter:
         try:
             data = json.loads(raw)
         except (TypeError, ValueError):
+            pass
+
+        # Vision models sometimes return a bare JSON array instead of the
+        # requested object. Treat a four-number array as a pixel bbox.
+        if isinstance(data, list) and len(data) == 4:
+            try:
+                data = {
+                    "found": True,
+                    "bbox_pixels": [float(v) for v in data],
+                    "confidence": 0.85,
+                    "label": str(target),
+                }
+            except (TypeError, ValueError):
+                data = None
+
+        if data is None:
             import re
-            tag = re.search(r"<box>\s*\[\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\]\s*</box>", raw, re.I)
-            bare = re.search(r"\[\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\]", raw)
+            # Gemini/OpenRouter-style grounding tags may use either
+            # [ymin,xmin,ymax,xmax] or [[ymin,xmin,ymax,xmax]].
+            tag = re.search(
+                r"<box>\s*\[\s*\[?\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*"
+                r"([0-9.]+)\s*,\s*([0-9.]+)\s*\]?\s*\]\s*</box>",
+                raw,
+                re.I,
+            )
+            bare = re.search(
+                r"\[\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\]",
+                raw,
+            )
             match = tag or bare
             if match:
                 vals = [float(x) for x in match.groups()]
