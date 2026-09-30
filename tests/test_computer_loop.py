@@ -36,7 +36,8 @@ class ComputerControlLoopTests(unittest.TestCase):
             self._ok("computer.screenshot", "/tmp/screen2.png"),
         ]
         decisions = iter([
-            {"action": {"tool": "computer.click", "arguments": {"x": 10, "y": 20}, "approved": True}},
+            {"action": {"tool": "computer.click", "arguments": {"x": 10, "y": 20}, "approved": True},
+             "visual_state": {"summary": "button visible", "target_visible": True, "completed": False, "blocked": False}},
             {"done": True},
         ])
         with patch.object(ComputerControlLoop, "_fingerprint", side_effect=["before", "after"]):
@@ -51,6 +52,7 @@ class ComputerControlLoopTests(unittest.TestCase):
         self.assertEqual(verification["before"], "before")
         self.assertEqual(verification["after"], "after")
         self.assertTrue(verification["changed"])
+        self.assertEqual(result["history"][0]["visual_state"]["summary"], "button visible")
 
     def test_unchanged_visual_state_is_reported_without_forcing_failure(self):
         self.registry.execute.side_effect = [
@@ -91,6 +93,25 @@ class ComputerControlLoopTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["status"], "stagnated")
         self.assertEqual(self.registry.execute.call_count, 5)
+
+    def test_visual_state_schema_is_bounded(self):
+        state = ComputerControlLoop._validate_visual_state({
+            "visual_state": {
+                "summary": "dialog opened",
+                "target_visible": True,
+                "completed": False,
+                "blocked": False,
+            }
+        })
+        self.assertTrue(state["target_visible"])
+        with self.assertRaises(ComputerLoopError):
+            ComputerControlLoop._validate_visual_state({
+                "visual_state": {"summary": "x", "unexpected": True}
+            })
+        with self.assertRaises(ComputerLoopError):
+            ComputerControlLoop._validate_visual_state({
+                "visual_state": {"summary": "x" * 1001}
+            })
 
     def test_model_cannot_self_approve_desktop_action(self):
         self.registry.execute.return_value = {"ok": False, "error": "approval required"}
