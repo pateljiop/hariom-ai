@@ -438,7 +438,7 @@ class App(tk.Tk):
 
     def ask_worker(self, prompt):
         try:
-            text, provider = self.router.chat(prompt, system="You are Hariom AI, a personal AI assistant. Be practical, direct, and personalized. Reply only in English or Hinglish. Match the user language: use English for English input and Hinglish for Hindi/Hinglish input. Do not use Devanagari Hindi unless explicitly requested. Never claim an action was performed unless a tool verified it.")
+            text, provider = self.router.chat(prompt, system=self.agent.intelligence.system_prompt())
             self.after(0, lambda: self.append(self.log, "AI (" + provider + "): " + text))
             self.after(0, lambda: self.status.set("Ready"))
         except Exception as exc:
