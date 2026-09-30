@@ -15,6 +15,7 @@ class AgentRunnerTests(unittest.TestCase):
             "requires_approval": False,
             "schema": {"required": ["path"], "optional": []},
         }]
+        self.registry.validate_arguments.return_value = True
         self.facade = AgentExecutionFacade(
             tool_registry=self.registry,
             executor=Mock(),
