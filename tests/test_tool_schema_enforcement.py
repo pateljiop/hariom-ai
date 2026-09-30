@@ -47,7 +47,9 @@ class ToolSchemaEnforcementTests(unittest.TestCase):
     def test_explicit_approval_allows_gated_tool(self):
         registry = ToolRegistry()
         registry.permission_manager.grant(Permission.BROWSER_CLICK)
-        registry.browser.click = lambda selector, approved=False: {"selector": selector}
+        registry._tools["browser.click"] = registry._tools["browser.click"].__class__(
+            **{**registry._tools["browser.click"].__dict__, "handler": lambda selector, approved=False: {"selector": selector}}
+        )
         result = registry.execute("browser.click", {"selector": "#submit", "approved": True}, approved=True)
         self.assertTrue(result["ok"], result)
 
