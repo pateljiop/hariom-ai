@@ -80,6 +80,8 @@ class PlanExecutor:
             step_state=state.steps,
             checkpoint=checkpoint,
             max_step_retries=plan.max_retries,
+            expected_files=plan.expected_files,
+            test_commands=plan.test_commands,
         )
         if result.get("ok"):
             self.task_service.transition(task_id, "testing")
@@ -238,6 +240,8 @@ class PlanExecutor:
             plan.actions, plan.test_target, task_id=task_id,
             step_state=state.steps, checkpoint=checkpoint,
             max_step_retries=plan.max_retries,
+            expected_files=plan.expected_files,
+            test_commands=plan.test_commands,
         )
         state.result = dict(result)
         self._persist_state(task_id, state)
