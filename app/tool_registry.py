@@ -8,6 +8,8 @@ from typing import Any, Callable, Dict
 
 from .terminal import run_command
 from .workspace import Workspace
+from .workspace_patcher import TextPatch, WorkspacePatcher
+from .test_runner import TestRunner
 
 
 class ToolError(Exception):
@@ -34,6 +36,8 @@ class ToolRegistry:
     def __init__(self, workspace=None, activity=None):
         self.workspace = workspace or Workspace()
         self.activity = activity
+        self.patcher = WorkspacePatcher(self.workspace)
+        self.test_runner = TestRunner(self.workspace.root)
         self._tools: Dict[str, ToolSpec] = {}
         self._register_defaults()
 
@@ -57,6 +61,16 @@ class ToolRegistry:
             "terminal.run",
             "Run a shell command with existing risky-command approval controls.",
             self._run_terminal,
+        ))
+        self.register(ToolSpec(
+            "workspace.patch",
+            "Replace an exact text fragment in one workspace file.",
+            self._patch_workspace,
+        ))
+        self.register(ToolSpec(
+            "tests.run",
+            "Run Python unittest discovery inside the workspace.",
+            self._run_tests,
         ))
 
     def register(self, spec):
@@ -86,6 +100,12 @@ class ToolRegistry:
             raise
         except Exception as exc:
             return {"ok": False, "tool": name, "error": str(exc)}
+
+    def _patch_workspace(self, path, old, new, expected_count=1):
+        return self.patcher.apply(TextPatch(path, old, new, expected_count))
+
+    def _run_tests(self, target="tests"):
+        return self.test_runner.run(target)
 
     def _run_terminal(self, command, approved=False):
         if not self.activity:
