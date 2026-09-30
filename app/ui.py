@@ -502,6 +502,18 @@ class App(tk.Tk):
         if state.result:
             self.append(self.log, state.result)
 
+    def _render_task_progress(self):
+        if not hasattr(self, "task_bar"):
+            return
+        self.task_bar.delete("all")
+        width = max(1, self.task_bar.winfo_width())
+        try:
+            progress = max(0, min(100, int(self.task_progress.get().rstrip("%"))))
+        except ValueError:
+            progress = 0
+        self.task_bar.create_rectangle(0, 0, width * progress / 100, 4,
+                                       fill="#4fc3f7", outline="")
+
     def list_workspace(self):
         try:
             items = self.ws.list_files()
