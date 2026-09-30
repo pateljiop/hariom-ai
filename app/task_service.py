@@ -25,9 +25,7 @@ class TaskService:
         objective = objective or user_request.strip()
         task_id = kwargs.pop("task_id", None) or self._make_id(user_request, objective)
         task = Task(task_id=task_id, user_request=user_request.strip(), objective=objective.strip(), **kwargs)
-        task.transition(TaskStatus.CREATED)
         self.store.create(task)
-        self.store.append_event(task.task_id, task.events[-1])
         return task
 
     def get_task(self, task_id):
