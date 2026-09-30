@@ -98,10 +98,11 @@ class ToolRegistry:
     def _normalize_arguments(name, arguments):
         """Normalize common model-generated argument aliases before dispatch."""
         args = dict(arguments or {})
-        if name == "read_file" and "path" not in args and "file" in args:
-            args["path"] = args.pop("file")
-        if name == "write_file" and "path" not in args and "file" in args:
-            args["path"] = args.pop("file")
+        if name in {"read_file", "write_file"} and "path" not in args:
+            for alias in ("file", "filename", "filepath"):
+                if alias in args:
+                    args["path"] = args.pop(alias)
+                    break
         return args
 
     def execute(self, name, arguments=None, approved=False):
