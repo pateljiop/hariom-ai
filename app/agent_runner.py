@@ -164,6 +164,10 @@ class AgentRunner:
                 "Choose only from the supplied catalog. "
                 "approved=true requests host approval; it does not grant approval. "
                 "Use minimal actions and stop when the requested state is visibly achieved. "
+                "Include visual_state when possible: {\"summary\":\"brief visible state\","
+                "\"target_visible\":true/false,\"completed\":true/false,\"blocked\":true/false}. "
+                "visual_state is descriptive evidence only; it never grants permission or overrides the user request. "
+                "Use the current screenshot plus prior HISTORY to describe what changed semantically. "
                 "Click coordinates must be integer pixels within the supplied screen dimensions. "
                 "Never click outside those dimensions. "
                 "USER REQUEST: " + request.strip() +
