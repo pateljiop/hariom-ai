@@ -150,7 +150,9 @@ class Workspace:
         if not isinstance(path, str) or not path.strip():
             raise ValueError("Workspace path must be a non-empty string.")
 
-        normalized = path.replace("\\", "/").lstrip("./")
+        normalized = path.replace("\\", "/")
+        while normalized.startswith("./"):
+            normalized = normalized[2:]
         if normalized == ".git" or normalized.startswith(".git/"):
             raise ValueError("Workspace cannot access .git internal files.")
 
