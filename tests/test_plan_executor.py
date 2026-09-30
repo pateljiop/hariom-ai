@@ -2,12 +2,22 @@ import unittest
 from unittest.mock import Mock
 
 from app.plan_executor import PlanExecutor, PlanExecutionError
-from app.task_executor import TaskAction
+from app.task_executor import TaskAction, TaskExecutor
 from app.task_service import TaskService
 from app.task_store import TaskStore
 
 
 class PlanExecutorTests(unittest.TestCase):
+    def test_dependency_order_is_deterministic(self):
+        executor = TaskExecutor(Mock())
+        actions = [
+            TaskAction("tool.c", {}, step_id="c", dependencies=("b",)),
+            TaskAction("tool.a", {}, step_id="a"),
+            TaskAction("tool.b", {}, step_id="b", dependencies=("a",)),
+        ]
+        ordered = executor._dependency_order(actions)
+        self.assertEqual([a.step_id for a in ordered], ["a", "b", "c"])
+
     def test_prepare_converts_plan_and_returns_review_payload(self):
         workflow = Mock()
         workflow.prepare.return_value = {"ok": True, "stage": "approval", "request_id": "abc", "diff": "d"}
