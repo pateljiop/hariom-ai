@@ -254,13 +254,10 @@ class AIRouter:
             except (KeyError, TypeError, ValueError) as exc:
                 raise RuntimeError("Vision locator returned invalid coordinates.") from exc
 
-        # Vision receives a cropped tab-strip image for browser-tab requests.
-        # Convert its coordinates back to the full-screen coordinate system before
-        # the mouse action is allowed to use them.
-        if vision_width != width or vision_height != height:
-            x *= width / float(vision_width)
-            y *= height / float(vision_height)
-
+        # The crop keeps the original screen origin and pixel scale; only its
+        # height is reduced. Therefore vision pixel coordinates map directly to
+        # the same top-left screen coordinates. The desktop screenshot is already
+        # normalized to screen_size() by ComputerController.
         if confidence < 0.70:
             return {"found": False, "reason": "Target location confidence is too low.", "confidence": confidence, "provider": provider}
 
