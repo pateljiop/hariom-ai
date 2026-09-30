@@ -77,7 +77,14 @@ class ComputerControlLoopTests(unittest.TestCase):
             )
 
     def test_iteration_limit_is_bounded(self):
-        self.registry.execute.return_value = self._ok("computer.screenshot", "/tmp/screen.png")
+        self.registry.execute.side_effect = [
+            self._ok("computer.screen_size", {"width": 1920, "height": 1080}),
+            self._ok("computer.screenshot", "/tmp/screen.png"),
+            self._ok("computer.screen_size", {"width": 1920, "height": 1080}),
+            self._ok("computer.screenshot", "/tmp/screen.png"),
+            self._ok("computer.screen_size", {"width": 1920, "height": 1080}),
+            self._ok("computer.screenshot", "/tmp/screen.png"),
+        ]
         result = ComputerControlLoop(self.registry, max_iterations=2).run(
             lambda image, history: {
                 "action": {"tool": "computer.key", "arguments": {"key": "tab"}}
