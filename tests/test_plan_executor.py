@@ -154,6 +154,28 @@ class PlanExecutorTests(unittest.TestCase):
             self.assertTrue(result["ok"])
             self.assertEqual(result["state"]["attempts"], 1)
 
+    def test_approve_restores_state_after_restart(self):
+        workflow = Mock()
+        workflow.prepare.return_value = {"ok": True, "stage": "approval", "request_id": "restart-commit", "diff": "d"}
+        workflow.approve.return_value = {"ok": True, "request_id": "restart-commit", "commit": {"ok": True}}
+        import tempfile
+        with tempfile.TemporaryDirectory() as root:
+            store = TaskStore(f"{root}/tasks.sqlite3")
+            first = PlanExecutor(workflow, task_service=TaskService(store))
+            prepared = first.prepare({
+                "task_id": "restart-commit-task",
+                "user_request": "restart then approve",
+                "actions": [{"tool": "workspace.write", "arguments": {"path": "a", "content": "b"}}],
+            })
+            second = PlanExecutor(workflow, task_service=TaskService(TaskStore(f"{root}/tasks.sqlite3")))
+            result = second.approve("restart-commit", "reviewed change")
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["state"]["task_id"], "restart-commit-task")
+            self.assertEqual(result["state"]["stage"], "committed")
+            restored = second.get_state("restart-commit-task")
+            self.assertEqual(restored["stage"], "committed")
+            self.assertEqual(restored["result"]["request_id"], "restart-commit")
+
     def test_get_state_unknown_task_raises(self):
         executor = PlanExecutor(Mock())
         with self.assertRaises(PlanExecutionError):
