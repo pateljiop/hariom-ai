@@ -52,6 +52,7 @@ class App(tk.Tk):
         self.history = ChatHistoryStore()
         self.current_conversation_id = None
         self.active_provider = "Auto"
+        self.task_started_at = None
 
         self.activity = ActivityBus()
         self.router = AIRouter(self.activity)
@@ -303,7 +304,7 @@ class App(tk.Tk):
         self.action_button(action_row, "Run", self.run_task).pack(side="left", padx=5)
         self.action_button(action_row, "Voice", self.voice_command).pack(side="left")
         self.action_button(action_row, "Screen", self.see_screen).pack(side="left", padx=5)
-        self.action_button(action_row, "Approve", self.approve_task).pack(side="right")
+        self.approval_button = self.action_button(action_row, "Approve", self.approve_task).pack(side="right")
 
         activity_head = tk.Frame(self.chat_surface, bg="#080c12")
         activity_head.pack(fill="x")
@@ -636,7 +637,8 @@ class App(tk.Tk):
 
     def task_worker(self, prompt):
         try:
-            self.after(0, lambda: self.status.set("Planning task..."))
+            self.task_started_at = time.time()
+            self.after(0, lambda: self.status.set("Planning..."))
             state = self.agent.run(prompt, approve=False)
             self.current_task = state
             self.after(0, lambda: self.show_task(state))
@@ -663,7 +665,7 @@ class App(tk.Tk):
             self.after(0, lambda: messagebox.showerror("Resume error", str(exc)))
 
     def approve_task(self):
-        if not self.current_task:
+        if not self.current_task or self.current_task.status.value != "waiting_approval":
             self.append(self.log, "No task is waiting for approval.")
             return
         threading.Thread(target=self.approve_worker, daemon=True).start()
@@ -679,12 +681,30 @@ class App(tk.Tk):
     def show_task(self, state):
         if self._expanded:
             self.geometry("%dx%d+%d+%d" % (self.panel_width, self.panel_height, self.winfo_x(), self.winfo_y()))
-        self.status.set("Task: " + state.status.value)
+        label = state.status.value.replace("_", " ").title()
+        self.status.set(label)
+        if hasattr(self, "task_started_at") and not self.task_started_at:
+            self.task_started_at = time.time()
+        self.log.configure(state="normal")
+        self.log.delete("1.0", "end")
+        self.log.configure(state="disabled")
         for i, step in enumerate(state.steps, 1):
-            self.append(self.log, "%s. [%s] %s" % (i, step["status"], step["description"]))
+            icon = "✓" if step["status"] == "completed" else ("●" if step["status"] == "running" else ("✕" if step["status"] == "failed" else "○"))
+            self.append(self.log, "%s  %s  %s" % (icon, step["status"].title(), step["description"]))
             if step.get("output"):
-                self.append(self.log, "   " + step["output"][:1000])
-        if state.result:
+                self.append(self.log, "    " + step["output"][:500])
+        if state.status.value == "waiting_approval":
+            self.append(self.log, "⚠ Approval required")
+            self.append(self.log, "Hariom wants to perform the protected action shown above.")
+        elif state.status.value == "completed":
+            elapsed = time.time() - self.task_started_at if self.task_started_at else 0
+            self.append(self.log, "✓ Task completed and verified.")
+            self.append(self.log, "Time: %.1fs" % elapsed)
+        elif state.status.value == "failed":
+            self.append(self.log, "✕ Task failed")
+            if state.errors:
+                self.append(self.log, "Error: " + state.errors[-1][:700])
+        if state.result and state.status.value not in ("completed", "failed"):
             self.append(self.log, state.result)
 
     def refresh_workspace_panel(self):
