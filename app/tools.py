@@ -31,7 +31,7 @@ class ToolRegistry:
             self.register(Tool("browser_open", "Open a public http/https URL in the controlled browser.", browser.open))
             self.register(Tool("browser_current_page", "Get the current browser URL and title.", browser.current_page))
             self.register(Tool("browser_read", "Read visible text from a browser page.", browser.read_text))
-            self.register(Tool("browser_click", "Click an element selected by CSS.", browser.click, True))
+            self.register(Tool("browser_click", "Click an element selected by CSS.", browser.click))
             self.register(Tool("browser_type", "Fill text into a form element selected by CSS.", browser.type_text, True))
             self.register(Tool("browser_screenshot", "Capture the current browser page.", browser.screenshot))
             self.register(Tool("browser_close", "Close the controlled browser session.", browser.close))
@@ -41,8 +41,8 @@ class ToolRegistry:
             self.register(Tool("computer_position", "Get the current mouse position.", computer.position))
             self.register(Tool("computer_screenshot", "Capture the Windows desktop.", computer.screenshot))
             self.register(Tool("computer_move_mouse", "Move the mouse to screen coordinates.", computer.move_mouse, True))
-            self.register(Tool("computer_click", "Click the Windows desktop at coordinates.", computer.click, True))
-            self.register(Tool("computer_click_target", "Freshly locate a visible screen target with AI vision and click its verified center.", computer.click_target, True))
+            self.register(Tool("computer_click", "Click the Windows desktop at coordinates.", computer.click))
+            self.register(Tool("computer_click_target", "Freshly locate a visible screen target with AI vision and click its verified center.", computer.click_target))
             self.register(Tool("computer_type", "Type text into the active application.", computer.type_text, True))
             self.register(Tool("computer_press_key", "Press one bounded keyboard key.", computer.press_key, True))
             self.register(Tool("computer_hotkey", "Press a bounded keyboard shortcut.", computer.hotkey, True))
@@ -75,11 +75,28 @@ class ToolRegistry:
     def get(self, name):
         return self._tools.get(name)
 
+    @staticmethod
+    def _sensitive_action(name, arguments):
+        if name not in {"browser_click", "computer_click", "computer_click_target"}:
+            return False
+        text = str(arguments or {}).lower()
+        sensitive = ("delete", "remove", "erase", "logout", "sign out", "purchase",
+                     "buy", "pay", "payment", "checkout", "confirm", "send", "submit",
+                     "publish", "transfer", "withdraw", "password", "credential",
+                     "permission", "revoke", "disable")
+        return any(term in text for term in sensitive)
+
+    def requires_approval(self, name, arguments=None):
+        tool = self.get(name)
+        if not tool:
+            raise KeyError("Unknown tool: " + str(name))
+        return bool(tool.requires_approval or self._sensitive_action(name, arguments))
+
     def execute(self, name, arguments=None, approved=False):
         tool = self.get(name)
         if not tool:
             raise KeyError("Unknown tool: " + str(name))
-        if tool.requires_approval and not approved:
+        if self.requires_approval(name, arguments) and not approved:
             raise PermissionError("Approval required for tool: " + str(name))
         return tool.handler(**(arguments or {}))
 
