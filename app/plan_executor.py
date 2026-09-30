@@ -237,6 +237,7 @@ class PlanExecutor:
         result = self.workflow.prepare(
             plan.actions, plan.test_target, task_id=task_id,
             step_state=state.steps, checkpoint=checkpoint,
+            max_step_retries=plan.max_retries,
         )
         state.result = dict(result)
         self._persist_state(task_id, state)
