@@ -8,6 +8,7 @@ from app.task_engine import TaskStatus
 from app.workspace import Workspace
 from app.context import WorkspaceContext
 from app.skills import SkillRegistry
+from app.tools import Tool
 
 class FakeRouter:
     def chat_messages(self, messages, **kwargs):
@@ -43,6 +44,43 @@ class PersonalAgentTests(unittest.TestCase):
             self.assertEqual(state.steps[0]["tool"],"computer_click_target")
             self.assertEqual(state.steps[0]["arguments"]["target"],"github tab")
             router.chat_messages.assert_not_called()
+
+    def test_repaired_step_is_retried_before_moving_on(self):
+        with tempfile.TemporaryDirectory() as d:
+            ws = Workspace(d); activity = Mock()
+
+            class RepairRouter:
+                def __init__(self):
+                    self.calls = 0
+
+                def chat_messages(self, messages, **kwargs):
+                    self.calls += 1
+                    if self.calls == 1:
+                        return {
+                            "role": "assistant",
+                            "content": "{\"steps\":[{\"description\":\"Run flaky tool\",\"tool\":\"flaky\",\"arguments\":{\"value\":\"bad\"}}]}"
+                        }, "fake"
+                    return {
+                        "role": "assistant",
+                        "content": "{\"step\":{\"description\":\"Retry flaky tool\",\"tool\":\"flaky\",\"arguments\":{\"value\":\"good\"}}}"
+                    }, "fake"
+
+            agent = PersonalAgent(
+                RepairRouter(), ws, activity,
+                memory=MemoryStore(Path(d) / "memory.sqlite3")
+            )
+
+            def flaky(value):
+                if value != "good":
+                    raise RuntimeError("bad value")
+                return "recovered"
+
+            agent.tools.register(Tool("flaky", "Test recovery tool.", flaky))
+            state = agent.run("recover the flaky tool")
+            self.assertEqual(state.status, TaskStatus.COMPLETED)
+            self.assertEqual(state.steps[0]["status"], "completed")
+            self.assertEqual(state.steps[0]["output"], "recovered")
+            self.assertEqual(state.attempts, 1)
 
     def test_agent_pauses_for_approval(self):
         with tempfile.TemporaryDirectory() as d:
