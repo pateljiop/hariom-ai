@@ -4,6 +4,7 @@ import unittest
 
 from app.approval_workflow import (
     ApprovalNotFoundError,
+    ApprovalDeniedError,
     ApprovalWorkflow,
     ApprovalWorkflowError,
 )
