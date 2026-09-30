@@ -1,6 +1,7 @@
 import unittest
 
-from app.tool_registry import ToolApprovalRequired, ToolError, ToolRegistry\nfrom app.permissions import Permission, PermissionManager
+from app.tool_registry import ToolApprovalRequired, ToolError, ToolRegistry
+from app.permissions import Permission, PermissionManager
 
 
 class ToolSchemaEnforcementTests(unittest.TestCase):
@@ -19,7 +20,25 @@ class ToolSchemaEnforcementTests(unittest.TestCase):
         with self.assertRaises(ToolError):
             registry.execute("workspace.write", {"path": "x.txt", "content": 123})
 
-    def test_enum_and_nested_schema_validation(self):\n        from app.tool_schema import ToolSchema, ToolSchemaError\n        nested = ToolSchema(required=("mode",), enums={"mode": ("safe", "fast")})\n        schema = ToolSchema(required=("config",), types={"config": (dict,)}, nested={"config": nested})\n        schema.validate({"config": {"mode": "safe"}})\n        with self.assertRaises(ToolSchemaError):\n            schema.validate({"config": {"mode": "unsafe"}})\n\n    def test_central_permission_gate_blocks_unapproved_terminal(self):\n        registry = ToolRegistry(permission_manager=PermissionManager())\n        with self.assertRaises(ToolApprovalRequired):\n            registry.validate_arguments("terminal.run", {"command": "echo ok"})\n            registry.execute("terminal.run", {"command": "echo ok"})\n\n    def test_explicit_approval_passes_permission_gate(self):\n        registry = ToolRegistry(permission_manager=PermissionManager())\n        self.assertTrue(registry.permission_manager.decide(Permission.TERMINAL_EXECUTE, approved=True).allowed)\n\n    def test_describe_includes_schema_fields(self):
+    def test_enum_and_nested_schema_validation(self):
+        from app.tool_schema import ToolSchema, ToolSchemaError
+        nested = ToolSchema(required=("mode",), enums={"mode": ("safe", "fast")})
+        schema = ToolSchema(required=("config",), types={"config": (dict,)}, nested={"config": nested})
+        schema.validate({"config": {"mode": "safe"}})
+        with self.assertRaises(ToolSchemaError):
+            schema.validate({"config": {"mode": "unsafe"}})
+
+    def test_central_permission_gate_blocks_unapproved_terminal(self):
+        registry = ToolRegistry(permission_manager=PermissionManager())
+        with self.assertRaises(ToolApprovalRequired):
+            registry.validate_arguments("terminal.run", {"command": "echo ok"})
+            registry.execute("terminal.run", {"command": "echo ok"})
+
+    def test_explicit_approval_passes_permission_gate(self):
+        registry = ToolRegistry(permission_manager=PermissionManager())
+        self.assertTrue(registry.permission_manager.decide(Permission.TERMINAL_EXECUTE, approved=True).allowed)
+
+    def test_describe_includes_schema_fields(self):
         registry = ToolRegistry()
         item = next(x for x in registry.describe() if x["name"] == "workspace.write")
         self.assertEqual(item["schema"]["required"], ["path", "content"])
