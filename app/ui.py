@@ -309,7 +309,14 @@ class App(tk.Tk):
         self.voice_button.pack(side="left")
         self.screen_button = self.action_button(action_row, "Screen", self.see_screen)
         self.screen_button.pack(side="left", padx=5)
-        self.approval_button = self.action_button(action_row, "Approve", self.approve_task).pack(side="right")
+        self.approval_card = tk.Frame(self.chat_surface, bg="#17130b", highlightthickness=1, highlightbackground="#5a4318")
+        self.approval_text = tk.Label(self.approval_card, text="", bg="#17130b", fg="#f3d48a",
+                                      font=("Segoe UI", 8), justify="left", anchor="w")
+        self.approval_text.pack(side="left", fill="x", expand=True, padx=10, pady=8)
+        self.approval_ok = self.action_button(self.approval_card, "Approve", self.approve_task, primary=True)
+        self.approval_ok.pack(side="right", padx=(4, 8), pady=5)
+        self.approval_cancel = self.action_button(self.approval_card, "Cancel", self.cancel_task)
+        self.approval_cancel.pack(side="right", padx=4, pady=5)
 
         activity_head = tk.Frame(self.chat_surface, bg="#080c12")
         activity_head.pack(fill="x")
@@ -684,6 +691,12 @@ class App(tk.Tk):
             return
         threading.Thread(target=self.approve_worker, daemon=True).start()
 
+    def cancel_task(self):
+        if self.current_task and self.current_task.status.value == "waiting_approval":
+            self.current_task.status = self.current_task.status.__class__.FAILED
+            self.current_task.result = "Task cancelled before the protected action was executed."
+            self.show_task(self.current_task)
+
     def approve_worker(self):
         try:
             state = self.agent.execute(self.current_task, approve=True)
@@ -708,9 +721,13 @@ class App(tk.Tk):
             if step.get("output"):
                 self.append(self.log, "    " + step["output"][:500])
         if state.status.value == "waiting_approval":
+            self.approval_text.configure(text="Approval required • A protected action is ready. Review the task step above.")
+            self.approval_card.pack(fill="x", pady=(0, 6), before=self.chat_surface.winfo_children()[0])
             self.append(self.log, "⚠ Approval required")
-            self.append(self.log, "Hariom wants to perform the protected action shown above.")
-        elif state.status.value == "completed":
+            self.append(self.log, "Review the protected action above before approving.")
+        else:
+            self.approval_card.pack_forget()
+        if state.status.value == "completed":
             elapsed = time.time() - self.task_started_at if self.task_started_at else 0
             completed = sum(1 for step in state.steps if step["status"] == "completed")
             self.append(self.log, "✓ Task completed and verified.")
