@@ -12,6 +12,8 @@ class TaskStoreTests(unittest.TestCase):
             store = TaskStore(path)
             task = Task("task-1", "do x", "x")
             store.create(task)
+            task.transition(TaskStatus.PLANNING)
+            task.transition(TaskStatus.VALIDATING)
             task.transition(TaskStatus.EXECUTING)
             store.save(task)
 
@@ -24,6 +26,7 @@ class TaskStoreTests(unittest.TestCase):
             store = TaskStore(f"{root}/tasks.sqlite3")
             task = Task("task-2", "do x", "x")
             store.create(task)
+            task.transition(TaskStatus.PLANNING)
             event = task.transition(TaskStatus.VALIDATING)
             store.save(task)
             store.append_event(task.task_id, event)
