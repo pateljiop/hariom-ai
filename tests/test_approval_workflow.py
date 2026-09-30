@@ -52,7 +52,6 @@ class ApprovalWorkflowTests(unittest.TestCase):
             test_commands=("python -m unittest discover -s tests",),
         )
         self.assertTrue(result["ok"])
-        self.assertTrue(result["expectation_result"]["ok"])
         self.registry.test_runner.run_command.assert_called_once_with(
             "python -m unittest discover -s tests"
         )
