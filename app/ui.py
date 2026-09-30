@@ -51,6 +51,7 @@ class App(tk.Tk):
         self.view = "chat"
         self.history = ChatHistoryStore()
         self.current_conversation_id = None
+        self.active_provider = "Auto"
 
         self.activity = ActivityBus()
         self.router = AIRouter(self.activity)
@@ -219,8 +220,11 @@ class App(tk.Tk):
         self.status = tk.StringVar(value="Ready")
         tk.Label(status_bar, textvariable=self.status, bg="#0b1119", fg="#aab5c4",
                  font=("Segoe UI", 8)).pack(side="left")
-        tk.Label(status_bar, text="LOCAL WORKSPACE", bg="#0b1119", fg="#596779",
-                 font=("Segoe UI", 7, "bold")).pack(side="right", padx=16)
+        self.provider_label = tk.Label(status_bar, text="Auto", bg="#0b1119", fg="#8fa0b4",
+                                        font=("Segoe UI", 8, "bold"))
+        self.provider_label.pack(side="right", padx=(8, 16))
+        tk.Label(status_bar, text="Workspace", bg="#0b1119", fg="#596779",
+                 font=("Segoe UI", 7, "bold")).pack(side="right")
 
         # Assistant identity / breathing area
         hero = tk.Frame(outer, bg="#080c12", height=112)
@@ -232,8 +236,17 @@ class App(tk.Tk):
             self.orb = tk.Label(hero, text="◉", bg="#080c12", fg="#79dcff",
                                 font=("Segoe UI", 48, "bold"))
         self.orb.pack(pady=(10, 0))
-        tk.Label(hero, text="Ready when you are.", bg="#080c12", fg="#667386",
+        tk.Label(hero, text="Hariom AI", bg="#080c12", fg="#eef4fa",
+                 font=("Segoe UI", 14, "bold")).pack()
+        tk.Label(hero, text="Ready to work", bg="#080c12", fg="#7e8b9d",
+                 font=("Segoe UI", 9)).pack(pady=(2, 2))
+        tk.Label(hero, text="Inspect, build, test and work across your desktop.", bg="#080c12", fg="#5f6d80",
                  font=("Segoe UI", 8)).pack()
+        chips = tk.Frame(hero, bg="#080c12")
+        chips.pack(pady=(7, 0))
+        for label in ("Files", "Terminal", "Browser", "Screen", "Voice"):
+            tk.Label(chips, text=label, bg="#111a24", fg="#8fa0b4",
+                     padx=7, pady=3, font=("Segoe UI", 7)).pack(side="left", padx=2)
 
         # Main navigation: Chat and persistent searchable History.
         nav = tk.Frame(outer, bg="#080c12")
@@ -303,14 +316,35 @@ class App(tk.Tk):
                   activeforeground="#eef4fa", relief="flat", bd=0,
                   font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side="right")
 
-        box = tk.Frame(self.chat_surface, bg="#0b1018", highlightthickness=1,
-                       highlightbackground="#1a2430")
-        box.pack(fill="both", expand=True, pady=(5, 8))
-        self.log = tk.Text(box, wrap="word", state="disabled",
+        split = tk.Frame(self.chat_surface, bg="#080c12")
+        split.pack(fill="both", expand=True, pady=(5, 8))
+        activity_panel = tk.Frame(split, bg="#0b1018", highlightthickness=1, highlightbackground="#1a2430")
+        activity_panel.pack(side="left", fill="both", expand=True, padx=(0, 5))
+        tk.Label(activity_panel, text="Live activity", bg="#0b1018", fg="#e4eaf1",
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=10, pady=(9, 2))
+        tk.Label(activity_panel, text="Safe execution progress", bg="#0b1018", fg="#596779",
+                 font=("Segoe UI", 7)).pack(anchor="w", padx=10, pady=(0, 6))
+        self.log = tk.Text(activity_panel, wrap="word", state="disabled",
                            bg="#0b1018", fg="#b8c4d3", relief="flat", bd=0,
-                           font=("Cascadia Mono", 8), padx=10, pady=9,
+                           font=("Cascadia Mono", 8), padx=10, pady=7,
                            insertbackground="#79dcff")
         self.log.pack(fill="both", expand=True)
+        workspace_panel = tk.Frame(split, bg="#0b1018", highlightthickness=1, highlightbackground="#1a2430", width=155)
+        workspace_panel.pack(side="right", fill="y")
+        workspace_panel.pack_propagate(False)
+        tk.Label(workspace_panel, text="Workspace", bg="#0b1018", fg="#e4eaf1",
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=10, pady=(9, 2))
+        self.workspace_path_label = tk.Label(workspace_panel, text=str(self.ws.root.name), bg="#0b1018", fg="#79dcff",
+                                             font=("Segoe UI", 8, "bold"), anchor="w")
+        self.workspace_path_label.pack(fill="x", padx=10, pady=(0, 7))
+        self.workspace_tree = tk.Label(workspace_panel, text="", bg="#0b1018", fg="#8795a7",
+                                       font=("Cascadia Mono", 7), justify="left", anchor="nw")
+        self.workspace_tree.pack(fill="both", expand=True, padx=10, pady=4)
+        tk.Label(workspace_panel, text="Tools", bg="#0b1018", fg="#596779",
+                 font=("Segoe UI", 7, "bold")).pack(anchor="w", padx=10, pady=(6, 2))
+        tk.Label(workspace_panel, text="Files  •  Terminal\nBrowser • Screen\nVoice", bg="#0b1018", fg="#8795a7",
+                 font=("Segoe UI", 7), justify="left", anchor="w").pack(fill="x", padx=10)
+        self.refresh_workspace_panel()
 
         self.history_surface = tk.Frame(outer, bg="#080c12")
         self.history_surface.pack(fill="both", expand=True)
@@ -585,6 +619,8 @@ class App(tk.Tk):
             messages = build_context(previous, self.agent.intelligence.system_prompt())
             self.history.add(conversation_id, "user", prompt)
             message, provider = self.router.chat_messages(messages, use_cache=False)
+            self.active_provider = provider
+            self.after(0, lambda provider=provider: self.provider_label.configure(text=provider))
             text = message.get("content", "")
             self.history.add(conversation_id, "assistant", text)
             self.after(0, lambda: self.append(self.log, "YOU: " + prompt))
@@ -650,6 +686,22 @@ class App(tk.Tk):
                 self.append(self.log, "   " + step["output"][:1000])
         if state.result:
             self.append(self.log, state.result)
+
+    def refresh_workspace_panel(self):
+        if not hasattr(self, "workspace_tree"):
+            return
+        try:
+            items = self.ws.list_files()[:12]
+            lines = []
+            for path in items:
+                try:
+                    rel = path.relative_to(self.ws.root)
+                except ValueError:
+                    rel = path.name
+                lines.append("├ " + str(rel))
+            self.workspace_tree.configure(text="\n".join(lines) if lines else "Workspace is empty")
+        except Exception:
+            self.workspace_tree.configure(text="Workspace unavailable")
 
     def list_workspace(self):
         try:
