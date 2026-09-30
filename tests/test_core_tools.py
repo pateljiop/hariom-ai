@@ -256,3 +256,16 @@ class GitManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             with self.assertRaises(GitError):
                 GitManager(root).create_branch("../escape")
+
+    def test_secret_scan_detects_common_api_key_patterns(self):
+        git = GitManager(tempfile.gettempdir())
+        git.diff = Mock(return_value="+api_key = \"super-secret-token-123456\"")
+        findings = git.scan_diff_for_secrets()
+        self.assertTrue(findings)
+
+    def test_commit_blocks_detected_secret_even_with_approval(self):
+        with tempfile.TemporaryDirectory() as root:
+            git = GitManager(root)
+            git.diff = Mock(return_value="+OPENAI_API_KEY = \"sk-proj-123456789012345678\"")
+            with self.assertRaisesRegex(PermissionError, "secret"):
+                git.commit("commit secret", approved=True)
