@@ -11,6 +11,8 @@ class TaskExecutorStepStateTests(unittest.TestCase):
         registry.describe.return_value = [{"name": "tool.a"}, {"name": "tool.b"}, {"name": "terminal.run"}]
         registry.workspace = Mock()
         registry.workspace.read_file.return_value = "present"
+        registry.test_runner = Mock()
+        registry.test_runner.run_command.return_value = {"ok": True, "returncode": 0, "output": ""}
         registry.execute.side_effect = outcomes or [
             {"ok": True, "value": "a"},
             {"ok": True, "value": "b"},
@@ -116,17 +118,27 @@ class TaskExecutorStepStateTests(unittest.TestCase):
 
     def test_step_test_command_is_verified(self):
         executor, registry = self._executor()
-        registry.execute.side_effect = [
-            {"ok": True, "value": "a"},
-            {"ok": True, "result": {"ok": True}},
-        ]
+        registry.execute.side_effect = [{"ok": True, "value": "a"}]
         state = {}
         result = executor.execute(
             [TaskAction("tool.a", {}, step_id="a", test_commands=("python -m unittest tests",), approved=True)],
             step_state=state,
         )
         self.assertTrue(result["ok"])
-        registry.execute.assert_called_with("terminal.run", {"command": "python -m unittest tests", "approved": True}, approved=True)
+        registry.test_runner.run_command.assert_called_once_with("python -m unittest discover -s tests")
+        registry.execute.assert_called_once_with("tool.a", {}, approved=True)
+
+    def test_unsafe_test_command_fails_closed(self):
+        executor, registry = self._executor()
+        registry.test_runner.run_command.side_effect = ValueError("unsupported command")
+        state = {}
+        result = executor.execute(
+            [TaskAction("tool.a", {}, step_id="a", test_commands=("python -c \"print(1)\"",))],
+            step_state=state,
+        )
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_type"], "verification_error")
+        self.assertEqual(state["a"]["status"], "failed")
 
     def test_approval_required_returns_current_step_to_pending(self):
         executor, registry = self._executor()
