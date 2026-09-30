@@ -31,6 +31,7 @@ class ApprovalRequest:
     created_at: str = ""
     expires_at: str = ""
     rejected: bool = False
+    commit_result: object = None
 
 
 class ApprovalWorkflow:
@@ -74,6 +75,13 @@ class ApprovalWorkflow:
 
     def approve(self, request_id, message):
         request = self._load(request_id)
+        if request.approved:
+            return {
+                "ok": True,
+                "request_id": request_id,
+                "commit": getattr(request, "commit_result", None),
+                "idempotent": True,
+            }
         self._ensure_pending(request)
         if not isinstance(message, str) or not message.strip():
             raise ApprovalWorkflowError("Commit message is required.")
@@ -83,7 +91,7 @@ class ApprovalWorkflow:
             raise ApprovalWorkflowError("Workspace diff changed after review; approval is invalid.")
 
         result = self.git.commit(message, approved=True)
-        consumed = ApprovalRequest(**{**request.__dict__, "approved": True})
+        consumed = ApprovalRequest(**{**request.__dict__, "approved": True, "commit_result": result})
         self._requests[request_id] = consumed
         self._persist(consumed, "approved")
         return {"ok": True, "request_id": request_id, "commit": result}
@@ -111,6 +119,7 @@ class ApprovalWorkflow:
                     created_at=saved["created_at"], expires_at=saved["expires_at"],
                     approved=saved["status"] == "approved",
                     rejected=saved["status"] == "rejected",
+                    commit_result=saved.get("commit_result"),
                 )
                 self._requests[request_id] = request
                 return request
@@ -130,6 +139,7 @@ class ApprovalWorkflow:
             "test_target": request.test_target,
             "test_result": request.test_result,
             "diff": request.diff,
+            "commit_result": request.commit_result,
         }
         self.store.save_approval(request.request_id, payload, request.created_at, request.expires_at, status)
 
