@@ -1,6 +1,8 @@
 """Plan-to-approval execution facade with observable state."""
 from .approval_workflow import ApprovalWorkflow
 from .execution_state import ExecutionState
+from .recovery import RecoveryCoordinator
+from .task_executor import TaskAction, TaskExecutionError
 from .task_plan import TaskPlan
 
 
@@ -29,6 +31,55 @@ class PlanExecutor:
         result["plan"] = plan.to_dict()
         result["state"] = state.snapshot()
         return result
+
+    def recover(self, task_id, repair_actions, test_target=None):
+        state = self._states.get(task_id)
+        if state is None:
+            raise PlanExecutionError(f"Unknown task: {task_id}")
+        if not isinstance(repair_actions, (list, tuple)) or not repair_actions:
+            raise PlanExecutionError("Repair actions are required.")
+        actions = tuple(repair_actions)
+        if not all(isinstance(action, TaskAction) for action in actions):
+            raise PlanExecutionError("Repair actions must be TaskAction objects.")
+        target = test_target or state.result.get("test_target") or "tests"
+
+        def verify():
+            result = self.workflow.executor.registry.test_runner.run(target)
+            state.result = dict(result)
+            return result
+
+        def repair(_failure):
+            if not state.record_attempt():
+                return {"ok": False, "stage": "recovery_limit"}
+            state.transition("repairing", attempt=state.attempts)
+            try:
+                result = self.workflow.executor.execute(actions)
+            except TaskExecutionError as exc:
+                state.transition("failed", error_type="repair_execution")
+                return {"ok": False, "stage": "repair_execution", "error": str(exc)}
+            if not result.get("ok"):
+                state.transition("failed", error_type="repair_execution")
+                return result
+            return {"ok": True, "execution": result}
+
+        state.transition("recovering", max_attempts=state.max_attempts)
+        recovery = RecoveryCoordinator(
+            verify,
+            repair,
+            max_attempts=state.max_attempts,
+        ).run()
+        if recovery.ok:
+            state.transition("approval", recovered=True)
+        else:
+            state.transition("failed", error_type=recovery.final_result.get("stage"))
+        state.result = dict(recovery.final_result)
+        return {
+            "ok": recovery.ok,
+            "stage": "approval" if recovery.ok else "recovery",
+            "attempts": recovery.attempts,
+            "state": state.snapshot(),
+            "result": recovery.final_result,
+        }
 
     def approve(self, request_id, message):
         result = self.workflow.approve(request_id, message)
