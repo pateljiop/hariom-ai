@@ -74,6 +74,16 @@ class TaskPlanTests(unittest.TestCase):
                 ]
             })
 
+    def test_dependencies_are_carried_into_actions(self):
+        plan = TaskPlan.from_dict({
+            "steps": [
+                {"step_id": "first", "tool": "workspace.list"},
+                {"step_id": "second", "tool": "workspace.list", "dependencies": ["first"]},
+            ]
+        })
+        self.assertEqual(plan.actions[1].dependencies, ("first",))
+        self.assertEqual(plan.actions[1].step_id, "second")
+
     def test_defaults_arguments_and_test_target(self):
         plan = TaskPlan.from_dict({
             "actions": [{"tool": "workspace.list"}]
