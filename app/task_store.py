@@ -18,6 +18,9 @@ class TaskStore:
     def _connect(self):
         conn = sqlite3.connect(self.path, timeout=5)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA busy_timeout = 5000")
         return conn
 
     def _initialize(self):
@@ -28,10 +31,11 @@ class TaskStore:
             conn.execute("""CREATE TABLE IF NOT EXISTS task_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL,
                 timestamp TEXT NOT NULL, status TEXT NOT NULL, payload TEXT NOT NULL,
-                FOREIGN KEY(task_id) REFERENCES tasks(task_id))""")
+                FOREIGN KEY(task_id) REFERENCES tasks(task_id) ON DELETE CASCADE)""")
             conn.execute("""CREATE TABLE IF NOT EXISTS approval_requests (
-                request_id TEXT PRIMARY KEY, task_id TEXT, payload TEXT NOT NULL,
-                created_at TEXT NOT NULL, expires_at TEXT NOT NULL, status TEXT NOT NULL)""")
+                request_id TEXT PRIMARY KEY, task_id TEXT NOT NULL, payload TEXT NOT NULL,
+                created_at TEXT NOT NULL, expires_at TEXT NOT NULL, status TEXT NOT NULL,
+                FOREIGN KEY(task_id) REFERENCES tasks(task_id) ON DELETE CASCADE)""")
 
     def create(self, task: Task):
         if self.get(task.task_id) is not None:
