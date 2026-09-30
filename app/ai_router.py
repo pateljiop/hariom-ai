@@ -255,7 +255,28 @@ class AIRouter:
                 raise RuntimeError("Vision locator returned invalid coordinates.") from exc
         if confidence < 0.70:
             return {"found": False, "reason": "Target location confidence is too low.", "confidence": confidence, "provider": provider}
-        return {"found": True, "x": max(0, min(width - 1, int(round(x)))), "y": max(0, min(height - 1, int(round(y)))), "label": str(data.get("label", target)), "confidence": confidence, "provider": provider}
+
+        # A browser-tab request must resolve inside the actual tab strip, even
+        # when the provider returns a plausible-looking coordinate.
+        final_x = max(0, min(width - 1, int(round(x))))
+        final_y = max(0, min(height - 1, int(round(y))))
+        if is_tab:
+            max_y = max(80, int(height * 0.18))
+            if final_y > max_y:
+                return {
+                    "found": False,
+                    "reason": "Vision result is outside the browser tab strip.",
+                    "confidence": confidence,
+                    "provider": provider,
+                }
+        return {
+            "found": True,
+            "x": final_x,
+            "y": final_y,
+            "label": str(data.get("label", target)),
+            "confidence": confidence,
+            "provider": provider,
+        }
     def _rank_vision(self):
         now = time.time()
         candidates = []
