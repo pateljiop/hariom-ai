@@ -426,6 +426,7 @@ class App(tk.Tk):
             if cid in seen:
                 continue
             seen.add(cid)
+            self._history_conversations.append(cid)
             snippet = item["content"].replace("\n", " ").strip()
             if len(snippet) > 72:
                 snippet = snippet[:72] + "…"
