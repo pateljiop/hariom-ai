@@ -18,6 +18,9 @@ class Workspace:
             if path.is_file()
         ]
 
+    def exists(self, path):
+        return self._safe_path(path).is_file()
+
     def read_file(self, path):
         target = self._safe_path(path)
         return target.read_text(encoding="utf-8")
