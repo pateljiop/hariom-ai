@@ -98,16 +98,17 @@ class ComputerControlLoopTests(unittest.TestCase):
             self._ok("computer.screen_size", {"width": 1920, "height": 1080}),
             {"ok": False, "error": "approval required"},
         ]
-        result = ComputerControlLoop(self.registry).run(
-            lambda image, history: {
-                "action": {
-                    "tool": "computer.click",
-                    "arguments": {"x": 1, "y": 2},
-                    "approved": True,
-                }
-            },
-            initial_image="/tmp/screen.png",
-        )
+        with patch.object(ComputerControlLoop, "_fingerprint", return_value="initial"):
+            result = ComputerControlLoop(self.registry).run(
+                lambda image, history: {
+                    "action": {
+                        "tool": "computer.click",
+                        "arguments": {"x": 1, "y": 2},
+                        "approved": True,
+                    }
+                },
+                initial_image="/tmp/screen.png",
+            )
         self.assertFalse(result["ok"])
         self.assertEqual(result["status"], "action_failed")
 
@@ -117,12 +118,13 @@ class ComputerControlLoopTests(unittest.TestCase):
             self._ok("computer.screen_size", {"width": 1920, "height": 1080}),
             self._ok("computer.screenshot", "/tmp/screen.png"),
         ]
-        with self.assertRaises(ComputerLoopError):
-            ComputerControlLoop(self.registry).run(
-                lambda image, history: {
-                    "action": {"tool": "computer.click", "arguments": {"x": 1920, "y": 100}, "approved": True}
-                }
-            )
+        with patch.object(ComputerControlLoop, "_fingerprint", return_value="initial"):
+            with self.assertRaises(ComputerLoopError):
+                ComputerControlLoop(self.registry).run(
+                    lambda image, history: {
+                        "action": {"tool": "computer.click", "arguments": {"x": 1920, "y": 100}, "approved": True}
+                    }
+                )
 
     def test_invalid_screen_geometry_is_rejected(self):
         self.registry.execute.return_value = self._ok(
