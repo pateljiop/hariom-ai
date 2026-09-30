@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
+from uuid import uuid4
 
 from .task_executor import TaskAction, TaskExecutor, TaskExecutionError
 
@@ -55,7 +56,7 @@ class ApprovalWorkflow:
             return {"ok": False, "stage": "verification", "execution": execution, "test_result": test_result}
 
         diff = self.git.diff()
-        request_id = self._make_request_id(actions, test_target, diff)
+        request_id = 'approval-' + uuid4().hex
         now = datetime.now(timezone.utc)
         expires = now + timedelta(seconds=self.approval_ttl_seconds)
         request = ApprovalRequest(
