@@ -13,6 +13,7 @@ from app.tool_registry import ToolRegistry, ToolError, UnknownToolError
 from app.task_executor import TaskAction, TaskExecutor
 from app.workspace_patcher import PatchError, TextPatch, WorkspacePatcher
 from app.test_runner import TestRunner, TestRunnerError
+from app.git_manager import GitError, GitManager
 
 
 class WorkspaceTests(unittest.TestCase):
@@ -238,3 +239,15 @@ class TestRunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             with self.assertRaises(TestRunnerError):
                 TestRunner(root).run("")
+
+
+class GitManagerTests(unittest.TestCase):
+    def test_commit_requires_approval(self):
+        with tempfile.TemporaryDirectory() as root:
+            with self.assertRaises(PermissionError):
+                GitManager(root).commit("test")
+
+    def test_invalid_branch_name_is_rejected(self):
+        with tempfile.TemporaryDirectory() as root:
+            with self.assertRaises(GitError):
+                GitManager(root).create_branch("../escape")
