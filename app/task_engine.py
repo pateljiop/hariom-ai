@@ -23,6 +23,7 @@ class TaskState:
     attempts: int = 0
     errors: list = field(default_factory=list)
     result: str = ""
+    provider: str = ""
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
 
@@ -61,6 +62,7 @@ class TaskState:
             "attempts": self.attempts,
             "errors": self.errors,
             "result": self.result,
+            "provider": self.provider,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -75,6 +77,7 @@ class TaskState:
             attempts=int(data.get("attempts", 0)),
             errors=list(data.get("errors") or []),
             result=str(data.get("result", "")),
+            provider=str(data.get("provider", "")),
             created_at=float(data.get("created_at", time.time())),
             updated_at=float(data.get("updated_at", time.time())),
         )
