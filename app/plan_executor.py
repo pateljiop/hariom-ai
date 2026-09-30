@@ -125,7 +125,11 @@ class PlanExecutor:
         }
 
     def approve(self, request_id, message):
-        result = self.workflow.approve(request_id, message)
+        approval = self.task_service.store.get_approval(request_id)
+        if approval and approval.get("status") == "approved":
+            result = self.workflow.approve(request_id, message)
+        else:
+            result = self.workflow.approve(request_id, message)
         approval = self.task_service.store.get_approval(request_id)
         task_id = approval.get("task_id") if approval else None
         state = self._states.get(task_id) if task_id else None
@@ -147,8 +151,10 @@ class PlanExecutor:
             if state is None:
                 state = ExecutionState(task_id, max_attempts=task.max_retries)
                 self._states[task_id] = state
-            state.transition("committed")
+            if state.stage != "committed":
+                state.transition("committed")
             state.result = dict(result)
+            self._persist_state(task_id, state)
             result["state"] = state.snapshot()
         return result
 
