@@ -57,13 +57,12 @@ class PlanExecutor:
         self.task_service.transition(task_id, "planning")
         self.task_service.transition(task_id, "validating")
         state.transition("validated", action_count=len(plan.actions))
-        self.task_service.transition(task_id, "approved")
         self.task_service.transition(task_id, "executing")
         state.transition("executing")
         result = self.workflow.prepare(plan.actions, plan.test_target, task_id=task_id)
         if result.get("ok"):
             self.task_service.transition(task_id, "testing")
-            self.task_service.transition(task_id, "awaiting_approval", request_id=result.get("request_id"))
+            self.task_service.transition(task_id, "awaiting_commit_approval", request_id=result.get("request_id"))
             state.transition("approval", request_id=result.get("request_id"))
         else:
             self.task_service.transition(task_id, "testing")
@@ -136,8 +135,13 @@ class PlanExecutor:
                     break
         if task_id:
             task = self.task_service.get_task(task_id)
-            if task.status.value != "completed":
+            if task.status.value == "awaiting_commit_approval":
+                self.task_service.transition(task_id, "committing", request_id=request_id)
                 self.task_service.transition(task_id, "completed", request_id=request_id)
+            elif task.status.value != "completed":
+                raise PlanExecutionError(
+                    f"Task '{task_id}' is not awaiting commit approval."
+                )
             if state is None:
                 state = ExecutionState(task_id, max_attempts=task.max_retries)
                 self._states[task_id] = state
