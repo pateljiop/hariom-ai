@@ -10,6 +10,7 @@ from .tools import ToolRegistry
 from .verification import Verifier
 from .evolution import EvolutionEngine
 from .modes import detect_mode
+from .intelligence import PersonalIntelligence
 
 
 SYSTEM_PROMPT = """You are Hariom AI, a personal computer/workspace assistant.
@@ -32,6 +33,7 @@ class PersonalAgent:
         self.verifier = Verifier()
         self.evolution = EvolutionEngine(APP_DIR, activity)
         self.checkpoints = TaskCheckpointStore(APP_DIR / "tasks")
+        self.intelligence = PersonalIntelligence(self.memory, self.workspace, self.tools, self.skills)
 
     def context(self, request):
         return {
