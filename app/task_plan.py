@@ -65,6 +65,37 @@ class TaskPlan:
             actions.append(TaskAction(tool.strip(), arguments, approved))
             steps.append(TaskStep(step_id.strip(), tool.strip(), arguments, step_seq("dependencies"), step_seq("expected_files"), step_seq("test_commands"), RiskLevel(step_risk), step_seq("required_approvals")))
 
+        step_ids = [step.step_id for step in steps]
+        if len(step_ids) != len(set(step_ids)):
+            raise PlanValidationError("Step IDs must be unique.")
+        step_id_set = set(step_ids)
+        for step in steps:
+            for dependency in step.dependencies:
+                if dependency == step.step_id:
+                    raise PlanValidationError(f"Step '{step.step_id}' cannot depend on itself.")
+                if dependency not in step_id_set:
+                    raise PlanValidationError(
+                        f"Step '{step.step_id}' depends on unknown step '{dependency}'."
+                    )
+
+        visiting = set()
+        visited = set()
+
+        def visit(step_id):
+            if step_id in visiting:
+                raise PlanValidationError(f"Circular step dependency detected at '{step_id}'.")
+            if step_id in visited:
+                return
+            visiting.add(step_id)
+            current = steps[step_ids.index(step_id)]
+            for dependency in current.dependencies:
+                visit(dependency)
+            visiting.remove(step_id)
+            visited.add(step_id)
+
+        for step_id in step_ids:
+            visit(step_id)
+
         test_target = payload.get("test_target", "tests")
         if not isinstance(test_target, str) or not test_target.strip():
             raise PlanValidationError("test_target must be a non-empty string.")
