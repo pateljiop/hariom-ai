@@ -152,7 +152,6 @@ class AIRouter:
         if is_tab:
             # Tabs are constrained to browser chrome. Crop the screenshot before
             # sending it to vision so page content cannot be mistaken for a tab.
-            vision_height = max(80, int(height * 0.18))
             try:
                 from PIL import Image
                 import io
