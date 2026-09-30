@@ -112,3 +112,41 @@ class StartupTests(unittest.TestCase):
         bus.emit("startup")
         self.assertEqual(len(received), 1)
         self.assertIn("startup", received[0])
+
+
+class ToolRegistryTests(unittest.TestCase):
+    def setUp(self):
+        from app.activity import ActivityBus
+        from app.tool_registry import ToolRegistry
+        self.temp = tempfile.TemporaryDirectory()
+        self.workspace = Workspace(self.temp.name)
+        self.activity = ActivityBus()
+        self.registry = ToolRegistry(self.workspace, self.activity)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_describe_exposes_structured_tools(self):
+        names = {item["name"] for item in self.registry.describe()}
+        self.assertTrue({"workspace.list", "workspace.read", "workspace.write", "terminal.run"} <= names)
+
+    def test_workspace_write_then_read(self):
+        result = self.registry.execute("workspace.write", {"path": "agent.txt", "content": "hello"})
+        self.assertTrue(result["ok"])
+        result = self.registry.execute("workspace.read", {"path": "agent.txt"})
+        self.assertEqual(result["result"], "hello")
+
+    def test_unknown_tool_is_rejected(self):
+        from app.tool_registry import UnknownToolError
+        with self.assertRaises(UnknownToolError):
+            self.registry.execute("does.not.exist")
+
+    def test_non_object_arguments_are_rejected(self):
+        from app.tool_registry import ToolError
+        with self.assertRaises(ToolError):
+            self.registry.execute("workspace.list", [])
+
+    def test_terminal_uses_existing_approval_gate(self):
+        blocked = self.registry.execute("terminal.run", {"command": "del dangerous.txt"})
+        self.assertFalse(blocked["ok"])
+        self.assertIn("approval", blocked["error"].lower())
