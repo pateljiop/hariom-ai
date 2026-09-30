@@ -1,10 +1,14 @@
 import json
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse
 
 from .activity import ActivityBus
 from .ai_router import AIRouter
 from .config import GATEWAY_API_KEY, GATEWAY_HOST, GATEWAY_PORT, PROVIDERS, ROUTING_PROFILES
+from .plan_executor import PlanExecutor
+from .task_plan import TaskPlan
+from .task_service import TaskService, TaskServiceError
 
 
 class ClientRequestError(ValueError):
@@ -12,6 +16,8 @@ class ClientRequestError(ValueError):
 
 activity = ActivityBus()
 router = AIRouter(activity)
+task_service = TaskService()
+plan_executor = PlanExecutor(task_service=task_service)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -52,7 +58,40 @@ class Handler(BaseHTTPRequestHandler):
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ClientRequestError('Invalid JSON body') from exc
 
+    def _task_path(self):
+        parts = [p for p in urlparse(self.path).path.split('/') if p]
+        if len(parts) >= 2 and parts[0] == 'tasks':
+            return parts[1], parts[2:]
+        return None, []
+
+    def _task_response(self, task):
+        return {'task': task.to_dict()}
+
     def do_GET(self):
+        task_id, suffix = self._task_path()
+        if task_id:
+            if not self._authorized():
+                self._send(401, {'error': {'message': 'Unauthorized'}})
+                return
+            try:
+                if suffix == []:
+                    self._send(200, self._task_response(task_service.get_task(task_id)))
+                elif suffix == ['events']:
+                    self._send(200, {'task_id': task_id, 'events': task_service.events(task_id)})
+                elif suffix == ['diff']:
+                    task = task_service.get_task(task_id)
+                    request_id = None
+                    for event in reversed(task_service.events(task_id)):
+                        if event.get('request_id'):
+                            request_id = event['request_id']
+                            break
+                    approval = task_service.store.get_approval(request_id) if request_id else None
+                    self._send(200, {'task_id': task_id, 'diff': approval.get('diff', '') if approval else ''})
+                else:
+                    self._send(404, {'error': {'message': 'Not found'}})
+            except TaskServiceError as exc:
+                self._send(404, {'error': {'message': str(exc)}})
+            return
         if self.path == '/health':
             self._send(200, {'status': 'ok', 'profiles': ROUTING_PROFILES, 'providers': router.status()})
             return
@@ -72,6 +111,67 @@ class Handler(BaseHTTPRequestHandler):
         self._send(404, {'error': {'message': 'Not found'}})
 
     def do_POST(self):
+        parsed = urlparse(self.path)
+        task_id, suffix = self._task_path()
+        if task_id:
+            if not self._authorized():
+                self._send(401, {'error': {'message': 'Unauthorized'}})
+                return
+            try:
+                payload = self._json_body()
+                if not isinstance(payload, dict):
+                    raise ClientRequestError('JSON body must be an object')
+                if suffix == []:
+                    plan = TaskPlan.from_dict(payload)
+                    task = task_service.create_task(
+                        plan.user_request or 'agent task',
+                        objective=plan.objective or plan.user_request or 'agent task',
+                        task_id=plan.task_id or None,
+                        dependencies=tuple(plan.dependencies),
+                        expected_files=tuple(plan.expected_files),
+                        test_commands=tuple(plan.test_commands),
+                        risk_level=plan.risk_level,
+                        required_approvals=tuple(plan.required_approvals),
+                        rollback_strategy=plan.rollback_strategy,
+                        max_retries=plan.max_retries,
+                        plan=plan.to_dict(),
+                    )
+                    self._send(201, self._task_response(task))
+                elif suffix == ['validate']:
+                    plan = TaskPlan.from_dict(payload)
+                    self._send(200, {'ok': True, 'task_id': task_id, 'plan': plan.to_dict()})
+                elif suffix == ['execute']:
+                    result = plan_executor.prepare(payload, task_id=task_id)
+                    self._send(200 if result.get('ok') else 422, result)
+                elif suffix == ['cancel']:
+                    reason = payload.get('reason', 'cancelled by user')
+                    task = task_service.cancel_task(task_id, reason=reason)
+                    self._send(200, self._task_response(task))
+                elif suffix == ['approve']:
+                    request_id = payload.get('request_id')
+                    message = payload.get('message')
+                    if not request_id or not message:
+                        raise ClientRequestError('request_id and message are required')
+                    result = plan_executor.approve(request_id, message)
+                    self._send(200, result)
+                elif suffix == ['reject']:
+                    request_id = payload.get('request_id')
+                    reason = payload.get('reason', 'rejected by user')
+                    if not request_id:
+                        raise ClientRequestError('request_id is required')
+                    result = plan_executor.workflow.reject(request_id, reason)
+                    task_service.cancel_task(task_id, reason=reason)
+                    self._send(200, result)
+                else:
+                    self._send(404, {'error': {'message': 'Not found'}})
+            except ClientRequestError as exc:
+                self._send(400, {'error': {'message': str(exc), 'type': 'invalid_request_error'}})
+            except (TaskServiceError, ValueError) as exc:
+                self._send(400, {'error': {'message': str(exc)}})
+            except Exception as exc:
+                self._send(409, {'error': {'message': str(exc), 'type': 'task_error'}})
+            return
+
         if self.path != '/v1/chat/completions':
             self._send(404, {'error': {'message': 'Not found'}})
             return
