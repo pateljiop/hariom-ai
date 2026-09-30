@@ -35,6 +35,7 @@ class AgentRunnerTests(unittest.TestCase):
 
     def test_invalid_model_output_is_blocked(self):
         self.router.chat.return_value = ('{"actions":[{"tool":"unknown","arguments":{}}]}', "fast")
+        self.registry.validate_arguments.side_effect = ValueError("Unknown tool: unknown")
         with self.assertRaises(AgentRunError):
             self.runner.plan("do something")
 
