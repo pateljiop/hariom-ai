@@ -125,46 +125,54 @@ class PersonalAgent:
             step = state.steps[index]
             if step.get("status") == "completed":
                 continue
-            state.start_step(index)
-            self._checkpoint(state)
-            tool_name = step.get("tool")
 
-            if not tool_name:
-                state.finish_step(step["description"])
-                continue
-
-            try:
-                tool = self.tools.get(tool_name)
-                if not tool:
-                    raise KeyError("Unknown tool: " + str(tool_name))
-                if self.tools.requires_approval(tool_name, step.get("arguments")) and not approve:
-                    state.status = TaskStatus.WAITING_APPROVAL
-                    self.activity.emit("AGENT -> approval required for " + tool_name)
-                    self._checkpoint(state)
-                    return state
-
-                output = self.tools.execute(tool_name, step.get("arguments"), approved=approve)
-                step["workspace_root"] = str(self.workspace.root)
-                state.finish_step(str(output)[-12000:])
+            step_attempts = 0
+            while True:
+                state.start_step(index)
                 self._checkpoint(state)
-            except Exception as exc:
-                state.fail_step(exc)
-                state.attempts += 1
-                self.activity.emit("AGENT FAILED -> %s: %s" % (tool_name, exc))
-                self.evolution.record(self.evolution.propose(self.evolution.observe_task(state)))
-                if state.attempts >= max_attempts:
-                    state.status = TaskStatus.FAILED
-                    state.result = "Task stopped after bounded recovery attempts."
+                tool_name = step.get("tool")
+
+                if not tool_name:
+                    state.finish_step(step["description"])
+                    break
+
+                try:
+                    tool = self.tools.get(tool_name)
+                    if not tool:
+                        raise KeyError("Unknown tool: " + str(tool_name))
+                    if self.tools.requires_approval(tool_name, step.get("arguments")) and not approve:
+                        state.status = TaskStatus.WAITING_APPROVAL
+                        self.activity.emit("AGENT -> approval required for " + tool_name)
+                        self._checkpoint(state)
+                        return state
+
+                    output = self.tools.execute(tool_name, step.get("arguments"), approved=approve)
+                    step["workspace_root"] = str(self.workspace.root)
+                    state.finish_step(str(output)[-12000:])
                     self._checkpoint(state)
-                    return state
-                if self.repair(state, index, str(exc)):
+                    break
+                except Exception as exc:
+                    state.fail_step(exc)
+                    step_attempts += 1
+                    state.attempts += 1
+                    self.activity.emit("AGENT FAILED -> %s: %s" % (tool_name, exc))
+                    self.evolution.record(self.evolution.propose(self.evolution.observe_task(state)))
+
+                    if step_attempts >= max_attempts:
+                        state.status = TaskStatus.FAILED
+                        state.result = "Task stopped after bounded recovery attempts."
+                        self._checkpoint(state)
+                        return state
+
+                    if not self.repair(state, index, str(exc)):
+                        state.status = TaskStatus.FAILED
+                        state.result = "Task could not be repaired safely."
+                        self._checkpoint(state)
+                        return state
+
+                    step = state.steps[index]
                     state.status = TaskStatus.RUNNING
                     self._checkpoint(state)
-                    continue
-                state.status = TaskStatus.FAILED
-                state.result = "Task could not be repaired safely."
-                self._checkpoint(state)
-                return state
 
         state.status = TaskStatus.VERIFYING
         ok, failures = self.verifier.verify_task(state)
