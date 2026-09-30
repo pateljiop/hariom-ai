@@ -42,6 +42,7 @@ class App(tk.Tk):
         self.max_panel_height = 900
         self._robot_photo = None
         self._logo_photo = None
+        self.mode = "agent"
 
         self.activity = ActivityBus()
         self.router = AIRouter(self.activity)
@@ -226,6 +227,24 @@ class App(tk.Tk):
         tk.Label(hero, text="Ready when you are.", bg="#080c12", fg="#667386",
                  font=("Segoe UI", 8)).pack()
 
+        # Mode switch: Chat is conversational; Agent can plan and execute tools.
+        mode_row = tk.Frame(outer, bg="#080c12")
+        mode_row.pack(fill="x", padx=14, pady=(0, 8))
+        tk.Label(mode_row, text="MODE", bg="#080c12", fg="#617084",
+                 font=("Segoe UI", 7, "bold")).pack(side="left", padx=(2, 8))
+        self.chat_mode_button = tk.Button(mode_row, text="CHAT", command=lambda: self.set_mode("chat"),
+                                           relief="flat", bd=0, padx=14, pady=5,
+                                           font=("Segoe UI", 8, "bold"), cursor="hand2")
+        self.chat_mode_button.pack(side="left")
+        self.agent_mode_button = tk.Button(mode_row, text="AGENT", command=lambda: self.set_mode("agent"),
+                                            relief="flat", bd=0, padx=14, pady=5,
+                                            font=("Segoe UI", 8, "bold"), cursor="hand2")
+        self.agent_mode_button.pack(side="left", padx=5)
+        self.mode_hint = tk.Label(mode_row, text="", bg="#080c12", fg="#667386",
+                                  font=("Segoe UI", 7))
+        self.mode_hint.pack(side="left", padx=8)
+        self.update_mode_ui()
+
         # Command surface
         command_card = tk.Frame(outer, bg="#111822", highlightthickness=1,
                                 highlightbackground="#1f2a38")
@@ -284,6 +303,30 @@ class App(tk.Tk):
                   bg="#0e141d", fg="#7c899b", activebackground="#18212d",
                   activeforeground="#eef4fa", relief="flat", bd=0,
                   font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side="right")
+
+    def set_mode(self, mode):
+        if mode not in ("chat", "agent"):
+            return
+        self.mode = mode
+        self.update_mode_ui()
+        if hasattr(self, "status"):
+            self.status.set("Chat mode" if mode == "chat" else "Agent mode")
+
+    def update_mode_ui(self):
+        if not hasattr(self, "chat_mode_button"):
+            return
+        active_bg = "#1b789c"
+        idle_bg = "#151d29"
+        self.chat_mode_button.configure(
+            bg=active_bg if self.mode == "chat" else idle_bg,
+            fg="#f4f8fb" if self.mode == "chat" else "#7e8b9d",
+            activebackground=active_bg, activeforeground="#ffffff")
+        self.agent_mode_button.configure(
+            bg=active_bg if self.mode == "agent" else idle_bg,
+            fg="#f4f8fb" if self.mode == "agent" else "#7e8b9d",
+            activebackground=active_bg, activeforeground="#ffffff")
+        self.mode_hint.configure(
+            text="Conversation only" if self.mode == "chat" else "Plan • tools • verify")
 
     def action_button(self, parent, text, command, primary=False):
         bg = "#1b789c" if primary else "#1a2330"
@@ -383,8 +426,12 @@ class App(tk.Tk):
 
     def ask(self):
         prompt = self.get_prompt()
-        if prompt:
-            threading.Thread(target=self.ask_worker, args=(prompt,), daemon=True).start()
+        if not prompt:
+            return
+        if self.mode == "agent":
+            self.run_task()
+            return
+        threading.Thread(target=self.ask_worker, args=(prompt,), daemon=True).start()
 
     def ask_worker(self, prompt):
         try:
