@@ -63,7 +63,7 @@ class TaskPlan:
             if step_risk not in {"low", "medium", "high", "critical"}:
                 raise PlanValidationError(f"Step {index} risk_level is invalid.")
             dependencies = step_seq("dependencies")
-            actions.append(TaskAction(tool.strip(), arguments, approved, dependencies))
+            actions.append(TaskAction(tool.strip(), arguments, approved, dependencies, step_id.strip()))
             steps.append(TaskStep(step_id.strip(), tool.strip(), arguments, step_seq("dependencies"), step_seq("expected_files"), step_seq("test_commands"), RiskLevel(step_risk), step_seq("required_approvals")))
 
         step_ids = [step.step_id for step in steps]
