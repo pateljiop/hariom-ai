@@ -10,6 +10,7 @@ class TaskAction:
     tool: str
     arguments: Dict[str, Any]
     approved: bool = False
+    dependencies: tuple = ()
 
 
 class TaskExecutionError(Exception):
@@ -24,14 +25,44 @@ class TaskExecutor:
         if actions is None:
             raise TaskExecutionError("Actions are required.")
         normalized = list(actions)
+        ids = {getattr(action, "step_id", None) for action in normalized}
+        ids.discard(None)
         for action in normalized:
             if not isinstance(action, TaskAction):
                 raise TaskExecutionError("Each action must be a TaskAction.")
             if not isinstance(action.arguments, dict):
                 raise TaskExecutionError("Action arguments must be an object.")
+            if not isinstance(action.dependencies, tuple):
+                raise TaskExecutionError("Action dependencies must be a tuple.")
             if action.tool not in {item["name"] for item in self.registry.describe()}:
                 raise UnknownToolError(f"Unknown tool: {action.tool}")
-        return normalized
+        return self._dependency_order(normalized)
+
+    @staticmethod
+    def _dependency_order(actions):
+        if not any(getattr(a, "dependencies", ()) for a in actions):
+            return actions
+        indexed = {getattr(a, "step_id", f"step-{i + 1}"): a for i, a in enumerate(actions)}
+        if len(indexed) != len(actions):
+            raise TaskExecutionError("Step IDs must be unique for dependency-aware execution.")
+        ordered = []
+        visiting, visited = set(), set()
+        def visit(step_id):
+            if step_id in visiting:
+                raise TaskExecutionError(f"Circular step dependency detected at '{step_id}'.")
+            if step_id in visited:
+                return
+            if step_id not in indexed:
+                raise TaskExecutionError(f"Unknown step dependency: {step_id}")
+            visiting.add(step_id)
+            for dep in indexed[step_id].dependencies:
+                visit(dep)
+            visiting.remove(step_id)
+            visited.add(step_id)
+            ordered.append(indexed[step_id])
+        for step_id in indexed:
+            visit(step_id)
+        return ordered
 
     def execute(self, actions):
         actions = self.validate(actions)
