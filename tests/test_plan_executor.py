@@ -167,6 +167,12 @@ class PlanExecutorTests(unittest.TestCase):
                 "user_request": "restart then approve",
                 "actions": [{"tool": "workspace.write", "arguments": {"path": "a", "content": "b"}}],
             })
+            store.save_approval(
+                "restart-commit",
+                {"task_id": "restart-commit-task", "actions": [], "test_target": "tests",
+                 "test_result": {"ok": True}, "diff": "d", "commit_result": None},
+                "2026-09-30T10:00:00+00:00", "2099-09-30T10:00:00+00:00", "pending",
+            )
             second = PlanExecutor(workflow, task_service=TaskService(TaskStore(f"{root}/tasks.sqlite3")))
             result = second.approve("restart-commit", "reviewed change")
             self.assertTrue(result["ok"])
