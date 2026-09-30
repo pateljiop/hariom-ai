@@ -31,7 +31,6 @@ class PlanExecutor:
                     objective=plan.objective or plan.user_request or "agent task",
                     task_id=task_id,
                     steps=tuple(plan.steps),
-                    steps=tuple(plan.steps),
                 dependencies=tuple(plan.dependencies),
                     expected_files=tuple(plan.expected_files),
                     test_commands=tuple(plan.test_commands),
