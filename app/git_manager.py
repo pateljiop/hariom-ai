@@ -5,7 +5,7 @@ from pathlib import Path
 
 SECRET_PATTERNS = (
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
-    re.compile(r"(?i)(?:api[_-]?key|secret|token|password)\s*[:=]\s*['"][^'"]{8,}['"]"),
+    re.compile(r'''(?i)(?:api[_-]?key|secret|token|password)\s*[:=]\s*['"][^'"]{8,}['"]'''),
     re.compile(r"\b(?:sk|rk)-[A-Za-z0-9_-]{16,}\b"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
