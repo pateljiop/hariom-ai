@@ -11,6 +11,7 @@ class TaskExecutorStepStateTests(unittest.TestCase):
         registry.describe.return_value = [{"name": "tool.a"}, {"name": "tool.b"}, {"name": "terminal.run"}]
         registry.workspace = Mock()
         registry.workspace.read_file.return_value = "present"
+        registry.workspace.exists.return_value = True
         registry.test_runner = Mock()
         registry.test_runner.run_command.return_value = {"ok": True, "returncode": 0, "output": ""}
         registry.execute.side_effect = outcomes or [
@@ -101,12 +102,12 @@ class TaskExecutorStepStateTests(unittest.TestCase):
             step_state=state,
         )
         self.assertTrue(result["ok"])
-        registry.workspace.read_file.assert_called_once_with("output.txt")
+        registry.workspace.exists.assert_called_once_with("output.txt")
         self.assertEqual(state["a"]["status"], "succeeded")
 
     def test_missing_expected_file_fails_step(self):
         executor, registry = self._executor()
-        registry.workspace.read_file.side_effect = FileNotFoundError("missing")
+        registry.workspace.exists.return_value = False
         state = {}
         result = executor.execute(
             [TaskAction("tool.a", {}, step_id="a", expected_files=("output.txt",))],
