@@ -53,6 +53,7 @@ class App(tk.Tk):
         self.current_conversation_id = None
         self.active_provider = "Auto"
         self.task_started_at = None
+        self.task_busy = False
 
         self.activity = ActivityBus()
         self.router = AIRouter(self.activity)
@@ -300,10 +301,14 @@ class App(tk.Tk):
 
         action_row = tk.Frame(command_card, bg="#111822")
         action_row.pack(fill="x", padx=8, pady=8)
-        self.action_button(action_row, "Ask", self.ask, primary=True).pack(side="left")
-        self.action_button(action_row, "Run", self.run_task).pack(side="left", padx=5)
-        self.action_button(action_row, "Voice", self.voice_command).pack(side="left")
-        self.action_button(action_row, "Screen", self.see_screen).pack(side="left", padx=5)
+        self.ask_button = self.action_button(action_row, "Ask", self.ask, primary=True)
+        self.ask_button.pack(side="left")
+        self.run_button = self.action_button(action_row, "Run", self.run_task)
+        self.run_button.pack(side="left", padx=5)
+        self.voice_button = self.action_button(action_row, "Voice", self.voice_command)
+        self.voice_button.pack(side="left")
+        self.screen_button = self.action_button(action_row, "Screen", self.see_screen)
+        self.screen_button.pack(side="left", padx=5)
         self.approval_button = self.action_button(action_row, "Approve", self.approve_task).pack(side="right")
 
         activity_head = tk.Frame(self.chat_surface, bg="#080c12")
@@ -630,9 +635,16 @@ class App(tk.Tk):
         except Exception as exc:
             self.after(0, lambda: messagebox.showerror("AI error", str(exc)))
 
+    def set_busy(self, busy):
+        self.task_busy = bool(busy)
+        state = "disabled" if busy else "normal"
+        for button in (self.ask_button, self.run_button, self.voice_button, self.screen_button):
+            button.configure(state=state)
+
     def run_task(self):
         prompt = self.get_prompt()
-        if prompt:
+        if prompt and not self.task_busy:
+            self.set_busy(True)
             threading.Thread(target=self.task_worker, args=(prompt,), daemon=True).start()
 
     def task_worker(self, prompt):
@@ -643,6 +655,7 @@ class App(tk.Tk):
             self.current_task = state
             self.after(0, lambda: self.show_task(state))
         except Exception as exc:
+            self.after(0, lambda: self.set_busy(False))
             self.after(0, lambda: messagebox.showerror("Task error", str(exc)))
 
     def resume_saved(self):
@@ -662,6 +675,7 @@ class App(tk.Tk):
             self.current_task = state
             self.after(0, lambda: self.show_task(state))
         except Exception as exc:
+            self.after(0, lambda: self.set_busy(False))
             self.after(0, lambda: messagebox.showerror("Resume error", str(exc)))
 
     def approve_task(self):
