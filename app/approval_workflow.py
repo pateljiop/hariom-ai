@@ -1,7 +1,7 @@
 """Approval-gated workflow with persistent, expiring approval requests."""
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 from uuid import uuid4
 
 from .task_executor import TaskAction, TaskExecutor, TaskExecutionError
@@ -42,12 +42,12 @@ class ApprovalWorkflow:
         self.approval_ttl_seconds = approval_ttl_seconds
         self._requests: Dict[str, ApprovalRequest] = {}
 
-    def prepare(self, actions, test_target="tests", task_id=""):
+    def prepare(self, actions, test_target="tests", task_id="", step_state=None, checkpoint: Callable | None = None):
         if actions is None:
             raise ApprovalWorkflowError("Actions are required.")
         actions = tuple(actions)
         try:
-            execution = self.executor.execute(actions)
+            execution = self.executor.execute(actions, step_state=step_state, checkpoint=checkpoint)
         except TaskExecutionError:
             raise
         if not execution["ok"]:
@@ -55,7 +55,6 @@ class ApprovalWorkflow:
         test_result = self.executor.registry.test_runner.run(test_target)
         if not test_result["ok"]:
             return {"ok": False, "stage": "verification", "execution": execution, "test_result": test_result}
-
         diff = self.git.diff()
         request_id = 'approval-' + uuid4().hex
         now = datetime.now(timezone.utc)
@@ -76,12 +75,7 @@ class ApprovalWorkflow:
     def approve(self, request_id, message):
         request = self._load(request_id)
         if request.approved:
-            return {
-                "ok": True,
-                "request_id": request_id,
-                "commit": getattr(request, "commit_result", None),
-                "idempotent": True,
-            }
+            return {"ok": True, "request_id": request_id, "commit": getattr(request, "commit_result", None), "idempotent": True}
         self._ensure_pending(request)
         if not isinstance(message, str) or not message.strip():
             raise ApprovalWorkflowError("Commit message is required.")
@@ -89,7 +83,6 @@ class ApprovalWorkflow:
             raise ApprovalDeniedError("Approval request has expired.")
         if self.git.diff() != request.diff:
             raise ApprovalWorkflowError("Workspace diff changed after review; approval is invalid.")
-
         result = self.git.commit(message, approved=True)
         consumed = ApprovalRequest(**{**request.__dict__, "approved": True, "commit_result": result})
         self._requests[request_id] = consumed
