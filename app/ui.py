@@ -1,4 +1,4 @@
-import threading,tkinter as tk
+import os,threading,tkinter as tk
 from tkinter import ttk,messagebox,filedialog
 from .config import WORKSPACE
 from .activity import ActivityBus
@@ -80,6 +80,10 @@ class App(tk.Tk):
         try:
             path=self.computer.screenshot(approved=True, persist=False)
             image=tk.PhotoImage(file=path)
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
             width,height=image.width(),image.height()
             max_width,max_height=1100,700
             scale=max(1,(width+max_width-1)//max_width,(height+max_height-1)//max_height)
