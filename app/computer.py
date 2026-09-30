@@ -1,4 +1,5 @@
 from pathlib import Path
+import tempfile
 import platform
 import time
 
@@ -33,14 +34,21 @@ class ComputerController:
         point = pyautogui.position()
         return {"x": point.x, "y": point.y}
 
-    def screenshot(self, path="computer-screen.png", approved=False):
+    def screenshot(self, path=None, approved=False, persist=False):
         if not approved:
             raise PermissionError("Computer screenshot requires explicit approval.")
         pyautogui = self._pyautogui()
-        target = Path(path).expanduser().resolve()
-        target.parent.mkdir(parents=True, exist_ok=True)
+        if persist:
+            if not path:
+                raise ValueError("A path is required when persist=True.")
+            target = Path(path).expanduser().resolve()
+            target.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            tmp = tempfile.NamedTemporaryFile(prefix="hariom-screen-", suffix=".png", delete=False)
+            tmp.close()
+            target = Path(tmp.name)
         pyautogui.screenshot(str(target))
-        self.activity.emit("COMPUTER -> screenshot " + str(target))
+        self.activity.emit("COMPUTER -> screenshot " + ("persisted" if persist else "temporary"))
         return str(target)
 
     def move_mouse(self, x, y, duration=0.2):
