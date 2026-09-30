@@ -205,7 +205,7 @@ class TaskExecutorTests(unittest.TestCase):
         self.assertIn("approval", result["error"].lower())
 
     def test_explicitly_approved_terminal_command_runs(self):
-        result = self.executor.execute([TaskAction("terminal.run", {"command": "python -c \"print(42)"}, approved=True)])
+        result = self.executor.execute([TaskAction("terminal.run", {"command": "python -c \"print(42)\""}, approved=True)])
         self.assertTrue(result["ok"])
 
 
