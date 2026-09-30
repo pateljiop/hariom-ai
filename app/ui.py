@@ -38,7 +38,7 @@ class App(tk.Tk):
         self.router = AIRouter(self.activity)
         self.ws = Workspace()
         self.browser = BrowserController(self.activity, headless=False)
-        self.computer = ComputerController(self.activity, locator=self.router.locate_on_screen)
+        self.computer = ComputerController(self.activity, locator=self.router.locate_on_screen, state_verifier=self.router.verify_click_state)
         self.github = GitHubTools(self.activity)
         self.voice = VoiceController(self.activity)
         self.public_apis = PublicAPIs(self.activity)
