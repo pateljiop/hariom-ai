@@ -579,8 +579,16 @@ class App(tk.Tk):
             if not self.current_conversation_id:
                 self.current_conversation_id = uuid.uuid4().hex
             conversation_id = self.current_conversation_id
+            previous = self.history.conversation(conversation_id)
+            messages = [{"role": "system", "content": self.agent.intelligence.system_prompt()}]
+            for message in previous[-20:]:
+                role = message["role"]
+                if role in ("user", "assistant"):
+                    messages.append({"role": role, "content": message["content"]})
+            messages.append({"role": "user", "content": prompt})
             self.history.add(conversation_id, "user", prompt)
-            text, provider = self.router.chat(prompt, system=self.agent.intelligence.system_prompt())
+            message, provider = self.router.chat_messages(messages, use_cache=False)
+            text = message.get("content", "")
             self.history.add(conversation_id, "assistant", text)
             self.after(0, lambda: self.append(self.log, "YOU: " + prompt))
             self.after(0, lambda: self.append(self.log, "AI (" + provider + "): " + text))
