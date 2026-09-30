@@ -304,6 +304,8 @@ class App(tk.Tk):
                   bg="#0e141d", fg="#7c899b", activebackground="#18212d",
                   activeforeground="#eef4fa", relief="flat", bd=0,
                   font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side="right")
+        tk.Button(footer, text="Brave", command=lambda: self.select_browser("brave"), bg="#0e141d", fg="#7c899b", activebackground="#18212d", activeforeground="#eef4fa", relief="flat", bd=0, font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side="right", padx=8)
+        tk.Button(footer, text="Chromium", command=lambda: self.select_browser("chromium"), bg="#0e141d", fg="#7c899b", activebackground="#18212d", activeforeground="#eef4fa", relief="flat", bd=0, font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side="right")
 
     def set_mode(self, mode):
         if mode not in ("chat", "agent"):
@@ -506,6 +508,14 @@ class App(tk.Tk):
             self.append(self.log, "\n".join(str(p.relative_to(self.ws.root)) for p in items[:100]) or "Workspace is empty.")
         except Exception as exc:
             messagebox.showerror("Workspace", str(exc))
+
+    def select_browser(self, browser):
+        try:
+            selected = self.browser.set_browser(browser)
+            self.status.set("Browser: " + selected)
+            self.append(self.log, "BROWSER -> selected " + selected)
+        except Exception as exc:
+            messagebox.showerror("Browser", str(exc))
 
     def choose_workspace(self):
         path = filedialog.askdirectory(initialdir=str(self.ws.root))
