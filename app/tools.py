@@ -94,13 +94,24 @@ class ToolRegistry:
             raise KeyError("Unknown tool: " + str(name))
         return bool(tool.requires_approval or self._sensitive_action(name, arguments))
 
+    @staticmethod
+    def _normalize_arguments(name, arguments):
+        """Normalize common model-generated argument aliases before dispatch."""
+        args = dict(arguments or {})
+        if name == "read_file" and "path" not in args and "file" in args:
+            args["path"] = args.pop("file")
+        if name == "write_file" and "path" not in args and "file" in args:
+            args["path"] = args.pop("file")
+        return args
+
     def execute(self, name, arguments=None, approved=False):
         tool = self.get(name)
         if not tool:
             raise KeyError("Unknown tool: " + str(name))
+        arguments = self._normalize_arguments(name, arguments)
         if self.requires_approval(name, arguments) and not approved:
             raise PermissionError("Approval required for tool: " + str(name))
-        return tool.handler(**(arguments or {}))
+        return tool.handler(**arguments)
 
     def list_files(self, limit=300):
         files = self.workspace.list_files()
