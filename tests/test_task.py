@@ -16,8 +16,8 @@ class TaskTests(unittest.TestCase):
         task.transition(TaskStatus.VALIDATING)
         task.transition(TaskStatus.EXECUTING)
         event = task.transition(TaskStatus.TESTING, tool="workspace.write")
-        self.assertEqual(task.status, TaskStatus.EXECUTING)
-        self.assertEqual(event["status"], "executing")
+        self.assertEqual(task.status, TaskStatus.TESTING)
+        self.assertEqual(event["status"], "testing")
         self.assertEqual(event["tool"], "workspace.write")
 
     def test_task_step_round_trips(self):
