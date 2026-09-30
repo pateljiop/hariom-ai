@@ -401,6 +401,7 @@ class App(tk.Tk):
         if query == "Search conversations…":
             query = ""
         self._history_results = self.history.search(query, limit=100)
+        self._history_conversations = []
         self.history_list.delete(0, "end")
         if not self._history_results:
             self.history_list.insert("end", "No conversations found.")
@@ -425,11 +426,11 @@ class App(tk.Tk):
         if not selection:
             return
         index = selection[0]
-        if index >= len(self._history_results):
+        if index >= len(getattr(self, "_history_conversations", [])):
             return
-        item = self._history_results[index]
-        conversation = self.history.conversation(item["conversation_id"])
-        self.current_conversation_id = item["conversation_id"]
+        conversation_id = self._history_conversations[index]
+        conversation = self.history.conversation(conversation_id)
+        self.current_conversation_id = conversation_id
         self.set_view("chat")
         self.log.configure(state="normal")
         self.log.delete("1.0", "end")
