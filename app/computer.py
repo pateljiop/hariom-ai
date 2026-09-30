@@ -75,7 +75,7 @@ class ComputerController:
         self.activity.emit("COMPUTER -> mouse click")
         return True
 
-    def type_text(self, text, interval=0.01, approved=False):
+    def type_text(self, text, interval=0.01, approved=False, sensitive=False):
         if not approved:
             raise PermissionError("Computer typing requires explicit approval.")
         pyautogui = self._pyautogui()
