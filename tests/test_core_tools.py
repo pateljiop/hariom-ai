@@ -11,6 +11,8 @@ from app.terminal import run_command
 from app.activity import ActivityBus
 from app.tool_registry import ToolRegistry, ToolError, UnknownToolError
 from app.task_executor import TaskAction, TaskExecutor
+from app.workspace_patcher import PatchError, TextPatch, WorkspacePatcher
+from app.test_runner import TestRunner, TestRunnerError
 
 
 class WorkspaceTests(unittest.TestCase):
@@ -199,3 +201,40 @@ class TaskExecutorTests(unittest.TestCase):
     def test_explicitly_approved_terminal_command_runs(self):
         result = self.executor.execute([TaskAction("terminal.run", {"command": "python -c \\\"print(42)\\\""}, approved=True)])
         self.assertTrue(result["ok"])
+
+
+class WorkspacePatcherTests(unittest.TestCase):
+    def test_exact_patch_applies_once(self):
+        with tempfile.TemporaryDirectory() as root:
+            ws = Workspace(root)
+            ws.write_file("demo.txt", "alpha beta alpha")
+            patcher = WorkspacePatcher(ws)
+            result = patcher.apply(TextPatch("demo.txt", "alpha beta", "gamma"))
+            self.assertEqual(result["replacements"], 1)
+            self.assertEqual(ws.read_file("demo.txt"), "gamma alpha")
+
+    def test_patch_rejects_unexpected_match_count(self):
+        with tempfile.TemporaryDirectory() as root:
+            ws = Workspace(root)
+            ws.write_file("demo.txt", "alpha alpha")
+            with self.assertRaises(PatchError):
+                WorkspacePatcher(ws).apply(TextPatch("demo.txt", "alpha", "beta"))
+
+    def test_patch_respects_workspace_boundary(self):
+        with tempfile.TemporaryDirectory() as root:
+            ws = Workspace(root)
+            with self.assertRaises(ValueError):
+                WorkspacePatcher(ws).apply(TextPatch("../escape.txt", "x", "y"))
+
+
+class TestRunnerTests(unittest.TestCase):
+    def test_runner_reports_success(self):
+        with tempfile.TemporaryDirectory() as root:
+            result = TestRunner(root).run("tests")
+            self.assertIn("ok", result)
+            self.assertFalse(result["timed_out"])
+
+    def test_runner_rejects_empty_target(self):
+        with tempfile.TemporaryDirectory() as root:
+            with self.assertRaises(TestRunnerError):
+                TestRunner(root).run("")
