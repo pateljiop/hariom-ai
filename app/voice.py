@@ -10,8 +10,8 @@ class VoiceController:
             return sr
         except ImportError as exc:
             raise RuntimeError(
-                "Voice input needs SpeechRecognition and PyAudio. "
-                "Install the optional voice dependencies."
+                "Voice input needs SpeechRecognition + PyAudio. "
+                "Run: python -m pip install -r requirements.txt"
             ) from exc
 
     def listen(self, timeout=5, phrase_time_limit=20):
