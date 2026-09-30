@@ -3,7 +3,8 @@ from .approval_workflow import ApprovalWorkflow
 from .execution_state import ExecutionState
 from .recovery import RecoveryCoordinator
 from .task_executor import TaskAction, TaskExecutionError
-from .task_plan import TaskPlan\nfrom .task_service import TaskService, TaskServiceError
+from .task_plan import TaskPlan
+from .task_service import TaskService, TaskServiceError
 
 
 class PlanExecutionError(Exception):
@@ -24,9 +25,11 @@ class PlanExecutor:
         state.transition("executing")
         result = self.workflow.prepare(plan.actions, plan.test_target)
         if result.get("ok"):
-            self.task_service.transition(task_id, "awaiting_approval", request_id=result.get("request_id"))\n            state.transition("approval", request_id=result.get("request_id"))
+            self.task_service.transition(task_id, "awaiting_approval", request_id=result.get("request_id"))
+            state.transition("approval", request_id=result.get("request_id"))
         else:
-            self.task_service.transition(task_id, "failed", error_type=result.get("stage"))\n            state.transition("failed", error_type=result.get("stage"))
+            self.task_service.transition(task_id, "failed", error_type=result.get("stage"))
+            state.transition("failed", error_type=result.get("stage"))
         state.result = dict(result)
         result["plan"] = plan.to_dict()
         result["state"] = state.snapshot()
@@ -85,7 +88,8 @@ class PlanExecutor:
         result = self.workflow.approve(request_id, message)
         for state in self._states.values():
             if state.result.get("request_id") == request_id:
-                self.task_service.transition(state.task_id, "completed", request_id=request_id)\n                state.transition("committed")
+                self.task_service.transition(state.task_id, "completed", request_id=request_id)
+                state.transition("committed")
                 state.result = dict(result)
                 result["state"] = state.snapshot()
                 break
