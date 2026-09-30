@@ -1,4 +1,6 @@
 import threading
+import time
+import uuid
 import tkinter as tk
 from tkinter import messagebox, filedialog
 from pathlib import Path
@@ -359,6 +361,84 @@ class App(tk.Tk):
         if hasattr(self, "status"):
             self.status.set("Chat mode" if mode == "chat" else "Agent mode")
 
+    def set_view(self, view):
+        if view not in ("chat", "history"):
+            return
+        self.view = view
+        if view == "chat":
+            self.history_surface.pack_forget()
+            self.chat_surface.pack(fill="both", expand=True)
+            self.status.set("Ready")
+        else:
+            self.chat_surface.pack_forget()
+            self.history_surface.pack(fill="both", expand=True)
+            self.refresh_history()
+            self.status.set("Chat history")
+        self.update_view_ui()
+
+    def update_view_ui(self):
+        if not hasattr(self, "chat_view_button"):
+            return
+        active = "#1b789c"
+        idle = "#151d29"
+        self.chat_view_button.configure(
+            bg=active if self.view == "chat" else idle,
+            fg="#f4f8fb" if self.view == "chat" else "#7e8b9d",
+            activebackground=active, activeforeground="#ffffff")
+        self.history_view_button.configure(
+            bg=active if self.view == "history" else idle,
+            fg="#f4f8fb" if self.view == "history" else "#7e8b9d",
+            activebackground=active, activeforeground="#ffffff")
+
+    def clear_history_placeholder(self, _event=None):
+        if self.history_search.get().strip() == "Search conversations…":
+            self.history_search.delete(0, "end")
+
+    def refresh_history(self):
+        if not hasattr(self, "history_list"):
+            return
+        query = self.history_search.get().strip()
+        if query == "Search conversations…":
+            query = ""
+        self._history_results = self.history.search(query, limit=100)
+        self.history_list.delete(0, "end")
+        if not self._history_results:
+            self.history_list.insert("end", "No conversations found.")
+            return
+        seen = set()
+        for item in self._history_results:
+            cid = item["conversation_id"]
+            if cid in seen:
+                continue
+            seen.add(cid)
+            snippet = item["content"].replace("\n", " ").strip()
+            if len(snippet) > 72:
+                snippet = snippet[:72] + "…"
+            role = "You" if item["role"] == "user" else "AI"
+            stamp = time.strftime("%d %b %H:%M", time.localtime(item["created"]))
+            self.history_list.insert("end", "%s  •  %s  •  %s" % (stamp, role, snippet))
+
+    def open_history_item(self, _event=None):
+        if not getattr(self, "_history_results", None):
+            return
+        selection = self.history_list.curselection()
+        if not selection:
+            return
+        index = selection[0]
+        if index >= len(self._history_results):
+            return
+        item = self._history_results[index]
+        conversation = self.history.conversation(item["conversation_id"])
+        self.current_conversation_id = item["conversation_id"]
+        self.set_view("chat")
+        self.log.configure(state="normal")
+        self.log.delete("1.0", "end")
+        self.log.configure(state="disabled")
+        for message in conversation:
+            label = "YOU" if message["role"] == "user" else "AI"
+            self.append(self.log, "%s: %s" % (label, message["content"]))
+        self.status.set("Loaded history")
+
     def update_mode_ui(self):
         if not hasattr(self, "chat_mode_button"):
             return
@@ -482,7 +562,13 @@ class App(tk.Tk):
 
     def ask_worker(self, prompt):
         try:
+            if not self.current_conversation_id:
+                self.current_conversation_id = uuid.uuid4().hex
+            conversation_id = self.current_conversation_id
+            self.history.add(conversation_id, "user", prompt)
             text, provider = self.router.chat(prompt, system=self.agent.intelligence.system_prompt())
+            self.history.add(conversation_id, "assistant", text)
+            self.after(0, lambda: self.append(self.log, "YOU: " + prompt))
             self.after(0, lambda: self.append(self.log, "AI (" + provider + "): " + text))
             self.after(0, lambda: self.status.set("Ready"))
         except Exception as exc:
