@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
+import subprocess
+import sys
 from urllib.parse import urlparse
 
 
@@ -33,11 +35,38 @@ class BrowserController:
             raise ValueError("Only valid http/https URLs are allowed.")
         return str(url)
 
+    def _launch_browser(self, playwright):
+        try:
+            return playwright.chromium.launch(headless=self.headless)
+        except Exception as exc:
+            message = str(exc)
+            missing = "Executable doesn't exist" in message or "playwright install" in message
+            if not missing:
+                raise
+            self.activity.emit("BROWSER -> Chromium missing; installing Playwright Chromium")
+            try:
+                subprocess.run(
+                    [sys.executable, "-m", "playwright", "install", "chromium"],
+                    check=True,
+                    timeout=180,
+                )
+            except Exception as install_exc:
+                raise RuntimeError(
+                    "Playwright Chromium is missing and automatic installation failed: "
+                    + str(install_exc)
+                ) from install_exc
+            self.activity.emit("BROWSER -> Chromium installed; retrying launch")
+            return playwright.chromium.launch(headless=self.headless)
+
     def open(self, url):
         url = self._validate_url(url)
         if self.session is None:
             playwright = self._playwright()().start()
-            browser = playwright.chromium.launch(headless=self.headless)
+            try:
+                browser = self._launch_browser(playwright)
+            except Exception:
+                playwright.stop()
+                raise
             page = browser.new_page()
             self.session = BrowserSession(browser=browser, page=page)
             self.session.playwright = playwright
