@@ -36,7 +36,7 @@ class AIRouterTests(unittest.TestCase):
         self.assertEqual(self.router.available(), ['fast', 'fallback'])
 
     def test_failed_provider_enters_cooldown(self):
-        self.router._failure('fast')
+        self.router._failure('fast', RuntimeError('rate limited'))
         status = self.router.status()
         self.assertFalse(status['fast']['healthy'])
         self.assertGreater(status['fast']['cooldown_remaining'], 0)
@@ -48,9 +48,12 @@ class AIRouterTests(unittest.TestCase):
         self.assertEqual(status['fast']['successes'], 1)
         self.assertAlmostEqual(status['fast']['latency'], 1.25)
 
-    @patch.object(ai_router.AIRouter, '_compatible')
+    @patch.object(ai_router.AIRouter, '_compatible_request')
     def test_chat_falls_back_to_next_provider(self, compatible):
-        compatible.side_effect = [RuntimeError('rate limited'), 'ok']
+        compatible.side_effect = [
+            RuntimeError('rate limited'),
+            ({'role': 'assistant', 'content': 'ok'}, {}),
+        ]
 
         text, provider = self.router.chat('hello')
 
@@ -59,18 +62,16 @@ class AIRouterTests(unittest.TestCase):
         self.assertEqual(compatible.call_count, 2)
         self.assertFalse(self.router.status()['fast']['healthy'])
 
-    @patch.object(ai_router.AIRouter, '_compatible')
+    @patch.object(ai_router.AIRouter, '_compatible_request')
     def test_preferred_provider_is_tried_first(self, compatible):
-        compatible.return_value = 'preferred-ok'
+        compatible.return_value = ({'role': 'assistant', 'content': 'preferred-ok'}, {})
 
         text, provider = self.router.chat('hello', preferred='fallback')
 
         self.assertEqual(text, 'preferred-ok')
         self.assertEqual(provider, 'fallback')
-        self.assertEqual(
-            compatible.call_args.args[0]['key'],
-            'key-fallback',
-        )
+        self.assertEqual(compatible.call_args.args[0], 'fallback')
+        self.assertEqual(compatible.call_args.args[1]['key'], 'key-fallback')
 
     def test_profiles_include_auto_and_coding(self):
         self.assertIn('hariom/auto', self.router.profiles())
