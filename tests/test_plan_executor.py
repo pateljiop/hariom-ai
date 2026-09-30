@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import Mock
 
 from app.plan_executor import PlanExecutor, PlanExecutionError
-from app.task_executor import TaskAction
+from app.task_executor import TaskAction\nfrom app.task_service import TaskService\nfrom app.task_store import TaskStore
 
 
 class PlanExecutorTests(unittest.TestCase):
@@ -22,7 +22,7 @@ class PlanExecutorTests(unittest.TestCase):
         self.assertEqual(result["plan"]["test_target"], "tests")
         self.assertEqual([e["stage"] for e in result["state"]["events"]], ["validated", "executing", "approval"])
 
-    def test_prepare_failure_exposes_failed_state(self):
+    def test_prepare_persists_task_lifecycle(self):\n        workflow = Mock()\n        workflow.prepare.return_value = {"ok": True, "stage": "approval", "request_id": "persisted"}\n        import tempfile\n        with tempfile.TemporaryDirectory() as root:\n            service = TaskService(TaskStore(f"{root}/tasks.sqlite3"))\n            executor = PlanExecutor(workflow, task_service=service)\n            result = executor.prepare({\n                "task_id": "task-persist",\n                "user_request": "write file",\n                "objective": "create file",\n                "actions": [{"tool": "workspace.write", "arguments": {"path": "a", "content": "b"}}],\n            })\n            restored = service.get_task("task-persist")\n            self.assertEqual(restored.status.value, "awaiting_approval")\n            self.assertTrue(any(e["status"] == "awaiting_approval" for e in service.events("task-persist")))\n            self.assertEqual(result["request_id"], "persisted")\n\n    def test_prepare_failure_exposes_failed_state(self):
         workflow = Mock()
         workflow.prepare.return_value = {"ok": False, "stage": "verification"}
         executor = PlanExecutor(workflow)
