@@ -17,11 +17,13 @@ class AIRouterTests(unittest.TestCase):
                 'key': 'key-fast',
                 'model': 'fast-model',
                 'base': 'https://example.test/fast',
+                'supports_vision': True,
             },
             'fallback': {
                 'key': 'key-fallback',
                 'model': 'fallback-model',
                 'base': 'https://example.test/fallback',
+                'supports_vision': False,
             },
         })
         # Keep tests isolated from router health persisted by earlier tests.
@@ -87,6 +89,29 @@ class AIRouterTests(unittest.TestCase):
         ai_router.PROVIDERS['fallback']['supports_tools'] = True
         ranked = self.router._rank(tools=[{'type': 'function'}])
         self.assertTrue(all(name == 'fallback' for name, _ in ranked))
+
+    def test_vision_requests_skip_non_vision_provider(self):
+        ranked = self.router._rank(vision=True)
+        self.assertTrue(all(name == 'fast' for name, _ in ranked))
+
+    @patch.object(ai_router.AIRouter, 'chat_request')
+    def test_chat_vision_builds_base64_image_message(self, chat_request):
+        import tempfile
+        from pathlib import Path
+        chat_request.return_value = ({'role': 'assistant', 'content': '{"done":true}'}, 'fast')
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / 'screen.png'
+            path.write_bytes(b'fake-png')
+            text, provider = self.router.chat_vision(path, 'Inspect the screen.')
+        self.assertEqual(provider, 'fast')
+        self.assertEqual(text, '{"done":true}')
+        messages = chat_request.call_args.kwargs['messages']
+        content = messages[0]['content']
+        self.assertEqual(content[0]['type'], 'text')
+        self.assertEqual(content[1]['type'], 'image_url')
+        self.assertIn('base64,', content[1]['image_url']['url'])
+        self.assertTrue(chat_request.call_args.kwargs['vision'])
+        self.assertFalse(chat_request.call_args.kwargs['use_cache'])
 
     def test_auth_failure_enters_long_disable_window(self):
         self.router._failure('fast', RuntimeError('401 Unauthorized'))
