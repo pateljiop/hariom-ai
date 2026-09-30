@@ -30,6 +30,24 @@ class AgentPlannerTests(unittest.TestCase):
                 "actions": [{"tool": "workspace.write", "arguments": {"path": "a"}}],
             })
 
+    def test_rejects_unknown_argument(self):
+        with self.assertRaises(AgentPlanningError):
+            self.planner.parse({
+                "actions": [{
+                    "tool": "workspace.read",
+                    "arguments": {"path": "a.txt", "unexpected": True},
+                }],
+            })
+
+    def test_rejects_wrong_argument_type(self):
+        with self.assertRaises(AgentPlanningError):
+            self.planner.parse({
+                "actions": [{
+                    "tool": "workspace.read",
+                    "arguments": {"path": 123},
+                }],
+            })
+
     def test_parse_json_rejects_invalid_json(self):
         with self.assertRaises(AgentPlanningError):
             self.planner.parse_json("{bad")
