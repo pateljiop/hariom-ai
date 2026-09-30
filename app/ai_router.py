@@ -190,7 +190,37 @@ class AIRouter:
         try:
             data = json.loads(raw)
         except (TypeError, ValueError):
-            pass
+            # Providers sometimes wrap the requested JSON in a short sentence,
+            # markdown, or extra tokens. Recover the first valid JSON object/array
+            # without interpreting arbitrary prose as coordinates.
+            decoder = json.JSONDecoder()
+            for index, char in enumerate(raw):
+                if char not in "[{":
+                    continue
+                try:
+                    candidate, _ = decoder.raw_decode(raw[index:])
+                    if isinstance(candidate, (dict, list)):
+                        data = candidate
+                        break
+                except (TypeError, ValueError):
+                    continue
+
+        # Normalize common provider aliases before validation.
+        if isinstance(data, dict):
+            if "bbox" in data and "bbox_pixels" not in data and "bbox_norm" not in data:
+                bbox = data.get("bbox")
+                if isinstance(bbox, (list, tuple)) and len(bbox) == 4:
+                    data["bbox_pixels"] = bbox
+            if "coordinates" in data and "x" not in data and "y" not in data:
+                coords = data.get("coordinates")
+                if isinstance(coords, dict) and "x" in coords and "y" in coords:
+                    data["x"], data["y"] = coords["x"], coords["y"]
+            if "center" in data and "x" not in data and "y" not in data:
+                center = data.get("center")
+                if isinstance(center, dict) and "x" in center and "y" in center:
+                    data["x"], data["y"] = center["x"], center["y"]
+            if "found" not in data and any(k in data for k in ("bbox_pixels", "bbox_norm", "x", "y")):
+                data["found"] = True
 
         # Vision models sometimes return a bare JSON array instead of the
         # requested object. Treat a four-number array as a pixel bbox.
