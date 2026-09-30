@@ -51,6 +51,44 @@ class BrowserController:
             raise RuntimeError("No browser session is open.")
         return {"url": self.session.page.url, "title": self.session.page.title()}
 
+    def observe(self, selector="body", include_screenshot=False, screenshot_approved=False):
+        """Return fresh browser state for closed-loop agent decisions."""
+        if not self.session:
+            raise RuntimeError("No browser session is open.")
+        page = self.session.page
+        observation = {
+            "url": page.url,
+            "title": page.title(),
+            "text": page.locator(selector).inner_text(timeout=10000)[:12000],
+        }
+        if include_screenshot:
+            observation["screenshot"] = self.screenshot(
+                approved=screenshot_approved
+            )
+        self.activity.emit("BROWSER -> observed current page")
+        return observation
+
+    def verify(self, selector=None, text=None, url_contains=None):
+        """Check current browser state against explicit, user/task-provided expectations."""
+        if not self.session:
+            raise RuntimeError("No browser session is open.")
+        page = self.session.page
+        checks = []
+        if selector:
+            checks.append(("selector", bool(page.locator(selector).count())))
+        if text is not None:
+            checks.append(("text", str(text) in page.locator("body").inner_text(timeout=10000)))
+        if url_contains is not None:
+            checks.append(("url", str(url_contains) in page.url))
+        if not checks:
+            raise ValueError("At least one verification condition is required.")
+        return {
+            "ok": all(value for _, value in checks),
+            "checks": [{"type": kind, "ok": value} for kind, value in checks],
+            "url": page.url,
+            "title": page.title(),
+        }
+
     def read_text(self, selector="body"):
         if not self.session:
             raise RuntimeError("No browser session is open.")
