@@ -14,6 +14,7 @@ class AgentExecutionFacadeTests(unittest.TestCase):
             "requires_approval": False,
             "schema": {"required": ["path"], "optional": []},
         }]
+        executor.workflow.executor.registry.validate_arguments.return_value = True
         executor.prepare.return_value = {"ok": True, "request_id": "r"}
         facade = AgentExecutionFacade(executor=executor)
 
