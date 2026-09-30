@@ -67,7 +67,7 @@ class PersonalAgent:
             response_format={"type": "json_object"},
         )
         data = self._parse_json(message.get("content", ""))
-        state = TaskState(request=normalized_request)
+        state = TaskState(request=normalized_request, provider=provider)
         steps = data.get("steps") if isinstance(data, dict) else None
         if isinstance(steps, list):
             for step in steps:
