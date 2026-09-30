@@ -494,7 +494,28 @@ class App(tk.Tk):
     def show_task(self, state):
         if self._expanded:
             self.geometry("%dx%d+%d+%d" % (self.panel_width, self.panel_height, self.winfo_x(), self.winfo_y()))
-        self.status.set("Task: " + state.status.value)
+        self.current_task = state
+        phase = getattr(state, "phase", state.status.value)
+        progress = getattr(state, "progress", 0)
+        self.status.set("Task: " + phase)
+        if hasattr(self, "task_phase"):
+            self.task_phase.set(phase)
+            self.task_progress.set(str(progress) + "%")
+            current = state.current_step
+            if 0 <= current < len(state.steps):
+                self.task_step.set("Step %d/%d  •  %s" % (current + 1, len(state.steps), state.steps[current].get("description", "")))
+            elif state.status.value == "completed":
+                self.task_step.set("All steps verified")
+            elif state.status.value == "failed":
+                self.task_step.set("Task stopped — inspect timeline")
+            else:
+                self.task_step.set("Preparing execution")
+            self._render_task_progress()
+        marker = getattr(self, "_last_rendered_task", None)
+        if marker == state.updated_at:
+            return
+        self._last_rendered_task = state.updated_at
+        self.append(self.log, "TASK -> %s (%d%%)" % (phase, progress))
         for i, step in enumerate(state.steps, 1):
             self.append(self.log, "%s. [%s] %s" % (i, step["status"], step["description"]))
             if step.get("output"):
