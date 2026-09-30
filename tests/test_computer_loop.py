@@ -34,6 +34,10 @@ class ComputerControlLoopTests(unittest.TestCase):
 
     def test_model_cannot_self_approve_desktop_action(self):
         self.registry.execute.return_value = {"ok": False, "error": "approval required"}
+        self.registry.execute.side_effect = [
+            self._ok("computer.screen_size", {"width": 1920, "height": 1080}),
+            {"ok": False, "error": "approval required"},
+        ]
         result = ComputerControlLoop(self.registry).run(
             lambda image, history: {
                 "action": {
