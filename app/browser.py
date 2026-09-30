@@ -5,6 +5,8 @@ import sys
 from urllib.parse import urlparse
 import os
 
+from .config import APP_DIR
+
 
 @dataclass
 class BrowserSession:
@@ -151,11 +153,11 @@ class BrowserController:
         self.activity.emit("BROWSER -> filled " + selector)
         return True
 
-    def screenshot(self, path="browser.png"):
+    def screenshot(self, path=None):
         self._reset_stale_session()
         if not self.session:
             raise RuntimeError("No browser session is open.")
-        target = Path(path).expanduser().resolve()
+        target = Path(path).expanduser().resolve() if path else (APP_DIR / "screenshots" / "browser.png").resolve()
         target.parent.mkdir(parents=True, exist_ok=True)
         self.session.page.screenshot(path=str(target), full_page=True)
         self.activity.emit("BROWSER -> screenshot " + str(target))
