@@ -104,6 +104,46 @@ class PlanExecutorTests(unittest.TestCase):
         self.assertEqual(result["state"]["stage"], "committed")
         self.assertEqual(prepared["state"]["stage"], "approval")
 
+    def test_get_state_restores_persisted_execution_state_after_restart(self):
+        workflow = Mock()
+        workflow.prepare.return_value = {"ok": True, "stage": "approval", "request_id": "restart-approval", "diff": "d"}
+        import tempfile
+        with tempfile.TemporaryDirectory() as root:
+            store = TaskStore(f"{root}/tasks.sqlite3")
+            service = TaskService(store)
+            first = PlanExecutor(workflow, task_service=service)
+            prepared = first.prepare({
+                "task_id": "restart-task",
+                "user_request": "restart recovery",
+                "actions": [{"tool": "workspace.write", "arguments": {"path": "a", "content": "b"}}],
+            })
+            second = PlanExecutor(workflow, task_service=TaskService(TaskStore(f"{root}/tasks.sqlite3")))
+            restored = second.get_state("restart-task")
+            self.assertEqual(restored["task_id"], "restart-task")
+            self.assertEqual(restored["stage"], "approval")
+            self.assertEqual(restored["result"]["request_id"], "restart-approval")
+            self.assertEqual(restored["events"][-1]["stage"], "approval")
+
+    def test_recover_uses_persisted_state_after_restart(self):
+        workflow = Mock()
+        workflow.prepare.return_value = {"ok": False, "stage": "verification"}
+        test_runner = Mock()
+        test_runner.run.side_effect = [{"ok": False}, {"ok": True}]
+        workflow.executor.registry.test_runner = test_runner
+        workflow.executor.execute.return_value = {"ok": True, "results": []}
+        import tempfile
+        with tempfile.TemporaryDirectory() as root:
+            store = TaskStore(f"{root}/tasks.sqlite3")
+            first = PlanExecutor(workflow, task_service=TaskService(store))
+            prepared = first.prepare({
+                "task_id": "recover-restart",
+                "actions": [{"tool": "workspace.write", "arguments": {"path": "a", "content": "b"}}],
+            })
+            second = PlanExecutor(workflow, task_service=TaskService(TaskStore(f"{root}/tasks.sqlite3")))
+            result = second.recover("recover-restart", [TaskAction("workspace.write", {"path": "fix", "content": "ok"})])
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["state"]["attempts"], 1)
+
     def test_get_state_unknown_task_raises(self):
         executor = PlanExecutor(Mock())
         with self.assertRaises(PlanExecutionError):
