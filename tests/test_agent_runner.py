@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 
 from app.agent_execution import AgentExecutionFacade
 from app.agent_runner import AgentRunError, AgentRunner
+from app.computer_loop import ComputerControlLoop
 
 
 class AgentRunnerTests(unittest.TestCase):
