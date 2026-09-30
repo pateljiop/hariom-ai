@@ -584,7 +584,7 @@ class App(tk.Tk):
             self.after(0, lambda: messagebox.showerror("Voice error", str(exc)))
 
     def see_screen(self):
-        self.status.set("Looking at your screen...")
+        self.status.set("Observing screen...")
         threading.Thread(target=self.screen_vision_worker, daemon=True).start()
 
     def screen_vision_worker(self):
@@ -597,7 +597,7 @@ class App(tk.Tk):
             )
             text, provider = self.router.vision_chat(prompt, image)
             self.after(0, lambda: self.append(self.log, "VISION (" + provider + "):\n" + text))
-            self.after(0, lambda: self.status.set("Screen analyzed"))
+            self.after(0, lambda: self.status.set("Ready"))
         except Exception as exc:
             error = str(exc)
             self.after(0, lambda error=error: messagebox.showerror("Screen Vision", error))
@@ -698,12 +698,16 @@ class App(tk.Tk):
             self.append(self.log, "Hariom wants to perform the protected action shown above.")
         elif state.status.value == "completed":
             elapsed = time.time() - self.task_started_at if self.task_started_at else 0
+            completed = sum(1 for step in state.steps if step["status"] == "completed")
             self.append(self.log, "✓ Task completed and verified.")
+            self.append(self.log, "Validation: %d/%d steps verified" % (completed, len(state.steps)))
             self.append(self.log, "Time: %.1fs" % elapsed)
+            self.refresh_workspace_panel()
         elif state.status.value == "failed":
             self.append(self.log, "✕ Task failed")
             if state.errors:
-                self.append(self.log, "Error: " + state.errors[-1][:700])
+                self.append(self.log, "What failed: " + state.errors[-1][:700])
+            self.append(self.log, "Next: review the failed step above, then retry or adjust the request.")
         if state.result and state.status.value not in ("completed", "failed"):
             self.append(self.log, state.result)
 
