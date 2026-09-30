@@ -31,6 +31,7 @@ class AgentExecutionFacadeTests(unittest.TestCase):
         executor = Mock()
         executor.workflow.executor.registry = Mock()
         executor.workflow.executor.registry.describe.return_value = []
+        executor.workflow.executor.registry.validate_arguments.side_effect = ValueError("Unknown tool: unknown")
         facade = AgentExecutionFacade(executor=executor)
 
         with self.assertRaises(Exception):
