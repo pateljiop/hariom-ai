@@ -53,6 +53,13 @@ PROVIDERS = {
         'supports_tools': True, 'supports_streaming': True, 'supports_json': True,
         'supports_vision': True, 'speed': 7, 'coding': 8, 'reasoning': 8,
     },
+    'airforce': {
+        'key': os.getenv('AIRFORCE_API_KEY', ''),
+        'model': os.getenv('AIRFORCE_MODEL', 'gpt-4.1-mini'),
+        'base': os.getenv('AIRFORCE_BASE_URL', 'https://api.airforce/v1') + '/chat/completions',
+        'supports_tools': True, 'supports_streaming': True, 'supports_json': True,
+        'supports_vision': True, 'speed': 8, 'coding': 8, 'reasoning': 8,
+    },
     'mistral': {
         'key': os.getenv('MISTRAL_API_KEY', ''),
         'model': os.getenv('MISTRAL_MODEL', 'devstral-small-latest'),
