@@ -1,6 +1,6 @@
 # Free AI Provider Catalog
 
-Last audited: 2026-09-29
+Last audited: 2026-09-30
 
 This catalog is for Hariom AI's personal-use, Windows-first provider router. It separates recurring free tiers from one-time credits/trials.
 
@@ -37,6 +37,14 @@ This catalog is for Hariom AI's personal-use, Windows-first provider router. It 
 4. The router must stop when a free quota is exhausted instead of silently causing charges.
 5. Free model names and quotas change; verify before hardcoding.
 6. Card-required services are not automatically considered free; billing controls and account terms must be checked separately.
+
+## Current verified changes — 2026-09-30
+
+### Gemini 3.5 Transcribe
+Google's current Gemini API pricing lists `gemini-3.5-transcribe` with **Free Tier input and output**. It is a speech-to-text model with automatic language detection, speaker diarization, word-level timestamps, and custom vocabulary biasing. This is directly useful for Hariom AI's voice-command and transcription pipeline, subject to account/model rate limits. It should be treated as a recurring free-tier capability, not unlimited usage. citeturn0search38
+
+### Cloudflare Workers AI model restrictions — confirmed
+Cloudflare's pricing page was updated September 7, 2026 and confirms the **10,000 Neurons/day** Workers Free allocation. It also explicitly identifies several models that require Workers Paid, including Kimi K2.6/K2.7 Code, GLM 5.2/5.3/5.3 Flash, and DeepSeek V4 variants. Free-plan requests beyond the daily allocation fail rather than automatically becoming paid. citeturn0search37turn0search39
 
 ## Current verified changes — 2026-09-29
 
