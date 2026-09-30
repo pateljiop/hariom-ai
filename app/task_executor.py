@@ -1,6 +1,6 @@
 """Sequential task execution over the structured tool registry."""
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable
+from typing import Any, Callable, Dict, Iterable
 
 from .tool_registry import ToolApprovalRequired, ToolError, ToolRegistry, UnknownToolError
 
@@ -46,8 +46,7 @@ class TaskExecutor:
         indexed = {getattr(a, "step_id", f"step-{i + 1}"): a for i, a in enumerate(actions)}
         if len(indexed) != len(actions):
             raise TaskExecutionError("Step IDs must be unique for dependency-aware execution.")
-        ordered = []
-        visiting, visited = set(), set()
+        ordered, visiting, visited = [], set(), set()
         def visit(step_id):
             if step_id in visiting:
                 raise TaskExecutionError(f"Circular step dependency detected at '{step_id}'.")
@@ -65,17 +64,50 @@ class TaskExecutor:
             visit(step_id)
         return ordered
 
-    def execute(self, actions):
+    def execute(self, actions, step_state=None, checkpoint: Callable | None = None):
         actions = self.validate(actions)
         results = []
+        state = step_state if step_state is not None else {}
         for index, action in enumerate(actions):
+            step_id = action.step_id or f"step-{index + 1}"
+            record = state.setdefault(step_id, {
+                "step_id": step_id, "status": "pending", "attempts": 0,
+                "result": None, "error": None,
+            })
+            if record.get("status") == "succeeded":
+                if record.get("result") is not None:
+                    results.append(record["result"])
+                continue
+            if any(state.get(dep, {}).get("status") in {"failed", "skipped"} for dep in action.dependencies):
+                record.update({"status": "skipped", "error": "dependency_failed"})
+                if checkpoint:
+                    checkpoint()
+                continue
+            record.update({"status": "running", "attempts": int(record.get("attempts", 0)) + 1, "error": None})
+            if checkpoint:
+                checkpoint()
             try:
                 result = self.registry.execute(action.tool, action.arguments, approved=action.approved)
             except ToolApprovalRequired as exc:
-                return {"ok": False, "stopped": True, "index": index, "error_type": "approval_required", "error": str(exc), "results": results}
+                record.update({"status": "pending", "error": str(exc)})
+                if checkpoint:
+                    checkpoint()
+                return {"ok": False, "stopped": True, "index": index, "step_id": step_id,
+                        "error_type": "approval_required", "error": str(exc), "results": results}
             except ToolError as exc:
-                return {"ok": False, "stopped": True, "index": index, "error_type": "tool_error", "error": str(exc), "results": results}
+                record.update({"status": "failed", "error": str(exc)})
+                if checkpoint:
+                    checkpoint()
+                return {"ok": False, "stopped": True, "index": index, "step_id": step_id,
+                        "error_type": "tool_error", "error": str(exc), "results": results}
             if not result.get("ok"):
-                return {"ok": False, "stopped": True, "index": index, "error_type": "execution_error", "error": result.get("error"), "results": results}
+                record.update({"status": "failed", "error": result.get("error"), "result": result})
+                if checkpoint:
+                    checkpoint()
+                return {"ok": False, "stopped": True, "index": index, "step_id": step_id,
+                        "error_type": "execution_error", "error": result.get("error"), "results": results}
+            record.update({"status": "succeeded", "result": result, "error": None})
             results.append(result)
+            if checkpoint:
+                checkpoint()
         return {"ok": True, "stopped": False, "results": results}
