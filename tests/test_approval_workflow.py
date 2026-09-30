@@ -42,6 +42,33 @@ class ApprovalWorkflowTests(unittest.TestCase):
         self.assertTrue(result["request_id"])
         self.git.commit.assert_not_called()
 
+    def test_plan_expectations_are_verified_before_approval(self):
+        self.registry.test_runner.run = Mock(return_value={"ok": True, "returncode": 0})
+        self.registry.test_runner.run_command = Mock(return_value={"ok": True, "returncode": 0, "output": ""})
+        self.git.diff.return_value = "diff"
+        result = self.workflow.prepare(
+            [TaskAction("workspace.write", {"path": "expected.txt", "content": "ok"})],
+            expected_files=("expected.txt",),
+            test_commands=("python -m unittest discover -s tests",),
+        )
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["expectation_result"]["ok"])
+        self.registry.test_runner.run_command.assert_called_once_with(
+            "python -m unittest discover -s tests"
+        )
+
+    def test_missing_plan_expectation_blocks_approval(self):
+        self.registry.test_runner.run = Mock(return_value={"ok": True, "returncode": 0})
+        self.git.diff.return_value = "diff"
+        result = self.workflow.prepare(
+            [TaskAction("workspace.write", {"path": "other.txt", "content": "ok"})],
+            expected_files=("missing.txt",),
+        )
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["stage"], "verification")
+        self.assertEqual(result["expectation_result"]["ok"], False)
+        self.git.commit.assert_not_called()
+
     def test_approval_persists_and_can_be_reloaded(self):
         self.registry.test_runner.run = Mock(return_value={"ok": True, "returncode": 0})
         self.git.diff.return_value = "same diff"
