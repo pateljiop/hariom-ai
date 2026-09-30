@@ -122,6 +122,12 @@ class PlanExecutor:
         approval = self.task_service.store.get_approval(request_id)
         task_id = approval.get("task_id") if approval else None
         state = self._states.get(task_id) if task_id else None
+        if state is None:
+            for candidate in self._states.values():
+                if candidate.result.get("request_id") == request_id:
+                    state = candidate
+                    task_id = candidate.task_id
+                    break
         if task_id:
             task = self.task_service.get_task(task_id)
             if task.status.value != "completed":
