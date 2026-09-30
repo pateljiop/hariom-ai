@@ -56,7 +56,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
             result = reloaded.approve(prepared["request_id"], "persisted commit")
             self.assertTrue(result["ok"])
 
-    def test_reject_consumes_request(self):
+    def test_approval_reload_preserves_step_metadata(self):\n        self.registry.test_runner.run = Mock(return_value={"ok": True, "returncode": 0})\n        self.git.diff.return_value = "same diff"\n        with tempfile.TemporaryDirectory() as root:\n            store = TaskStore(f"{root}/tasks.sqlite3")\n            from app.task_service import TaskService\n            TaskService(store).create_task("persist metadata", task_id="task-metadata")\n            action = TaskAction("workspace.write", {"path": "x", "content": "y"}, False, ("step-1",), "step-2")\n            workflow = ApprovalWorkflow(self.executor, self.git, store=store)\n            prepared = workflow.prepare([TaskAction("workspace.write", {"path": "a", "content": "b"}, False, (), "step-1"), action], task_id="task-metadata")\n            reloaded = ApprovalWorkflow(self.executor, self.git, store=store)\n            request = reloaded._load(prepared["request_id"])\n            self.assertEqual(request.actions[1].step_id, "step-2")\n            self.assertEqual(request.actions[1].dependencies, ("step-1",))\n\n    def test_reject_consumes_request(self):
         self.registry.test_runner.run = Mock(return_value={"ok": True, "returncode": 0})
         self.git.diff.return_value = "diff"
         prepared = self.workflow.prepare([TaskAction("workspace.write", {"path": "x", "content": "y"})])
