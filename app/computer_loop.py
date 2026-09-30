@@ -104,11 +104,30 @@ class ComputerControlLoop:
             return None, {"ok": False, "status": "observation_failed", "error": str(exc)}
         return {"image_path": path, "screen": geometry, "fingerprint": fingerprint}, None
 
+    @staticmethod
+    def _validate_visual_state(decision):
+        state = decision.get("visual_state")
+        if state is None:
+            return {}
+        if not isinstance(state, dict):
+            raise ComputerLoopError("visual_state must be an object.")
+        allowed = {"summary", "target_visible", "completed", "blocked"}
+        if set(state) - allowed:
+            raise ComputerLoopError("visual_state contains unsupported fields.")
+        summary = state.get("summary", "")
+        if not isinstance(summary, str) or len(summary) > 1000:
+            raise ComputerLoopError("visual_state summary must be a string of at most 1000 characters.")
+        for key in ("target_visible", "completed", "blocked"):
+            if key in state and not isinstance(state[key], bool):
+                raise ComputerLoopError("visual_state boolean fields must be boolean.")
+        return dict(state)
+
     def _validate(self, decision):
         if not isinstance(decision, dict):
             raise ComputerLoopError("Computer decision must be an object.")
         if decision.get("done") is True:
             return None
+        visual_state = self._validate_visual_state(decision)
         action = decision.get("action")
         if not isinstance(action, dict):
             raise ComputerLoopError("Computer decision requires an action or done=true.")
@@ -122,7 +141,7 @@ class ComputerControlLoop:
         if not isinstance(requested, bool):
             raise ComputerLoopError("Computer action approved must be boolean.")
         approved = requested and self._approved(tool, arguments)
-        return {"tool": tool, "arguments": arguments, "approved": approved}
+        return {"tool": tool, "arguments": arguments, "approved": approved, "visual_state": visual_state}
 
     def run(self, decide: Callable, initial_image=None):
         if not callable(decide):
@@ -180,7 +199,7 @@ class ComputerControlLoop:
             result = self.registry.execute(
                 action["tool"], action["arguments"], approved=action["approved"]
             )
-            event = {"iteration": iteration, "action": action, "result": result}
+            event = {"iteration": iteration, "action": {k: action[k] for k in ("tool", "arguments", "approved")}, "result": result, "visual_state": action["visual_state"]}
             history.append(event)
             if not result.get("ok"):
                 self._cleanup(observation["image_path"])
