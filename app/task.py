@@ -83,7 +83,7 @@ class Task:
     _ALLOWED_TRANSITIONS = {
         TaskStatus.CREATED: {TaskStatus.PLANNING, TaskStatus.CANCELLED},
         TaskStatus.PLANNING: {TaskStatus.VALIDATING, TaskStatus.FAILED, TaskStatus.CANCELLED},
-        TaskStatus.VALIDATING: {TaskStatus.AWAITING_APPROVAL, TaskStatus.APPROVED, TaskStatus.FAILED, TaskStatus.CANCELLED},
+        TaskStatus.VALIDATING: {TaskStatus.EXECUTING, TaskStatus.AWAITING_APPROVAL, TaskStatus.APPROVED, TaskStatus.FAILED, TaskStatus.CANCELLED},
         TaskStatus.AWAITING_APPROVAL: {TaskStatus.APPROVED, TaskStatus.FAILED, TaskStatus.CANCELLED},
         TaskStatus.APPROVED: {TaskStatus.EXECUTING, TaskStatus.CANCELLED},
         TaskStatus.EXECUTING: {TaskStatus.TESTING, TaskStatus.FAILED, TaskStatus.TIMED_OUT, TaskStatus.CANCELLED},
