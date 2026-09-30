@@ -24,7 +24,11 @@ class TaskTests(unittest.TestCase):
         self.assertEqual(data["steps"][0]["tool"], "workspace.read")
         self.assertEqual(data["steps"][0]["risk_level"], "medium")
 
-    def test_string_step_risk_is_normalized(self):\n        step = TaskStep("s2", "workspace.read", risk_level="medium")\n        self.assertEqual(step.risk_level, RiskLevel.MEDIUM)\n\n    def test_invalid_retry_limit_rejected(self):
+    def test_string_step_risk_is_normalized(self):
+        step = TaskStep("s2", "workspace.read", risk_level="medium")
+        self.assertEqual(step.risk_level, RiskLevel.MEDIUM)
+
+    def test_invalid_retry_limit_rejected(self):
         with self.assertRaises(ValueError):
             Task("task-4", "x", "x", max_retries=11)
 
