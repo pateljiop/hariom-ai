@@ -114,6 +114,36 @@ class AIRouterTests(unittest.TestCase):
         self.assertFalse(result["verified"])
 
     @patch.object(ai_router.AIRouter, "vision_chat")
+    def test_locate_on_screen_crops_browser_tab_region(self, vision):
+        vision.return_value = (
+            '{"found":true,"x":300,"y":120,"label":"GitHub tab","confidence":0.91}',
+            "openrouter",
+        )
+        result = self.router.locate_on_screen("GitHub tab", b"image", (1280, 1080))
+        self.assertTrue(result["found"])
+        self.assertEqual(result["x"], 300)
+        self.assertEqual(result["y"], 120)
+        vision.assert_called_once()
+        self.assertIn("cropped image", vision.call_args.args[0])
+        self.assertEqual(vision.call_args.args[1], b"image")
+
+    @patch.object(ai_router.AIRouter, "vision_chat")
+    def test_locate_on_screen_uses_top_crop_for_real_image(self, vision):
+        from PIL import Image
+        import io
+        image = Image.new("RGB", (100, 100), "white")
+        buf = io.BytesIO()
+        image.save(buf, format="PNG")
+        vision.return_value = (
+            '{"found":true,"x":40,"y":10,"label":"GitHub tab","confidence":0.91}',
+            "openrouter",
+        )
+        result = self.router.locate_on_screen("GitHub tab", buf.getvalue(), (100, 100))
+        self.assertTrue(result["found"])
+        sent_image = vision.call_args.args[1]
+        with Image.open(io.BytesIO(sent_image)) as sent:
+            self.assertEqual(sent.size, (100, 18))
+    @patch.object(ai_router.AIRouter, "vision_chat")
     def test_locate_on_screen_rejects_low_confidence(self, vision):
         vision.return_value = (
             '{"found":true,"x":100,"y":100,"confidence":0.42}',
