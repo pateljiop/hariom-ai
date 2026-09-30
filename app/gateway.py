@@ -152,6 +152,9 @@ class Handler(BaseHTTPRequestHandler):
                     message = payload.get('message')
                     if not request_id or not message:
                         raise ClientRequestError('request_id and message are required')
+                    approval = task_service.store.get_approval(request_id)
+                    if not approval or approval.get('task_id') != task_id:
+                        raise ClientRequestError('Approval request does not belong to this task')
                     result = plan_executor.approve(request_id, message)
                     self._send(200, result)
                 elif suffix == ['reject']:
@@ -159,6 +162,9 @@ class Handler(BaseHTTPRequestHandler):
                     reason = payload.get('reason', 'rejected by user')
                     if not request_id:
                         raise ClientRequestError('request_id is required')
+                    approval = task_service.store.get_approval(request_id)
+                    if not approval or approval.get('task_id') != task_id:
+                        raise ClientRequestError('Approval request does not belong to this task')
                     result = plan_executor.workflow.reject(request_id, reason)
                     task_service.cancel_task(task_id, reason=reason)
                     self._send(200, result)
