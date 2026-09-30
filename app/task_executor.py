@@ -12,6 +12,7 @@ class TaskAction:
     approved: bool = False
     dependencies: tuple = ()
     step_id: str = ""
+    retryable: bool = False
 
 
 class TaskExecutionError(Exception):
@@ -83,7 +84,9 @@ class TaskExecutor:
                     if checkpoint:
                         checkpoint()
 
-    def execute(self, actions, step_state=None, checkpoint: Callable | None = None, resume_interrupted=False):
+    def execute(self, actions, step_state=None, checkpoint: Callable | None = None, resume_interrupted=False, max_step_retries=0):
+        if not isinstance(max_step_retries, int) or isinstance(max_step_retries, bool) or max_step_retries < 0 or max_step_retries > 10:
+            raise TaskExecutionError("max_step_retries must be an integer between 0 and 10.")
         actions = self.validate(actions)
         results = []
         state = step_state if step_state is not None else {}
@@ -117,6 +120,11 @@ class TaskExecutor:
                 return {"ok": False, "stopped": True, "index": index, "step_id": step_id,
                         "error_type": "approval_required", "error": str(exc), "results": results}
             except ToolError as exc:
+                if action.retryable and int(record.get("attempts", 0)) <= max_step_retries:
+                    record.update({"status": "pending", "error": str(exc)})
+                    if checkpoint:
+                        checkpoint()
+                    continue
                 record.update({"status": "failed", "error": str(exc)})
                 self._skip_dependents(actions[index + 1:], state, checkpoint)
                 if checkpoint:
@@ -124,6 +132,11 @@ class TaskExecutor:
                 return {"ok": False, "stopped": True, "index": index, "step_id": step_id,
                         "error_type": "tool_error", "error": str(exc), "results": results}
             if not result.get("ok"):
+                if action.retryable and int(record.get("attempts", 0)) <= max_step_retries:
+                    record.update({"status": "pending", "error": result.get("error"), "result": result})
+                    if checkpoint:
+                        checkpoint()
+                    continue
                 record.update({"status": "failed", "error": result.get("error"), "result": result})
                 self._skip_dependents(actions[index + 1:], state, checkpoint)
                 if checkpoint:
