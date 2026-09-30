@@ -6,6 +6,10 @@ from .activity import ActivityBus
 from .ai_router import AIRouter
 from .config import GATEWAY_API_KEY, GATEWAY_HOST, GATEWAY_PORT, PROVIDERS, ROUTING_PROFILES
 
+
+class ClientRequestError(ValueError):
+    """An invalid client request that should receive HTTP 400."""
+
 activity = ActivityBus()
 router = AIRouter(activity)
 
@@ -37,10 +41,16 @@ class Handler(BaseHTTPRequestHandler):
         return self.headers.get('Authorization', '') == 'Bearer ' + GATEWAY_API_KEY
 
     def _json_body(self):
-        length = int(self.headers.get('Content-Length', '0'))
-        if length > 5_000_000:
-            raise ValueError('Request body too large')
-        return json.loads(self.rfile.read(length).decode('utf-8'))
+        try:
+            length = int(self.headers.get('Content-Length', '0'))
+        except (TypeError, ValueError) as exc:
+            raise ClientRequestError('Invalid Content-Length') from exc
+        if length < 0 or length > 5_000_000:
+            raise ClientRequestError('Request body too large')
+        try:
+            return json.loads(self.rfile.read(length).decode('utf-8'))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ClientRequestError('Invalid JSON body') from exc
 
     def do_GET(self):
         if self.path == '/health':
@@ -70,9 +80,11 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = self._json_body()
+            if not isinstance(payload, dict):
+                raise ClientRequestError('JSON body must be an object')
             messages = payload.get('messages') or []
-            if not messages:
-                raise ValueError('messages is required')
+            if not isinstance(messages, list) or not messages:
+                raise ClientRequestError('messages is required and must be a non-empty list')
 
             requested = payload.get('model', 'hariom/auto')
             profile = requested if requested in ROUTING_PROFILES else 'hariom/auto'
@@ -119,6 +131,8 @@ class Handler(BaseHTTPRequestHandler):
                 })
             else:
                 self._send(200, response)
+        except ClientRequestError as exc:
+            self._send(400, {'error': {'message': str(exc), 'type': 'invalid_request_error'}})
         except Exception as exc:
             self._send(502, {'error': {'message': str(exc), 'type': 'upstream_error'}})
 
