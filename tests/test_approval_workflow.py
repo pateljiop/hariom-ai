@@ -112,6 +112,24 @@ class ApprovalWorkflowTests(unittest.TestCase):
 
         self.git.commit.assert_not_called()
 
+    def test_approved_request_is_idempotent_after_restart(self):
+        self.registry.test_runner.run = Mock(return_value={"ok": True, "returncode": 0})
+        self.git.diff.return_value = "same diff"
+        self.git.commit.return_value = "committed"
+        with tempfile.TemporaryDirectory() as root:
+            store = TaskStore(f"{root}/tasks.sqlite3")
+            from app.task_service import TaskService
+            TaskService(store).create_task("idempotent approval", task_id="task-idempotent")
+            first = ApprovalWorkflow(self.executor, self.git, store=store)
+            prepared = first.prepare([TaskAction("workspace.write", {"path": "x", "content": "y"})], task_id="task-idempotent")
+            first_result = first.approve(prepared["request_id"], "commit once")
+            self.assertTrue(first_result["ok"])
+            second = ApprovalWorkflow(self.executor, self.git, store=store)
+            second_result = second.approve(prepared["request_id"], "commit again")
+            self.assertTrue(second_result["ok"])
+            self.assertTrue(second_result["idempotent"])
+            self.git.commit.assert_called_once_with("commit once", approved=True)
+
     def test_unknown_request_is_rejected(self):
         with self.assertRaises(ApprovalNotFoundError):
             self.workflow.approve("missing", "commit")
