@@ -55,23 +55,29 @@ class BrowserController:
             raise RuntimeError("No browser session is open.")
         return self.session.page.locator(selector).inner_text(timeout=10000)[:12000]
 
-    def click(self, selector):
+    def click(self, selector, approved=False):
         if not self.session:
             raise RuntimeError("No browser session is open.")
+        if not approved:
+            raise PermissionError("Browser click requires explicit approval.")
         self.session.page.locator(selector).first.click(timeout=10000)
         self.activity.emit("BROWSER -> clicked " + selector)
         return self.current_page()
 
-    def type_text(self, selector, text):
+    def type_text(self, selector, text, approved=False):
         if not self.session:
             raise RuntimeError("No browser session is open.")
+        if not approved:
+            raise PermissionError("Browser typing requires explicit approval.")
         self.session.page.locator(selector).first.fill(str(text), timeout=10000)
         self.activity.emit("BROWSER -> filled " + selector)
         return True
 
-    def screenshot(self, path="browser.png"):
+    def screenshot(self, path="browser.png", approved=False):
         if not self.session:
             raise RuntimeError("No browser session is open.")
+        if not approved:
+            raise PermissionError("Browser screenshot requires explicit approval.")
         target = Path(path).expanduser().resolve()
         target.parent.mkdir(parents=True, exist_ok=True)
         self.session.page.screenshot(path=str(target), full_page=True)
