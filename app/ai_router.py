@@ -223,8 +223,19 @@ class AIRouter:
                 data["found"] = True
 
         # Vision models sometimes return a bare JSON array instead of the
-        # requested object. Treat a four-number array as a pixel bbox.
-        if isinstance(data, list) and len(data) == 4:
+        # requested object. Treat a four-number array as a pixel bbox. Some
+        # grounding formats wrap the normalized bbox in one extra array layer.
+        if isinstance(data, list) and len(data) == 1 and isinstance(data[0], list) and len(data[0]) == 4:
+            try:
+                data = {
+                    "found": True,
+                    "bbox_norm": [float(v) for v in data[0]],
+                    "confidence": 0.85,
+                    "label": str(target),
+                }
+            except (TypeError, ValueError):
+                data = None
+        elif isinstance(data, list) and len(data) == 4:
             try:
                 data = {
                     "found": True,
