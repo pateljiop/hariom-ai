@@ -240,8 +240,8 @@ class AIRouter:
             # Gemini/OpenRouter-style grounding tags may use either
             # [ymin,xmin,ymax,xmax] or [[ymin,xmin,ymax,xmax]].
             tag = re.search(
-                r"<box>\s*\[\s*\[?\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*"
-                r"([0-9.]+)\s*,\s*([0-9.]+)\s*\]?\s*\]\s*</box>",
+                r"<box>\s*\[+\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*"
+                r"([0-9.]+)\s*,\s*([0-9.]+)\s*\]+\s*</box>",
                 raw,
                 re.I,
             )
