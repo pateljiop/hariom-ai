@@ -299,6 +299,7 @@ class App(tk.Tk):
         self.prompt.insert("1.0", "Tell Hariom AI what to do…")
         self.prompt.bind("<FocusIn>", self.clear_placeholder)
         self.prompt.bind("<Control-Return>", lambda _e: self.run_task())
+        self.prompt.bind("<Return>", self.handle_prompt_enter)
 
         action_row = tk.Frame(command_card, bg="#111822")
         action_row.pack(fill="x", padx=8, pady=8)
@@ -369,7 +370,25 @@ class App(tk.Tk):
         self.workspace_tree.pack(fill="both", expand=True, padx=10, pady=4)
         tk.Label(workspace_panel, text="Tools", bg="#0b1018", fg="#596779",
                  font=("Segoe UI", 7, "bold")).pack(anchor="w", padx=10, pady=(6, 2))
-        tk.Label(workspace_panel, text="Files  •  Terminal\nBrowser • Screen\nVoice", bg="#0b1018", fg="#8795a7",
+        tool_names = {item["name"] for item in self.tools.describe()}
+        capability_map = [
+            ("Files", bool({"list_files", "read_file", "write_file"} & tool_names)),
+            ("Terminal", "run_command" in tool_names),
+            ("Browser", any(name.startswith("browser_") for name in tool_names)),
+            ("Screen", any(name.startswith("computer_") for name in tool_names)),
+            ("Voice", any(name.startswith("voice") for name in tool_names)),
+        ]
+        tool_lines = "\n".join(("✓ " if enabled else "○ ") + name for name, enabled in capability_map)
+        tk.Label(workspace_panel, text=tool_lines, bg="#0b1018", fg="#8795a7",
+                 font=("Segoe UI", 7), justify="left", anchor="w").pack(fill="x", padx=10)
+        tk.Label(workspace_panel, text="Permissions", bg="#0b1018", fg="#596779",
+                 font=("Segoe UI", 7, "bold")).pack(anchor="w", padx=10, pady=(8, 2))
+        permission_lines = [
+            "✓ Workspace",
+            ("✓ " if any(item["requires_approval"] for item in self.tools.describe()) else "○ ") + "Protected actions",
+            "○ Screen consent" if any(name.startswith("computer_") for name in tool_names) else "○ Screen",
+        ]
+        tk.Label(workspace_panel, text="\n".join(permission_lines), bg="#0b1018", fg="#8795a7",
                  font=("Segoe UI", 7), justify="left", anchor="w").pack(fill="x", padx=10)
         self.refresh_workspace_panel()
 
@@ -580,6 +599,12 @@ class App(tk.Tk):
             self.lift()
         else:
             self.withdraw()
+
+    def handle_prompt_enter(self, event):
+        if event.state & 0x0001:
+            return None
+        self.ask()
+        return "break"
 
     def clear_placeholder(self, _event=None):
         if self.prompt.get("1.0", "end").strip() == "Tell Hariom AI what to do…":
