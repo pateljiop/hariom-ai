@@ -8,6 +8,7 @@ STEP_RUNNING = "running"
 STEP_SUCCEEDED = "succeeded"
 STEP_FAILED = "failed"
 STEP_SKIPPED = "skipped"
+STEP_INTERRUPTED = "interrupted"
 
 
 @dataclass
@@ -46,6 +47,18 @@ class ExecutionState:
 
     def step_is_succeeded(self, step_id):
         return self.steps.get(step_id, {}).get("status") == STEP_SUCCEEDED
+
+    def recover_interrupted_steps(self):
+        """Mark in-flight steps as interrupted after an unclean restart."""
+        changed = False
+        for record in self.steps.values():
+            if record.get("status") == STEP_RUNNING:
+                record.update({"status": STEP_INTERRUPTED, "error": "interrupted_by_restart"})
+                record["updated_at"] = datetime.now(timezone.utc).isoformat()
+                changed = True
+        if changed:
+            self.transition("recovery_required", reason="in_flight_steps_interrupted")
+        return changed
 
     def can_retry(self):
         return self.attempts < self.max_attempts
