@@ -1,6 +1,7 @@
 """Application service for persistent task lifecycle management."""
 import hashlib
 from typing import Optional
+from uuid import uuid4
 
 from .task import Task, TaskStatus
 from .task_store import TaskStore
