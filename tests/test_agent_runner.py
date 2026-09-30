@@ -52,6 +52,23 @@ class AgentRunnerTests(unittest.TestCase):
         self.assertEqual(payload["actions"][0]["tool"], "workspace.read")
         self.assertEqual(result["provider"], "fast")
 
+    def test_run_performs_bounded_repair(self):
+        self.router.chat.side_effect = [
+            ('{"actions":[{"tool":"workspace.read","arguments":{"path":"a.txt"}}]}', "fast"),
+            ('{"actions":[{"tool":"workspace.write","arguments":{"path":"a.txt","content":"fixed"}}]}', "fast"),
+        ]
+        self.facade.prepare_model_output = Mock(return_value={"ok": False, "stage": "verification", "state": {"task_id": "task-1"}})
+        self.facade.executor.recover = Mock(return_value={"ok": True, "stage": "approval", "state": {"task_id": "task-1"}})
+        result = self.runner.run("Fix a.txt", max_repairs=1)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["repairs"], 1)
+        self.facade.executor.recover.assert_called_once()
+        self.assertEqual(self.facade.executor.recover.call_args.args[0], "task-1")
+
+    def test_run_rejects_excessive_repair_budget(self):
+        with self.assertRaises(AgentRunError):
+            self.runner.run("Fix it", max_repairs=4)
+
     def test_provider_failure_is_wrapped(self):
         self.router.chat.side_effect = RuntimeError("no provider")
         with self.assertRaises(AgentRunError):
