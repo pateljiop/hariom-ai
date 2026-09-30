@@ -8,7 +8,7 @@ class ExecutionState:
     task_id: str
     stage: str = "created"
     attempts: int = 0
-    max_attempts: int = 3
+    max_attempts: int = 2
     events: list = field(default_factory=list)
     result: dict = field(default_factory=dict)
 
