@@ -8,6 +8,9 @@ from app.browser import BrowserController
 from app.computer import ComputerController
 from app.workspace import Workspace
 from app.terminal import run_command
+from app.activity import ActivityBus
+from app.tool_registry import ToolRegistry, ToolError, UnknownToolError
+from app.task_executor import TaskAction, TaskExecutor
 
 
 class WorkspaceTests(unittest.TestCase):
@@ -150,3 +153,49 @@ class ToolRegistryTests(unittest.TestCase):
         blocked = self.registry.execute("terminal.run", {"command": "del dangerous.txt"})
         self.assertFalse(blocked["ok"])
         self.assertIn("approval", blocked["error"].lower())
+
+
+class TaskExecutorTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.workspace = Workspace(self.temp.name)
+        self.activity = ActivityBus()
+        self.registry = ToolRegistry(self.workspace, self.activity)
+        self.executor = TaskExecutor(self.registry)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_executes_multiple_actions_in_order(self):
+        result = self.executor.execute([
+            TaskAction("workspace.write", {"path": "task.txt", "content": "hello"}),
+            TaskAction("workspace.read", {"path": "task.txt"}),
+        ])
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["results"][1]["result"], "hello")
+
+    def test_failure_stops_execution_and_preserves_results(self):
+        result = self.executor.execute([
+            TaskAction("workspace.write", {"path": "task.txt", "content": "hello"}),
+            TaskAction("workspace.read", {"path": "missing.txt"}),
+            TaskAction("workspace.write", {"path": "after.txt", "content": "no"}),
+        ])
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["stopped"])
+        self.assertEqual(result["index"], 1)
+        self.assertEqual(len(result["results"]), 1)
+        self.assertFalse((self.workspace.root / "after.txt").exists())
+
+    def test_unknown_tool_is_rejected_before_execution(self):
+        with self.assertRaises(UnknownToolError):
+            self.executor.execute([TaskAction("missing.tool", {})])
+
+    def test_risky_terminal_command_remains_approval_gated(self):
+        result = self.executor.execute([TaskAction("terminal.run", {"command": "shutdown now"})])
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_type"], "execution_error")
+        self.assertIn("approval", result["error"].lower())
+
+    def test_explicitly_approved_terminal_command_runs(self):
+        result = self.executor.execute([TaskAction("terminal.run", {"command": "python -c \\\"print(42)\\\""}, approved=True)])
+        self.assertTrue(result["ok"])
