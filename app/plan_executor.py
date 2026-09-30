@@ -19,8 +19,40 @@ class PlanExecutor:
 
     def prepare(self, payload, task_id=None):
         plan = TaskPlan.from_dict(payload)
-        task_id = task_id or self._make_task_id(plan)
-        state = ExecutionState(task_id)
+        requested_task_id = task_id or plan.task_id
+        if requested_task_id:
+            task_id = requested_task_id
+            try:
+                self.task_service.get_task(task_id)
+            except TaskServiceError:
+                self.task_service.create_task(
+                    plan.user_request or "agent task",
+                    objective=plan.objective or plan.user_request or "agent task",
+                    task_id=task_id,
+                    dependencies=tuple(plan.dependencies),
+                    expected_files=tuple(plan.expected_files),
+                    test_commands=tuple(plan.test_commands),
+                    risk_level=plan.risk_level,
+                    required_approvals=tuple(plan.required_approvals),
+                    rollback_strategy=plan.rollback_strategy,
+                    max_retries=plan.max_retries,
+                    plan=plan.to_dict(),
+                )
+        else:
+            created = self.task_service.create_task(
+                plan.user_request or "agent task",
+                objective=plan.objective or plan.user_request or "agent task",
+                dependencies=tuple(plan.dependencies),
+                expected_files=tuple(plan.expected_files),
+                test_commands=tuple(plan.test_commands),
+                risk_level=plan.risk_level,
+                required_approvals=tuple(plan.required_approvals),
+                rollback_strategy=plan.rollback_strategy,
+                max_retries=plan.max_retries,
+                plan=plan.to_dict(),
+            )
+            task_id = created.task_id
+        state = ExecutionState(task_id, max_attempts=plan.max_retries)
         self._states[task_id] = state
         state.transition("validated", action_count=len(plan.actions))
         state.transition("executing")
