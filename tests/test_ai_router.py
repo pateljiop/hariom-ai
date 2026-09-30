@@ -22,6 +22,8 @@ class AIRouterTests(unittest.TestCase):
                 'base': 'https://example.test/fallback',
             },
         })
+        # Keep tests isolated from router health persisted by earlier tests.
+        self.router.health.clear()
 
     def tearDown(self):
         ai_router.PROVIDERS.clear()
