@@ -13,6 +13,8 @@ class TaskAction:
     dependencies: tuple = ()
     step_id: str = ""
     retryable: bool = False
+    expected_files: tuple = ()
+    test_commands: tuple = ()
 
 
 class TaskExecutionError(Exception):
@@ -84,6 +86,23 @@ class TaskExecutor:
                     if checkpoint:
                         checkpoint()
 
+    def _verify_step(self, action):
+        workspace = getattr(self.registry, "workspace", None)
+        if workspace is not None:
+            for path in action.expected_files:
+                try:
+                    workspace.read_file(path)
+                except Exception as exc:
+                    return {"ok": False, "error": f"Expected file missing or unreadable: {path}: {exc}"}
+        for command in action.test_commands:
+            result = self.registry.execute("terminal.run", {"command": command, "approved": action.approved}, approved=action.approved)
+            if not result.get("ok"):
+                return {"ok": False, "error": f"Verification command failed: {command}", "result": result}
+            command_result = result.get("result")
+            if isinstance(command_result, dict) and not command_result.get("ok", True):
+                return {"ok": False, "error": f"Verification command failed: {command}", "result": result}
+        return {"ok": True}
+
     def execute(self, actions, step_state=None, checkpoint: Callable | None = None, resume_interrupted=False, max_step_retries=0):
         if not isinstance(max_step_retries, int) or isinstance(max_step_retries, bool) or max_step_retries < 0 or max_step_retries > 10:
             raise TaskExecutionError("max_step_retries must be an integer between 0 and 10.")
@@ -146,7 +165,18 @@ class TaskExecutor:
                         checkpoint()
                     return {"ok": False, "stopped": True, "index": index, "step_id": step_id,
                             "error_type": "execution_error", "error": result.get("error"), "results": results}
-                record.update({"status": "succeeded", "result": result, "error": None})
+                verification = self._verify_step(action)
+                if not verification["ok"]:
+                    retry = action.retryable and int(record.get("attempts", 0)) <= max_step_retries
+                    record.update({"status": "pending" if retry else "failed", "error": verification["error"], "verification": verification})
+                    if checkpoint:
+                        checkpoint()
+                    if retry:
+                        continue
+                    self._skip_dependents(actions[index + 1:], state, checkpoint)
+                    return {"ok": False, "stopped": True, "index": index, "step_id": step_id,
+                            "error_type": "verification_error", "error": verification["error"], "results": results}
+                record.update({"status": "succeeded", "result": result, "error": None, "verification": verification})
                 results.append(result)
                 if checkpoint:
                     checkpoint()
