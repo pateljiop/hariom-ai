@@ -315,12 +315,12 @@ class App(tk.Tk):
             self.withdraw()
 
     def clear_placeholder(self, _event=None):
-        if self.prompt.get("1.0", "end").strip() == "Ask Hariom AI...":
+        if self.prompt.get("1.0", "end").strip() == "Tell Hariom AI what to do…":
             self.prompt.delete("1.0", "end")
 
     def get_prompt(self):
         value = self.prompt.get("1.0", "end").strip()
-        return "" if value == "Ask Hariom AI..." else value
+        return "" if value == "Tell Hariom AI what to do…" else value
 
     def log_line(self, line):
         self.after(0, lambda: self._append_if_open(line))
