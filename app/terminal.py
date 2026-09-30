@@ -1,4 +1,5 @@
 import re
+import shlex
 import subprocess
 
 RISKY = (
@@ -6,8 +7,6 @@ RISKY = (
     "diskpart", "remove-item", "git push --force", "git reset --hard",
     "git clean -fd", "git clean -xdf",
 )
-import shlex
-import subprocess
 
 SHELL_META = re.compile(r"[;&|<>`$()]")
 MAX_OUTPUT = 12000
