@@ -121,7 +121,7 @@ class TaskExecutorStepStateTests(unittest.TestCase):
         registry.execute.side_effect = [{"ok": True, "value": "a"}]
         state = {}
         result = executor.execute(
-            [TaskAction("tool.a", {}, step_id="a", test_commands=("python -m unittest tests",), approved=True)],
+            [TaskAction("tool.a", {}, step_id="a", test_commands=("python -m unittest discover -s tests",), approved=True)],
             step_state=state,
         )
         self.assertTrue(result["ok"])
