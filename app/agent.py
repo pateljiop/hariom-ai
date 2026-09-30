@@ -11,6 +11,7 @@ from .verification import Verifier
 from .evolution import EvolutionEngine
 from .modes import detect_mode
 from .intelligence import PersonalIntelligence
+from .language import command_context
 
 
 SYSTEM_PROMPT = """You are Hariom AI, a personal computer/workspace assistant.
@@ -47,7 +48,9 @@ class PersonalAgent:
         }
 
     def plan(self, request):
-        ctx = self.context(request)
+        language = command_context(request)
+        normalized_request = language["normalized"]
+        ctx = self.context(normalized_request)
         prompt = (
             "Create a practical execution plan. Return JSON only with an array named steps. "
             "Each step has description, optional tool and optional arguments. "
@@ -63,7 +66,7 @@ class PersonalAgent:
             response_format={"type": "json_object"},
         )
         data = self._parse_json(message.get("content", ""))
-        state = TaskState(request=request)
+        state = TaskState(request=normalized_request)
         steps = data.get("steps") if isinstance(data, dict) else None
         if isinstance(steps, list):
             for step in steps:
