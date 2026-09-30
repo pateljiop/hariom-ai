@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from app.agent_execution import AgentExecutionFacade
 from app.agent_runner import AgentRunError, AgentRunner
@@ -120,11 +120,12 @@ class AgentRunnerTests(unittest.TestCase):
             {"ok": True, "result": {"width": 1920, "height": 1080}},
             {"ok": True, "result": "/tmp/screen2.png"},
         ]
-        result = self.runner.run_computer(
-            "Click the visible button",
-            max_iterations=2,
-            approval_checker=lambda action: True,
-        )
+        with patch.object(ComputerControlLoop, "_fingerprint", side_effect=["one", "two"]):
+            result = self.runner.run_computer(
+                "Click the visible button",
+                max_iterations=2,
+                approval_checker=lambda action: True,
+            )
         self.assertTrue(result["ok"])
         self.assertEqual(result["status"], "completed")
         self.assertEqual(self.router.chat_vision.call_count, 2)
