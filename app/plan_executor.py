@@ -71,10 +71,11 @@ class PlanExecutor:
         state.result = dict(result)
         result["plan"] = plan.to_dict()
         result["state"] = state.snapshot()
+        self._persist_state(task_id, state)
         return result
 
     def recover(self, task_id, repair_actions, test_target=None):
-        state = self._states.get(task_id)
+        state = self._restore_state(task_id)
         if state is None:
             raise PlanExecutionError(f"Unknown task: {task_id}")
         if not isinstance(repair_actions, (list, tuple)) or not repair_actions:
@@ -114,6 +115,7 @@ class PlanExecutor:
         else:
             state.transition("failed", error_type=recovery.final_result.get("stage"))
         state.result = dict(recovery.final_result)
+        self._persist_state(task_id, state)
         return {
             "ok": recovery.ok,
             "stage": "approval" if recovery.ok else "recovery",
@@ -151,10 +153,38 @@ class PlanExecutor:
         return result
 
     def get_state(self, task_id):
-        state = self._states.get(task_id)
+        state = self._restore_state(task_id)
         if state is None:
             raise PlanExecutionError(f"Unknown task: {task_id}")
         return state.snapshot()
+
+    def _persist_state(self, task_id, state):
+        task = self.task_service.get_task(task_id)
+        task.result = dict(task.result)
+        task.result["execution_state"] = state.snapshot()
+        self.task_service.store.save(task)
+
+    def _restore_state(self, task_id):
+        state = self._states.get(task_id)
+        if state is not None:
+            return state
+        try:
+            task = self.task_service.get_task(task_id)
+        except TaskServiceError:
+            return None
+        snapshot = task.result.get("execution_state") if isinstance(task.result, dict) else None
+        if not isinstance(snapshot, dict):
+            return None
+        state = ExecutionState(
+            task_id,
+            stage=snapshot.get("stage", "created"),
+            attempts=int(snapshot.get("attempts", 0)),
+            max_attempts=int(snapshot.get("max_attempts", task.max_retries)),
+            events=list(snapshot.get("events", [])),
+            result=dict(snapshot.get("result", {})),
+        )
+        self._states[task_id] = state
+        return state
 
     @staticmethod
     def _make_task_id(plan):
