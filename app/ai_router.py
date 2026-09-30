@@ -145,11 +145,33 @@ class AIRouter:
         if width <= 0 or height <= 0:
             raise ValueError("screen_size must be positive")
         target_text = str(target).strip()
+        is_tab = "tab" in target_text.lower()
+        vision_width, vision_height = width, height
+        vision_image = image_bytes
         region_hint = ""
-        if "tab" in target_text.lower():
+        if is_tab:
+            # Tabs are constrained to browser chrome. Crop the screenshot before
+            # sending it to vision so page content cannot be mistaken for a tab.
+            vision_height = max(80, int(height * 0.18))
+            try:
+                from PIL import Image
+                import io
+                with Image.open(io.BytesIO(image_bytes)) as source:
+                    crop_height = min(source.height, max(1, int(source.height * 0.18)))
+                    cropped = source.crop((0, 0, source.width, crop_height))
+                    buffer = io.BytesIO()
+                    cropped.save(buffer, format="PNG")
+                    vision_image = buffer.getvalue()
+                    vision_width = source.width
+                    vision_height = crop_height
+            except Exception:
+                # If cropping is unavailable, keep the original image and retain
+                # the strict post-location region check below.
+                pass
             region_hint = (
-                "Because this target is a browser tab, search ONLY the top 18% of the "
-                "screen/browser chrome. Do not select page content below that region.\n"
+                "This screenshot is cropped to the browser's top tab/chrome region. "
+                "Coordinates must be relative to this cropped image. "
+                "Search ONLY for the requested browser tab; do not use page content.\n"
             )
         prompt = (
             "Locate this exact target on the screenshot: " + target_text + "\n"
@@ -158,7 +180,7 @@ class AIRouter:
             + "If clearly visible you may instead return bbox as [x1,y1,x2,y2] in pixels. "
             + "Never guess. If not clearly visible return found=false with a reason."
         )
-        text, provider = self.vision_chat(prompt, image_bytes)
+        text, provider = self.vision_chat(prompt, vision_image)
         raw = str(text).strip()
         if raw.startswith("```"):
             raw = raw.strip("`").strip()
@@ -214,7 +236,7 @@ class AIRouter:
             if not isinstance(b, (list, tuple)) or len(b) != 4:
                 raise RuntimeError("Vision locator returned an invalid pixel bounding box.")
             x1, y1, x2, y2 = [float(v) for v in b]
-            if not (0 <= x1 < x2 <= width and 0 <= y1 < y2 <= height):
+            if not (0 <= x1 < x2 <= vision_width and 0 <= y1 < y2 <= vision_height):
                 raise RuntimeError("Vision locator returned out-of-screen pixel bounds.")
             x, y = (x1 + x2) / 2.0, (y1 + y2) / 2.0
         elif "bbox_norm" in data:
@@ -224,8 +246,8 @@ class AIRouter:
             ymin, xmin, ymax, xmax = [float(v) for v in b]
             if not (0 <= ymin <= ymax <= 1000 and 0 <= xmin <= xmax <= 1000):
                 raise RuntimeError("Vision locator returned invalid normalized bounds.")
-            x = ((xmin + xmax) / 2000.0) * width
-            y = ((ymin + ymax) / 2000.0) * height
+            x = ((xmin + xmax) / 2000.0) * vision_width
+            y = ((ymin + ymax) / 2000.0) * vision_height
         else:
             try:
                 x, y = float(data["x"]), float(data["y"])
