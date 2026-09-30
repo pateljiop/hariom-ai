@@ -64,6 +64,31 @@ class TaskExecutorStepStateTests(unittest.TestCase):
         self.assertTrue(result['ok'])
         self.assertEqual(state['a']['status'], 'succeeded')
 
+    def test_retryable_step_retries_with_bounded_budget(self):
+        executor, registry = self._executor(outcomes=[{"ok": False, "error": "temporary"}, {"ok": True, "value": "ok"}])
+        state = {}
+        result = executor.execute(
+            [TaskAction("tool.a", {}, step_id="a", retryable=True)],
+            step_state=state,
+            max_step_retries=1,
+        )
+        self.assertTrue(result["ok"])
+        self.assertEqual(state["a"]["status"], "succeeded")
+        self.assertEqual(state["a"]["attempts"], 2)
+        self.assertEqual(registry.execute.call_count, 2)
+
+    def test_non_retryable_step_never_repeats(self):
+        executor, registry = self._executor(outcomes=[{"ok": False, "error": "temporary"}, {"ok": True}])
+        state = {}
+        result = executor.execute(
+            [TaskAction("tool.a", {}, step_id="a")],
+            step_state=state,
+            max_step_retries=3,
+        )
+        self.assertFalse(result["ok"])
+        self.assertEqual(state["a"]["attempts"], 1)
+        self.assertEqual(registry.execute.call_count, 1)
+
     def test_approval_required_returns_current_step_to_pending(self):
         executor, registry = self._executor()
         registry.execute.side_effect = ToolApprovalRequired("approval needed")
