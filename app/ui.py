@@ -246,9 +246,20 @@ class App(tk.Tk):
                  font=("Segoe UI", 8)).pack()
         chips = tk.Frame(hero, bg="#080c12")
         chips.pack(pady=(7, 0))
-        for label in ("Files", "Terminal", "Browser", "Screen", "Voice"):
-            tk.Label(chips, text=label, bg="#111a24", fg="#8fa0b4",
-                     padx=7, pady=3, font=("Segoe UI", 7)).pack(side="left", padx=2)
+        self.capability_chips = {}
+        capabilities = (
+            ("Files", hasattr(self, "tools")),
+            ("Terminal", hasattr(self, "tools")),
+            ("Browser", hasattr(self, "browser")),
+            ("Screen", hasattr(self, "computer")),
+            ("Voice", hasattr(self, "voice")),
+        )
+        for label, enabled in capabilities:
+            if enabled:
+                chip = tk.Label(chips, text=label, bg="#111a24", fg="#8fa0b4",
+                                padx=7, pady=3, font=("Segoe UI", 7))
+                chip.pack(side="left", padx=2)
+                self.capability_chips[label] = chip
 
         # Main navigation: Chat and persistent searchable History.
         nav = tk.Frame(outer, bg="#080c12")
@@ -295,9 +306,10 @@ class App(tk.Tk):
                               selectbackground="#294457", relief="flat", bd=0,
                               font=("Segoe UI", 10), padx=11, pady=9)
         self.prompt.pack(fill="x", padx=8)
-        self.prompt.insert("1.0", "Tell Hariom AI what to do…")
+        self.prompt.insert("1.0", "What should I do?")
         self.prompt.bind("<FocusIn>", self.clear_placeholder)
-        self.prompt.bind("<Control-Return>", lambda _e: self.run_task())
+        self.prompt.bind("<Return>", lambda _e: self.ask_from_enter())
+        self.prompt.bind("<Shift-Return>", lambda _e: None)
 
         action_row = tk.Frame(command_card, bg="#111822")
         action_row.pack(fill="x", padx=8, pady=8)
@@ -647,6 +659,11 @@ class App(tk.Tk):
         state = "disabled" if busy else "normal"
         for button in (self.ask_button, self.run_button, self.voice_button, self.screen_button):
             button.configure(state=state)
+
+    def ask_from_enter(self):
+        if self.prompt.get("1.0", "end-1c").strip() and not self.task_busy:
+            self.ask()
+        return "break"
 
     def run_task(self):
         prompt = self.get_prompt()
