@@ -560,12 +560,12 @@ class App(tk.Tk):
             self.withdraw()
 
     def clear_placeholder(self, _event=None):
-        if self.prompt.get("1.0", "end").strip() == "Tell Hariom AI what to do…":
+        if self.prompt.get("1.0", "end").strip() == "What should I do?":
             self.prompt.delete("1.0", "end")
 
     def get_prompt(self):
         value = self.prompt.get("1.0", "end").strip()
-        return "" if value == "Tell Hariom AI what to do…" else value
+        return "" if value == "What should I do?" else value
 
     def log_line(self, line):
         self.after(0, lambda: self._append_if_open(line))
@@ -737,6 +737,10 @@ class App(tk.Tk):
             self.append(self.log, "%s  %s  %s" % (icon, step["status"].title(), step["description"]))
             if step.get("output"):
                 self.append(self.log, "    " + step["output"][:500])
+        if state.status.value in ("completed", "failed"):
+            self.set_busy(False)
+            self.task_started_at = None
+
         if state.status.value == "waiting_approval":
             self.approval_text.configure(text="Approval required • A protected action is ready. Review the task step above.")
             self.approval_card.pack(fill="x", pady=(0, 6), before=self.chat_surface.winfo_children()[0])
