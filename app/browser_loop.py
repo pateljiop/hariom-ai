@@ -1,8 +1,7 @@
 """Bounded closed-loop browser control.
 
-The loop deliberately accepts only browser-scoped actions. Observations are
-returned as untrusted data; the caller/model must not treat page content as
-instructions.
+Observations are untrusted data. Model output can request actions but cannot
+grant itself approval; approval must come from the host/user callback.
 """
 from typing import Any, Callable, Dict, Optional
 
@@ -22,7 +21,7 @@ class BrowserControlLoop:
     })
     MUTATING_TOOLS = frozenset({"browser.click", "browser.type", "browser.open"})
 
-    def __init__(self, registry, max_iterations=6):
+    def __init__(self, registry, max_iterations=6, approval_checker=None):
         self.registry = registry
         if (
             not isinstance(max_iterations, int)
@@ -30,7 +29,10 @@ class BrowserControlLoop:
             or not 1 <= max_iterations <= 10
         ):
             raise BrowserLoopError("max_iterations must be an integer between 1 and 10.")
+        if approval_checker is not None and not callable(approval_checker):
+            raise BrowserLoopError("approval_checker must be callable.")
         self.max_iterations = max_iterations
+        self.approval_checker = approval_checker
 
     def _observe(self):
         result = self.registry.execute("browser.observe", {})
@@ -52,14 +54,23 @@ class BrowserControlLoop:
             raise BrowserLoopError("Browser decision requires an action object or done=true.")
         tool = action.get("tool")
         arguments = action.get("arguments", {})
-        approved = action.get("approved", False)
+        requested_approval = action.get("approved", False)
         if tool not in self.ALLOWED_TOOLS:
             raise BrowserLoopError(f"Browser loop does not allow tool '{tool}'.")
         if not isinstance(arguments, dict):
             raise BrowserLoopError("Browser action arguments must be an object.")
-        if not isinstance(approved, bool):
+        if not isinstance(requested_approval, bool):
             raise BrowserLoopError("Browser action approved must be boolean.")
-        if "approved" not in arguments and approved:
+
+        # Model output never grants approval. If the model requests an action
+        # that needs approval, the host/user callback decides whether to allow it.
+        approved = False
+        if requested_approval and self.approval_checker is not None:
+            approved = bool(self.approval_checker({
+                "tool": tool,
+                "arguments": dict(arguments),
+            }))
+        if approved and "approved" not in arguments:
             arguments = dict(arguments)
             arguments["approved"] = True
         return {"tool": tool, "arguments": arguments, "approved": approved}, decision.get("verify")
@@ -94,11 +105,7 @@ class BrowserControlLoop:
                 action["arguments"],
                 approved=action["approved"],
             )
-            event = {
-                "iteration": iteration,
-                "action": action,
-                "result": result,
-            }
+            event = {"iteration": iteration, "action": action, "result": result}
             history.append(event)
 
             if not result.get("ok"):
@@ -111,8 +118,6 @@ class BrowserControlLoop:
                     "history": history,
                 }
 
-            # Mutating actions always get a fresh observation. Read-only
-            # verification may use its explicit result without an extra page read.
             if tool in self.MUTATING_TOOLS:
                 try:
                     observation = self._observe()
@@ -135,9 +140,7 @@ class BrowserControlLoop:
                 if not isinstance(verification, dict):
                     raise BrowserLoopError("Verification must be an object.")
                 verify_result = self.registry.execute(
-                    "browser.verify",
-                    verification,
-                    approved=False,
+                    "browser.verify", verification, approved=False
                 )
                 event["verification"] = verify_result
                 if not verify_result.get("ok"):
@@ -149,8 +152,8 @@ class BrowserControlLoop:
                         "observation": observation,
                         "history": history,
                     }
-                verify_payload = verify_result.get("result", {})
-                if not verify_payload.get("ok", False):
+                payload = verify_result.get("result", {})
+                if not payload.get("ok", False):
                     return {
                         "ok": False,
                         "status": "verification_failed",
