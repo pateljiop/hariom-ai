@@ -54,13 +54,19 @@ class PlanExecutor:
             task_id = created.task_id
         state = ExecutionState(task_id, max_attempts=plan.max_retries)
         self._states[task_id] = state
+        self.task_service.transition(task_id, "planning")
+        self.task_service.transition(task_id, "validating")
         state.transition("validated", action_count=len(plan.actions))
+        self.task_service.transition(task_id, "approved")
+        self.task_service.transition(task_id, "executing")
         state.transition("executing")
         result = self.workflow.prepare(plan.actions, plan.test_target, task_id=task_id)
         if result.get("ok"):
+            self.task_service.transition(task_id, "testing")
             self.task_service.transition(task_id, "awaiting_approval", request_id=result.get("request_id"))
             state.transition("approval", request_id=result.get("request_id"))
         else:
+            self.task_service.transition(task_id, "testing")
             self.task_service.transition(task_id, "failed", error_type=result.get("stage"))
             state.transition("failed", error_type=result.get("stage"))
         state.result = dict(result)
