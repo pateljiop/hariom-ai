@@ -1,6 +1,6 @@
 import unittest
 
-from app.execution_state import ExecutionState
+from app.execution_state import ExecutionState, STEP_INTERRUPTED, STEP_RUNNING
 
 
 class ExecutionStateTests(unittest.TestCase):
@@ -27,6 +27,20 @@ class ExecutionStateTests(unittest.TestCase):
         state.record_attempt()
         self.assertEqual(state.events[-1]["stage"], "retry")
         self.assertEqual(state.events[-1]["attempt"], 1)
+
+    def test_running_steps_become_interrupted_after_restart(self):
+        state = ExecutionState('task-restart')
+        state.steps['step-1'] = {'step_id': 'step-1', 'status': STEP_RUNNING, 'attempts': 1, 'result': None, 'error': None}
+        self.assertTrue(state.recover_interrupted_steps())
+        self.assertEqual(state.steps['step-1']['status'], STEP_INTERRUPTED)
+        self.assertEqual(state.steps['step-1']['error'], 'interrupted_by_restart')
+        self.assertEqual(state.stage, 'recovery_required')
+
+    def test_recovery_is_idempotent(self):
+        state = ExecutionState('task-restart-idempotent')
+        state.steps['step-1'] = {'step_id': 'step-1', 'status': STEP_RUNNING, 'attempts': 1, 'result': None, 'error': None}
+        self.assertTrue(state.recover_interrupted_steps())
+        self.assertFalse(state.recover_interrupted_steps())
 
 
 if __name__ == "__main__":
