@@ -3,7 +3,7 @@
 Model output is treated as untrusted data: only validated structured plans
 may reach the execution layer.
 """
-from typing import Any, Dict
+from typing import Any
 
 from .task_plan import TaskPlan, PlanValidationError
 
@@ -27,17 +27,13 @@ class AgentPlanner:
         else:
             raise AgentPlanningError("Model output must be a structured plan object.")
 
-        known = {item["name"] for item in self.tool_registry.describe()}
         for action in plan.actions:
-            if action.tool not in known:
-                raise AgentPlanningError(f"Unknown tool in plan: {action.tool}")
-            schema = next(item["schema"] for item in self.tool_registry.describe() if item["name"] == action.tool)
-            required = set(schema["required"])
-            missing = required.difference(action.arguments)
-            if missing:
+            try:
+                self.tool_registry.validate_arguments(action.tool, action.arguments)
+            except Exception as exc:
                 raise AgentPlanningError(
-                    f"Tool '{action.tool}' is missing required arguments: {', '.join(sorted(missing))}"
-                )
+                    f"Invalid arguments for tool '{action.tool}': {exc}"
+                ) from exc
         return plan
 
     def parse_json(self, model_output: Any) -> TaskPlan:
@@ -47,5 +43,5 @@ class AgentPlanner:
         try:
             payload = json.loads(model_output)
         except json.JSONDecodeError as exc:
-            raise AgentPlanningError(f"Invalid model JSON: {exc.msg}")
+            raise AgentPlanningError(f"Invalid model JSON: {exc.msg}") from exc
         return self.parse(payload)
