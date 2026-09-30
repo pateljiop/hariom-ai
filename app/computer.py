@@ -117,6 +117,19 @@ class ComputerController:
         if not location.get("found"):
             raise RuntimeError("Target not found: " + str(location.get("reason", target_text)))
 
+        # Never act on a vision coordinate that is missing/invalid, even if a
+        # provider returned found=true. Keep the action layer defensive.
+        try:
+            x = int(location["x"])
+            y = int(location["y"])
+            confidence = float(location.get("confidence", 0.0))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RuntimeError("Vision returned an invalid screen location.") from exc
+        if not (0 <= x < int(size["width"]) and 0 <= y < int(size["height"])):
+            raise RuntimeError("Vision returned a screen location outside the display.")
+        if confidence < 0.70:
+            raise RuntimeError("Vision location confidence is too low to click safely.")
+
         # Browser tabs live in the top chrome. A vision result far down the page is
         # not a safe interpretation of a request to click a tab.
         lowered = target_text.lower()
@@ -130,9 +143,9 @@ class ComputerController:
 
         self.activity.emit(
             "COMPUTER -> located %s at (%s, %s), confidence %.2f"
-            % (location.get("label", target_text), location["x"], location["y"], location.get("confidence", 0.0))
+            % (location.get("label", target_text), x, y, confidence)
         )
-        click_result = self.click(location["x"], location["y"], button=button, clicks=clicks)
+        click_result = self.click(x, y, button=button, clicks=clicks)
         result = {
             **click_result,
             "target": target_text,
