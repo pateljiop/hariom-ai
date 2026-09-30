@@ -10,7 +10,8 @@ from app.approval_workflow import (
 )
 from app.activity import ActivityBus
 from app.git_manager import GitManager
-from app.task_executor import TaskAction, TaskExecutor\nfrom app.task_store import TaskStore
+from app.task_executor import TaskAction, TaskExecutor
+from app.task_store import TaskStore
 from app.tool_registry import ToolRegistry
 from app.workspace import Workspace
 
