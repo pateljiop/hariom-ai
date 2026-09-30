@@ -95,3 +95,20 @@ class GatewayRequestTests(unittest.TestCase):
         handler.headers["Content-Length"] = "5000001"
         with self.assertRaises(gateway.ClientRequestError):
             handler._json_body()
+
+
+class StartupTests(unittest.TestCase):
+    def test_main_delegates_to_ui_launcher(self):
+        from app import main
+        with patch.object(main, "launch") as launch:
+            main.main()
+            launch.assert_called_once_with()
+
+    def test_activity_bus_notifies_subscribers(self):
+        from app.activity import ActivityBus
+        received = []
+        bus = ActivityBus()
+        bus.subscribe(received.append)
+        bus.emit("startup")
+        self.assertEqual(len(received), 1)
+        self.assertIn("startup", received[0])
