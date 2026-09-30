@@ -63,3 +63,34 @@ class ComputerSafetyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _Body:
+    def __init__(self, data):
+        import io
+        self.rfile = io.BytesIO(data)
+        self.headers = {"Content-Length": str(len(data))}
+
+
+class GatewayRequestTests(unittest.TestCase):
+    def _handler(self, body):
+        handler = object.__new__(gateway.Handler)
+        holder = _Body(body)
+        handler.rfile = holder.rfile
+        handler.headers = holder.headers
+        return handler
+
+    def test_gateway_rejects_invalid_json_as_client_error(self):
+        handler = self._handler(b"{not-json")
+        with self.assertRaises(gateway.ClientRequestError):
+            handler._json_body()
+
+    def test_gateway_accepts_valid_json(self):
+        handler = self._handler(b'{"messages":[{"role":"user","content":"hi"}]}')
+        self.assertEqual(handler._json_body()["messages"][0]["role"], "user")
+
+    def test_gateway_rejects_oversized_body(self):
+        handler = self._handler(b"{}")
+        handler.headers["Content-Length"] = "5000001"
+        with self.assertRaises(gateway.ClientRequestError):
+            handler._json_body()
