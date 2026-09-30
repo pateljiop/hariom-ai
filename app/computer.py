@@ -66,6 +66,13 @@ class ComputerController:
         try:
             from PIL import ImageGrab
             image = ImageGrab.grab()
+            size = self.screen_size()
+            expected = (int(size["width"]), int(size["height"]))
+            if image.size != expected:
+                # Windows DPI scaling can make ImageGrab return physical pixels
+                # while PyAutoGUI reports logical screen coordinates. Normalize the
+                # screenshot so vision coordinates map directly to mouse coordinates.
+                image = image.resize(expected)
         except Exception as exc:
             raise RuntimeError(
                 "Windows screen capture failed: %s: %s" % (type(exc).__name__, exc)
