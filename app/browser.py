@@ -18,6 +18,23 @@ class BrowserController:
         self.activity = activity
         self.headless = headless
         self.session = None
+        self._owner_thread_id = None
+
+    def _reset_stale_session(self):
+        import threading
+        current = threading.get_ident()
+        if self.session is not None and self._owner_thread_id not in (None, current):
+            self.activity.emit("BROWSER -> resetting stale cross-thread session")
+            try:
+                self.session.browser.close()
+            except Exception:
+                pass
+            try:
+                self.session.playwright.stop()
+            except Exception:
+                pass
+            self.session = None
+            self._owner_thread_id = None
 
     def _playwright(self):
         try:
@@ -60,6 +77,7 @@ class BrowserController:
 
     def open(self, url):
         url = self._validate_url(url)
+        self._reset_stale_session()
         if self.session is None:
             playwright = self._playwright()().start()
             try:
@@ -70,22 +88,27 @@ class BrowserController:
             page = browser.new_page()
             self.session = BrowserSession(browser=browser, page=page)
             self.session.playwright = playwright
+            import threading
+            self._owner_thread_id = threading.get_ident()
         self.session.page.goto(url, wait_until="domcontentloaded")
         self.activity.emit("BROWSER -> opened " + url)
         return {"url": self.session.page.url, "title": self.session.page.title()}
 
     def current_page(self):
+        self._reset_stale_session()
         if not self.session:
             raise RuntimeError("No browser session is open.")
         return {"url": self.session.page.url, "title": self.session.page.title()}
 
     def read_text(self, selector="body"):
+        self._reset_stale_session()
         if not self.session:
             raise RuntimeError("No browser session is open.")
         text = self.session.page.locator(selector).inner_text(timeout=10000)
         return text[:12000]
 
     def click(self, selector):
+        self._reset_stale_session()
         if not self.session:
             raise RuntimeError("No browser session is open.")
         self.session.page.locator(selector).first.click(timeout=10000)
@@ -93,6 +116,7 @@ class BrowserController:
         return {"url": self.session.page.url, "title": self.session.page.title()}
 
     def type_text(self, selector, text):
+        self._reset_stale_session()
         if not self.session:
             raise RuntimeError("No browser session is open.")
         self.session.page.locator(selector).first.fill(str(text), timeout=10000)
@@ -100,6 +124,7 @@ class BrowserController:
         return True
 
     def screenshot(self, path="browser.png"):
+        self._reset_stale_session()
         if not self.session:
             raise RuntimeError("No browser session is open.")
         target = Path(path).expanduser().resolve()
@@ -116,5 +141,6 @@ class BrowserController:
             self.session.playwright.stop()
         finally:
             self.session = None
+            self._owner_thread_id = None
         self.activity.emit("BROWSER -> closed")
         return True
