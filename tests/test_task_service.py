@@ -19,7 +19,8 @@ class TaskServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             service = TaskService(TaskStore(f"{root}/tasks.sqlite3"))
             task = service.create_task("Run tests")
-            service.transition(task.task_id, TaskStatus.TESTING)
+            service.transition(task.task_id, TaskStatus.PLANNING)
+            service.transition(task.task_id, TaskStatus.VALIDATING)
             restored = service.get_task(task.task_id)
             self.assertEqual(restored.status, TaskStatus.TESTING)
             self.assertTrue(any(e["status"] == "testing" for e in service.events(task.task_id)))
