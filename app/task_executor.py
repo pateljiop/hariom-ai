@@ -91,9 +91,10 @@ class TaskExecutor:
         if workspace is not None:
             for path in action.expected_files:
                 try:
-                    workspace.read_file(path)
+                    if not workspace.exists(path):
+                        return {"ok": False, "error": f"Expected file is missing: {path}"}
                 except Exception as exc:
-                    return {"ok": False, "error": f"Expected file missing or unreadable: {path}: {exc}"}
+                    return {"ok": False, "error": f"Expected file path rejected: {path}: {exc}"}
         for command in action.test_commands:
             try:
                 result = self.registry.test_runner.run_command(command)
@@ -102,6 +103,11 @@ class TaskExecutor:
             if not result.get("ok"):
                 return {"ok": False, "error": f"Verification command failed: {command}", "result": result}
         return {"ok": True}
+
+    def verify_expectations(self, expected_files=(), test_commands=()):
+        return self._verify_step(
+            TaskAction("__verification__", {}, expected_files=tuple(expected_files), test_commands=tuple(test_commands))
+        )
 
     def execute(self, actions, step_state=None, checkpoint: Callable | None = None, resume_interrupted=False, max_step_retries=0):
         if not isinstance(max_step_retries, int) or isinstance(max_step_retries, bool) or max_step_retries < 0 or max_step_retries > 10:
