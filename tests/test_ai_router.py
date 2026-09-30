@@ -145,6 +145,28 @@ class AIRouterTests(unittest.TestCase):
         with Image.open(io.BytesIO(sent_image)) as sent:
             self.assertEqual(sent.size, (100, 18))
     @patch.object(ai_router.AIRouter, "vision_chat")
+    def test_locate_on_screen_recovers_wrapped_json_and_aliases(self, vision):
+        vision.return_value = (
+            'Here is the result: {"bbox":[615,8,925,45],"confidence":0.91,"label":"GitHub tab"} done.',
+            "openrouter",
+        )
+        result = self.router.locate_on_screen("GitHub tab", b"image", (1280, 720))
+        self.assertTrue(result["found"])
+        self.assertEqual(result["x"], 770)
+        self.assertEqual(result["y"], 26)
+
+    @patch.object(ai_router.AIRouter, "vision_chat")
+    def test_locate_on_screen_recovers_coordinate_alias(self, vision):
+        vision.return_value = (
+            'Result: {"coordinates":{"x":320,"y":90},"confidence":0.91,"label":"Save"}',
+            "openrouter",
+        )
+        result = self.router.locate_on_screen("Save button", b"image", (800, 600))
+        self.assertTrue(result["found"])
+        self.assertEqual(result["x"], 320)
+        self.assertEqual(result["y"], 90)
+
+    @patch.object(ai_router.AIRouter, "vision_chat")
     def test_locate_on_screen_rejects_low_confidence(self, vision):
         vision.return_value = (
             '{"found":true,"x":100,"y":100,"confidence":0.42}',
