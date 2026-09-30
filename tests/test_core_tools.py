@@ -153,6 +153,14 @@ class ToolRegistryTests(unittest.TestCase):
         names = {item["name"] for item in self.registry.describe()}
         self.assertTrue({"workspace.list", "workspace.read", "workspace.write", "terminal.run"} <= names)
 
+    def test_browser_observe_and_verify_are_read_only_tools(self):
+        names = {item["name"] for item in self.registry.describe()}
+        self.assertTrue({"browser.observe", "browser.verify"} <= names)
+        self.assertEqual(
+            next(item for item in self.registry.describe() if item["name"] == "browser.observe")["risk"],
+            "low",
+        )
+
     def test_workspace_write_then_read(self):
         result = self.registry.execute("workspace.write", {"path": "agent.txt", "content": "hello"})
         self.assertTrue(result["ok"])
