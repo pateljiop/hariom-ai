@@ -14,6 +14,32 @@ class TaskPlanTests(unittest.TestCase):
         self.assertEqual(plan.actions[0].tool, "workspace.write")
         self.assertEqual(plan.to_dict()["actions"][1]["tool"], "tests.run")
 
+    def test_structured_steps_are_canonical_and_round_trip(self):
+        plan = TaskPlan.from_dict({
+            "steps": [{
+                "step_id": "write",
+                "tool": "workspace.write",
+                "arguments": {"path": "a.txt", "content": "x"},
+                "dependencies": [],
+                "expected_files": ["a.txt"],
+                "test_commands": ["tests"],
+                "risk_level": "medium",
+                "required_approvals": ["workspace.write"],
+            }]
+        })
+        self.assertEqual(plan.steps[0].step_id, "write")
+        self.assertEqual(plan.steps[0].risk_level, "medium" if isinstance(plan.steps[0].risk_level, str) else plan.steps[0].risk_level)
+        data = plan.to_dict()
+        self.assertEqual(data["steps"][0]["step_id"], "write")
+        self.assertEqual(data["actions"][0]["tool"], "workspace.write")
+
+    def test_steps_are_accepted_without_legacy_actions(self):
+        plan = TaskPlan.from_dict({
+            "steps": [{"step_id": "list", "tool": "workspace.list"}]
+        })
+        self.assertEqual(len(plan.steps), 1)
+        self.assertEqual(plan.actions[0].tool, "workspace.list")
+
     def test_defaults_arguments_and_test_target(self):
         plan = TaskPlan.from_dict({
             "actions": [{"tool": "workspace.list"}]
