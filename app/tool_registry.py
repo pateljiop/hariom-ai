@@ -7,6 +7,8 @@ from .workspace import Workspace
 from .workspace_patcher import TextPatch, WorkspacePatcher
 from .test_runner import TestRunner
 from .git_manager import GitManager
+from .browser import BrowserController
+from .computer import ComputerController
 from .tool_schema import ToolSchema, ToolSchemaError
 from .permissions import Permission, PermissionManager
 
@@ -54,6 +56,8 @@ class ToolRegistry:
         self.patcher = WorkspacePatcher(self.workspace)
         self.test_runner = TestRunner(self.workspace.root)
         self.git = GitManager(self.workspace.root)
+        self.browser = BrowserController()
+        self.computer = ComputerController()
         self._tools: Dict[str, ToolSpec] = {}
         self._register_defaults()
 
@@ -64,6 +68,15 @@ class ToolRegistry:
         self.register(ToolSpec("terminal.run", "Run a shell command with existing risky-command approval controls.", self._run_terminal, schema=ToolSchema(required=("command",), optional=("approved",), types={"command": (str,), "approved": (bool,)}), permission=Permission.TERMINAL_EXECUTE.value, risk="high", requires_approval=True))
         self.register(ToolSpec("workspace.patch", "Replace an exact text fragment in one workspace file.", self._patch_workspace, schema=ToolSchema(required=("path", "old", "new"), optional=("expected_count",), types={"path": (str,), "old": (str,), "new": (str,), "expected_count": (int,)}), permission=Permission.WORKSPACE_WRITE.value))
         self.register(ToolSpec("tests.run", "Run Python unittest discovery inside the workspace.", self._run_tests, schema=ToolSchema(optional=("target",), types={"target": (str,)}), permission=Permission.TERMINAL_EXECUTE.value, risk="medium"))
+        self.register(ToolSpec("browser.open", "Open a URL in the browser.", self.browser.open, schema=ToolSchema(required=("url",), types={"url": (str,)}), permission=Permission.BROWSER_READ.value, risk="medium"))
+        self.register(ToolSpec("browser.read", "Read the current browser page.", self.browser.read, permission=Permission.BROWSER_READ.value, risk="low"))
+        self.register(ToolSpec("browser.click", "Click a browser element.", self.browser.click, schema=ToolSchema(required=("selector",), optional=("approved",), types={"selector": (str,), "approved": (bool,)}), permission=Permission.BROWSER_CLICK.value, requires_approval=True, risk="high"))
+        self.register(ToolSpec("browser.type", "Type into a browser field.", self.browser.type_text, schema=ToolSchema(required=("selector", "text"), optional=("approved",), types={"selector": (str,), "text": (str,), "approved": (bool,)}), permission=Permission.BROWSER_TYPE.value, requires_approval=True, risk="high"))
+        self.register(ToolSpec("browser.screenshot", "Capture the current browser view.", self.browser.screenshot, schema=ToolSchema(optional=("path", "approved"), types={"path": (str,), "approved": (bool,)}), permission=Permission.COMPUTER_SCREENSHOT.value, requires_approval=True, risk="high"))
+        self.register(ToolSpec("computer.screenshot", "Capture the current computer screen.", self.computer.screenshot, schema=ToolSchema(optional=("path", "approved"), types={"path": (str,), "approved": (bool,)}), permission=Permission.COMPUTER_SCREENSHOT.value, requires_approval=True, risk="high"))
+        self.register(ToolSpec("computer.click", "Click at screen coordinates.", self.computer.click, schema=ToolSchema(optional=("x", "y", "button", "clicks", "approved"), types={"x": (int,), "y": (int,), "button": (str,), "clicks": (int,), "approved": (bool,)}), permission=Permission.COMPUTER_KEYBOARD.value, requires_approval=True, risk="high"))
+        self.register(ToolSpec("computer.type", "Type text on the computer.", self.computer.type_text, schema=ToolSchema(required=("text",), optional=("interval", "approved"), types={"text": (str,), "interval": (int, float), "approved": (bool,)}), permission=Permission.COMPUTER_KEYBOARD.value, requires_approval=True, risk="high"))
+        self.register(ToolSpec("computer.key", "Press an allowed keyboard key.", self.computer.press_key, schema=ToolSchema(required=("key",), optional=("approved",), types={"key": (str,), "approved": (bool,)}), permission=Permission.COMPUTER_KEYBOARD.value, requires_approval=True, risk="high"))
         self.register(ToolSpec("git.status", "Show workspace Git status.", self.git.status, permission=Permission.WORKSPACE_READ.value))
         self.register(ToolSpec("git.diff", "Show the current Git diff.", self.git.diff, permission=Permission.WORKSPACE_READ.value))
         self.register(ToolSpec("git.branch", "Create a new isolated Git branch.", self.git.create_branch, schema=ToolSchema(required=("name",), types={"name": (str,)}), permission=Permission.WORKSPACE_WRITE.value))
