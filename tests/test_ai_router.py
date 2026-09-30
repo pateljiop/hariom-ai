@@ -105,7 +105,7 @@ class AIRouterTests(unittest.TestCase):
             text, provider = self.router.chat_vision(path, 'Inspect the screen.')
         self.assertEqual(provider, 'fast')
         self.assertEqual(text, '{"done":true}')
-        messages = chat_request.call_args.kwargs['messages']
+        messages = chat_request.call_args.args[0]
         content = messages[0]['content']
         self.assertEqual(content[0]['type'], 'text')
         self.assertEqual(content[1]['type'], 'image_url')
