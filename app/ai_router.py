@@ -154,7 +154,8 @@ class AIRouter:
                 if s['remaining_rpd'] is not None:
                     score -= max(0, 10 - s['remaining_rpd'])
                 candidates.append((score, name, model))
-        candidates.sort(reverse=True)
+        # Preserve provider insertion order when scores tie; preferred/scored providers still sort first.
+        candidates.sort(key=lambda item: item[0], reverse=True)
         return [(n, m) for _, n, m in candidates]
 
     def _configured(self, name, cfg):
