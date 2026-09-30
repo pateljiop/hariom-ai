@@ -253,6 +253,14 @@ class AIRouter:
                 x, y = float(data["x"]), float(data["y"])
             except (KeyError, TypeError, ValueError) as exc:
                 raise RuntimeError("Vision locator returned invalid coordinates.") from exc
+
+        # Vision receives a cropped tab-strip image for browser-tab requests.
+        # Convert its coordinates back to the full-screen coordinate system before
+        # the mouse action is allowed to use them.
+        if vision_width != width or vision_height != height:
+            x *= width / float(vision_width)
+            y *= height / float(vision_height)
+
         if confidence < 0.70:
             return {"found": False, "reason": "Target location confidence is too low.", "confidence": confidence, "provider": provider}
 

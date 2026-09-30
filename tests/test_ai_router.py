@@ -140,6 +140,7 @@ class AIRouterTests(unittest.TestCase):
         )
         result = self.router.locate_on_screen("GitHub tab", buf.getvalue(), (100, 100))
         self.assertTrue(result["found"])
+        self.assertEqual(result["y"], 56)
         sent_image = vision.call_args.args[1]
         with Image.open(io.BytesIO(sent_image)) as sent:
             self.assertEqual(sent.size, (100, 18))
