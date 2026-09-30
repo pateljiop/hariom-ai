@@ -48,7 +48,7 @@ class ToolSchemaEnforcementTests(unittest.TestCase):
         registry = ToolRegistry()
         registry.permission_manager.grant(Permission.BROWSER_CLICK)
         registry.browser.click = lambda selector, approved=False: {"selector": selector}
-        result = registry.execute("browser.click", {"selector": "#submit"}, approved=True)
+        result = registry.execute("browser.click", {"selector": "#submit", "approved": True}, approved=True)
         self.assertTrue(result["ok"])
 
     def test_describe_includes_schema_fields(self):
