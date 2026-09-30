@@ -12,18 +12,18 @@ SHELL_META = re.compile(r"[;&|<>`$()]")
 MAX_OUTPUT = 12000
 TIMEOUT_SECONDS = 120
 
-def _parse_command(command):
+def _parse_command(command, approved=False):
     if not isinstance(command, str) or not command.strip():
         raise ValueError("Command must be a non-empty string.")
-    if SHELL_META.search(command):
+    if SHELL_META.search(command) and not approved:
         raise PermissionError("Shell metacharacters are not allowed.")
     try:
-        return shlex.split(command, posix=False)
+        return shlex.split(command, posix=approved)
     except ValueError as exc:
         raise ValueError(f"Invalid command syntax: {exc}") from exc
 
 def run_command(command, activity, approved=False):
-    argv = _parse_command(command)
+    argv = _parse_command(command, approved=approved)
     normalized = command.strip().lower()
     if not approved and any(x in normalized for x in RISKY):
         raise PermissionError("Risky command blocked. Explicit approval required.")
