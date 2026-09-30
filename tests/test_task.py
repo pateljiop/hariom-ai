@@ -12,7 +12,10 @@ class TaskTests(unittest.TestCase):
 
     def test_task_transition_records_event(self):
         task = Task("task-2", "do x", "x")
-        event = task.transition(TaskStatus.EXECUTING, tool="workspace.write")
+        task.transition(TaskStatus.PLANNING)
+        task.transition(TaskStatus.VALIDATING)
+        task.transition(TaskStatus.EXECUTING)
+        event = task.transition(TaskStatus.TESTING, tool="workspace.write")
         self.assertEqual(task.status, TaskStatus.EXECUTING)
         self.assertEqual(event["status"], "executing")
         self.assertEqual(event["tool"], "workspace.write")
