@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -73,15 +74,23 @@ class BrowserController:
         self.activity.emit("BROWSER -> filled " + selector)
         return True
 
-    def screenshot(self, path="browser.png", approved=False):
+    def screenshot(self, path=None, approved=False, persist=False):
         if not self.session:
             raise RuntimeError("No browser session is open.")
         if not approved:
             raise PermissionError("Browser screenshot requires explicit approval.")
-        target = Path(path).expanduser().resolve()
-        target.parent.mkdir(parents=True, exist_ok=True)
+        if persist:
+            if not path:
+                raise ValueError("A path is required when persist=True.")
+            target = Path(path).expanduser().resolve()
+            target.parent.mkdir(parents=True, exist_ok=True)
+            self.session.page.screenshot(path=str(target), full_page=True)
+            self.activity.emit("BROWSER -> screenshot persisted")
+            return str(target)
+        with tempfile.NamedTemporaryFile(prefix="hariom-browser-", suffix=".png", delete=False) as tmp:
+            target = Path(tmp.name)
         self.session.page.screenshot(path=str(target), full_page=True)
-        self.activity.emit("BROWSER -> screenshot " + str(target))
+        self.activity.emit("BROWSER -> screenshot temporary")
         return str(target)
 
     def close(self):
