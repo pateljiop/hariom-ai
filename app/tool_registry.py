@@ -61,7 +61,7 @@ class ToolRegistry:
     def describe(self):
         return [{"name": s.name, "description": s.description, "requires_approval": s.requires_approval, "schema": {"required": list(s.schema.required), "optional": list(s.schema.optional)}} for s in self._tools.values()]
 
-    def execute(self, name, arguments=None, approved=False):
+    def validate_arguments(self, name, arguments=None):
         spec = self._tools.get(name)
         if spec is None:
             raise UnknownToolError(f"Unknown tool: {name}")
@@ -70,9 +70,16 @@ class ToolRegistry:
         try:
             spec.schema.validate(arguments)
         except ToolSchemaError as exc:
-            raise ToolError(str(exc))
+            raise ToolError(str(exc)) from exc
+        return True
+
+    def execute(self, name, arguments=None, approved=False):
+        self.validate_arguments(name, arguments)
+        spec = self._tools[name]
         if spec.requires_approval and not approved:
             raise ToolApprovalRequired(f"Tool '{name}' requires approval.")
+        if arguments is None:
+            arguments = {}
         try:
             return {"ok": True, "tool": name, "result": spec.handler(**arguments)}
         except ToolError:
