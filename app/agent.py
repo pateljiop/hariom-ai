@@ -55,7 +55,8 @@ class PersonalAgent:
             "Create a practical execution plan. Return JSON only with an array named steps. "
             "Each step has description, optional tool and optional arguments. "
             "Only use tools from the supplied tool list. "
-            "Do not claim execution or invent results.\n\nREQUEST:\n" + request +
+            "Do not claim execution or invent results.\n\nLANGUAGE CONTEXT:\n" + json.dumps(language, ensure_ascii=False) +
+            "\n\nREQUEST:\n" + normalized_request +
             "\n\nCONTEXT:\n" + json.dumps(ctx, ensure_ascii=False)
         )
         planning_profile = "hariom/fast" if self._is_screen_click_request(request) else "hariom/reasoning"
