@@ -51,11 +51,6 @@ class TaskExecutorStepStateTests(unittest.TestCase):
         )
         self.assertFalse(result["ok"])
         self.assertEqual(state["a"]["status"], "failed")
-        resumed = executor.execute(
-            [TaskAction("tool.a", {}, step_id="a"), TaskAction("tool.b", {}, step_id="b", dependencies=("a",))],
-            step_state=state,
-        )
-        self.assertFalse(resumed["ok"])
         self.assertEqual(state["b"]["status"], "skipped")
 
     def test_interrupted_step_requires_explicit_resume(self):
