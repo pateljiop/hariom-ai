@@ -1,6 +1,7 @@
 import threading
 import tkinter as tk
 from tkinter import messagebox, filedialog
+from pathlib import Path
 
 from .activity import ActivityBus
 from .agent import PersonalAgent
@@ -33,6 +34,14 @@ class App(tk.Tk):
         self._drag_x = self._drag_y = 0
         self._expanded = False
         self.current_task = None
+        self.panel_width = 440
+        self.panel_height = 650
+        self.min_panel_width = 360
+        self.max_panel_width = 760
+        self.min_panel_height = 500
+        self.max_panel_height = 900
+        self._robot_photo = None
+        self._logo_photo = None
 
         self.activity = ActivityBus()
         self.router = AIRouter(self.activity)
@@ -109,7 +118,7 @@ class App(tk.Tk):
             return
         x, y = self.winfo_x(), self.winfo_y()
         self._expanded = True
-        self.geometry("440x650+%d+%d" % (x, max(20, y - 30)))
+        self.geometry("%dx%d+%d+%d" % (self.panel_width, self.panel_height, x, max(20, y - 30)))
         self.build_panel()
         self.lift()
 
