@@ -95,11 +95,11 @@ class TaskExecutor:
                 except Exception as exc:
                     return {"ok": False, "error": f"Expected file missing or unreadable: {path}: {exc}"}
         for command in action.test_commands:
-            result = self.registry.execute("terminal.run", {"command": command, "approved": action.approved}, approved=action.approved)
+            try:
+                result = self.registry.test_runner.run_command(command)
+            except Exception as exc:
+                return {"ok": False, "error": f"Verification command rejected: {command}: {exc}"}
             if not result.get("ok"):
-                return {"ok": False, "error": f"Verification command failed: {command}", "result": result}
-            command_result = result.get("result")
-            if isinstance(command_result, dict) and not command_result.get("ok", True):
                 return {"ok": False, "error": f"Verification command failed: {command}", "result": result}
         return {"ok": True}
 
