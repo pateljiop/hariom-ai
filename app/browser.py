@@ -65,13 +65,13 @@ class BrowserController:
         self.activity.emit("BROWSER -> clicked " + selector)
         return self.current_page()
 
-    def type_text(self, selector, text, approved=False):
+    def type_text(self, selector, text, approved=False, sensitive=False):
         if not self.session:
             raise RuntimeError("No browser session is open.")
         if not approved:
             raise PermissionError("Browser typing requires explicit approval.")
         self.session.page.locator(selector).first.fill(str(text), timeout=10000)
-        self.activity.emit("BROWSER -> filled " + selector)
+        self.activity.emit("BROWSER -> filled field" + (" [sensitive]" if sensitive else ""))
         return True
 
     def screenshot(self, path=None, approved=False, persist=False):
