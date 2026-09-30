@@ -79,6 +79,7 @@ class PlanExecutor:
             task_id=task_id,
             step_state=state.steps,
             checkpoint=checkpoint,
+            max_step_retries=plan.max_retries,
         )
         if result.get("ok"):
             self.task_service.transition(task_id, "testing")
