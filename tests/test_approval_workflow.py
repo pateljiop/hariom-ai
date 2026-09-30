@@ -9,7 +9,7 @@ from app.approval_workflow import (
 )
 from app.activity import ActivityBus
 from app.git_manager import GitManager
-from app.task_executor import TaskAction, TaskExecutor
+from app.task_executor import TaskAction, TaskExecutor\nfrom app.task_store import TaskStore
 from app.tool_registry import ToolRegistry
 from app.workspace import Workspace
 
@@ -39,6 +39,35 @@ class ApprovalWorkflowTests(unittest.TestCase):
         self.assertEqual(result["diff"], "diff -- file")
         self.assertTrue(result["request_id"])
         self.git.commit.assert_not_called()
+
+    def test_approval_persists_and_can_be_reloaded(self):
+        self.registry.test_runner.run = Mock(return_value={"ok": True, "returncode": 0})
+        self.git.diff.return_value = "same diff"
+        self.git.commit.return_value = "committed"
+        with tempfile.TemporaryDirectory() as root:
+            store = TaskStore(f"{root}/tasks.sqlite3")
+            workflow = ApprovalWorkflow(self.executor, self.git, store=store)
+            prepared = workflow.prepare([TaskAction("workspace.write", {"path": "x", "content": "y"})], task_id="task-1")
+            reloaded = ApprovalWorkflow(self.executor, self.git, store=store)
+            result = reloaded.approve(prepared["request_id"], "persisted commit")
+            self.assertTrue(result["ok"])
+
+    def test_reject_consumes_request(self):
+        self.registry.test_runner.run = Mock(return_value={"ok": True, "returncode": 0})
+        self.git.diff.return_value = "diff"
+        prepared = self.workflow.prepare([TaskAction("workspace.write", {"path": "x", "content": "y"})])
+        result = self.workflow.reject(prepared["request_id"])
+        self.assertTrue(result["rejected"])
+        with self.assertRaises(ApprovalDeniedError):
+            self.workflow.approve(prepared["request_id"], "should fail")
+
+    def test_expired_request_cannot_be_approved(self):
+        self.registry.test_runner.run = Mock(return_value={"ok": True, "returncode": 0})
+        self.git.diff.return_value = "diff"
+        workflow = ApprovalWorkflow(self.executor, self.git, approval_ttl_seconds=-1)
+        prepared = workflow.prepare([TaskAction("workspace.write", {"path": "x", "content": "y"})])
+        with self.assertRaises(ApprovalDeniedError):
+            workflow.approve(prepared["request_id"], "expired")
 
     def test_failed_tests_block_approval_request(self):
         self.registry.test_runner.run = Mock(return_value={
