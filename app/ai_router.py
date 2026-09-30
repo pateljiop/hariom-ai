@@ -246,8 +246,10 @@ class AIRouter:
             ymin, xmin, ymax, xmax = [float(v) for v in b]
             if not (0 <= ymin <= ymax <= 1000 and 0 <= xmin <= xmax <= 1000):
                 raise RuntimeError("Vision locator returned invalid normalized bounds.")
-            x = ((xmin + xmax) / 2000.0) * vision_width
-            y = ((ymin + ymax) / 2000.0) * vision_height
+            # Normalized grounding coordinates are expressed against the
+            # complete screen, not the cropped tab-strip image.
+            x = ((xmin + xmax) / 2000.0) * width
+            y = ((ymin + ymax) / 2000.0) * height
         else:
             try:
                 x, y = float(data["x"]), float(data["y"])
