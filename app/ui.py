@@ -577,8 +577,38 @@ class App(tk.Tk):
             self.append(self.log, line)
 
     def _set_status(self, line):
-        if hasattr(self, "status") and self._expanded:
-            self.status.set(line[:75])
+        if not hasattr(self, "status") or not self._expanded:
+            return
+        text = str(line)
+        if text.startswith("AGENT ->"):
+            label = text[8:].strip()
+        elif "approval" in text.lower():
+            label = "Waiting approval"
+        elif "planning" in text.lower():
+            label = "Planning..."
+        elif "execut" in text.lower():
+            label = "Executing..."
+        elif "verify" in text.lower():
+            label = "Verifying..."
+        elif "VISION" in text:
+            label = "Observing screen..."
+        else:
+            return
+        self.status.set(label)
+        self._update_status_dot(label)
+
+    def _update_status_dot(self, label):
+        if not hasattr(self, "_status_dot"):
+            return
+        colors = {
+            "Ready": "#67e8a5",
+            "Waiting approval": "#f3c969",
+            "Planning...": "#79dcff",
+            "Executing...": "#79dcff",
+            "Verifying...": "#79dcff",
+            "Observing screen...": "#79dcff",
+        }
+        self._status_dot.configure(fg=colors.get(label, "#8fa0b4"))
 
     def pulse_orb(self):
         if hasattr(self, "orb") and self._expanded:
