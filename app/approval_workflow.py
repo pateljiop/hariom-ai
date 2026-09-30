@@ -106,7 +106,7 @@ class ApprovalWorkflow:
             if saved:
                 request = ApprovalRequest(
                     request_id=request_id,
-                    actions=tuple(TaskAction(x["tool"], x.get("arguments", {}), x.get("approved", False)) for x in saved["actions"]),
+                    actions=tuple(TaskAction(\n                        x["tool"], x.get("arguments", {}), x.get("approved", False),\n                        tuple(x.get("dependencies", [])), x.get("step_id", "")\n                    ) for x in saved["actions"]),
                     test_target=saved["test_target"], test_result=saved["test_result"],
                     diff=saved["diff"], task_id=saved.get("task_id", ""),
                     created_at=saved["created_at"], expires_at=saved["expires_at"],
@@ -128,7 +128,7 @@ class ApprovalWorkflow:
             return
         payload = {
             "task_id": request.task_id,
-            "actions": [{"tool": a.tool, "arguments": dict(a.arguments), "approved": a.approved} for a in request.actions],
+            "actions": [{\n                "tool": a.tool, "arguments": dict(a.arguments), "approved": a.approved,\n                "dependencies": list(a.dependencies), "step_id": a.step_id,\n            } for a in request.actions],
             "test_target": request.test_target,
             "test_result": request.test_result,
             "diff": request.diff,
