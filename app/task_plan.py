@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from typing import Any, Dict
 
+from .task import RiskLevel, TaskStep
 from .task_executor import TaskAction, TaskExecutionError
 
 
@@ -29,24 +30,40 @@ class TaskPlan:
     def from_dict(cls, payload: Dict[str, Any]):
         if not isinstance(payload, dict):
             raise PlanValidationError("Plan must be an object.")
+        raw_steps = payload.get("steps")
         raw_actions = payload.get("actions")
-        if not isinstance(raw_actions, list) or not raw_actions:
-            raise PlanValidationError("Plan actions must be a non-empty list.")
+        if raw_steps is None:
+            raw_steps = raw_actions
+        if not isinstance(raw_steps, list) or not raw_steps:
+            raise PlanValidationError("Plan steps/actions must be a non-empty list.")
 
         actions = []
-        for index, raw in enumerate(raw_actions):
+        steps = []
+        for index, raw in enumerate(raw_steps):
             if not isinstance(raw, dict):
-                raise PlanValidationError(f"Action {index} must be an object.")
+                raise PlanValidationError(f"Step {index} must be an object.")
             tool = raw.get("tool")
             arguments = raw.get("arguments", {})
             approved = raw.get("approved", False)
             if not isinstance(tool, str) or not tool.strip():
-                raise PlanValidationError(f"Action {index} has an invalid tool.")
+                raise PlanValidationError(f"Step {index} has an invalid tool.")
             if not isinstance(arguments, dict):
-                raise PlanValidationError(f"Action {index} arguments must be an object.")
+                raise PlanValidationError(f"Step {index} arguments must be an object.")
             if not isinstance(approved, bool):
-                raise PlanValidationError(f"Action {index} approved must be boolean.")
+                raise PlanValidationError(f"Step {index} approved must be boolean.")
+            step_id = raw.get("step_id", f"step-{index + 1}")
+            if not isinstance(step_id, str) or not step_id.strip():
+                raise PlanValidationError(f"Step {index} step_id must be a non-empty string.")
+            def step_seq(name):
+                value = raw.get(name, [])
+                if not isinstance(value, list) or any(not isinstance(item, str) or not item.strip() for item in value):
+                    raise PlanValidationError(f"Step {index} {name} must be a list of non-empty strings.")
+                return tuple(item.strip() for item in value)
+            step_risk = raw.get("risk_level", payload.get("risk_level", "low"))
+            if step_risk not in {"low", "medium", "high", "critical"}:
+                raise PlanValidationError(f"Step {index} risk_level is invalid.")
             actions.append(TaskAction(tool.strip(), arguments, approved))
+            steps.append(TaskStep(step_id.strip(), tool.strip(), arguments, step_seq("dependencies"), step_seq("expected_files"), step_seq("test_commands"), RiskLevel(step_risk), step_seq("required_approvals")))
 
         test_target = payload.get("test_target", "tests")
         if not isinstance(test_target, str) or not test_target.strip():
@@ -78,7 +95,7 @@ class TaskPlan:
         return cls(
             tuple(actions), test_target.strip(),
             task_id.strip(), user_request.strip(), objective.strip(),
-            seq("steps"), seq("dependencies"), seq("expected_files"), seq("test_commands"),
+            tuple(steps), seq("dependencies"), seq("expected_files"), seq("test_commands"),
             risk_level, seq("required_approvals"), rollback.strip(), max_retries,
         )
 
@@ -92,7 +109,19 @@ class TaskPlan:
             "task_id": self.task_id,
             "user_request": self.user_request,
             "objective": self.objective,
-            "steps": list(self.steps),
+            "steps": [
+                {
+                    "step_id": step.step_id,
+                    "tool": step.tool,
+                    "arguments": dict(step.arguments),
+                    "dependencies": list(step.dependencies),
+                    "expected_files": list(step.expected_files),
+                    "test_commands": list(step.test_commands),
+                    "risk_level": step.risk_level.value,
+                    "required_approvals": list(step.required_approvals),
+                }
+                for step in self.steps
+            ],
             "dependencies": list(self.dependencies),
             "expected_files": list(self.expected_files),
             "test_commands": list(self.test_commands),
