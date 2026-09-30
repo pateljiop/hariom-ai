@@ -42,12 +42,12 @@ class ApprovalWorkflow:
         self.approval_ttl_seconds = approval_ttl_seconds
         self._requests: Dict[str, ApprovalRequest] = {}
 
-    def prepare(self, actions, test_target="tests", task_id="", step_state=None, checkpoint: Callable | None = None):
+    def prepare(self, actions, test_target="tests", task_id="", step_state=None, checkpoint: Callable | None = None, max_step_retries=0):
         if actions is None:
             raise ApprovalWorkflowError("Actions are required.")
         actions = tuple(actions)
         try:
-            execution = self.executor.execute(actions, step_state=step_state, checkpoint=checkpoint)
+            execution = self.executor.execute(actions, step_state=step_state, checkpoint=checkpoint, max_step_retries=max_step_retries)
         except TaskExecutionError:
             raise
         if not execution["ok"]:
