@@ -282,7 +282,36 @@ class App(tk.Tk):
         self.action_button(action_row, "Screen", self.see_screen).pack(side="left", padx=5)
         self.action_button(action_row, "Approve", self.approve_task).pack(side="right")
 
-        # Live computer view: local-only screen preview, refreshed without blocking the UI.\n        screen_card = tk.Frame(outer, bg="#0d141e", highlightthickness=1, highlightbackground="#1b2937")\n        screen_card.pack(fill="x", padx=14, pady=(0, 8))\n        screen_head = tk.Frame(screen_card, bg="#0d141e")\n        screen_head.pack(fill="x", padx=10, pady=(7, 3))\n        tk.Label(screen_head, text="LIVE SCREEN", bg="#0d141e", fg="#e4eaf1", font=("Segoe UI", 8, "bold")).pack(side="left")\n        self.screen_state = tk.StringVar(value="Local preview")\n        tk.Label(screen_head, textvariable=self.screen_state, bg="#0d141e", fg="#67e8a5", font=("Segoe UI", 7, "bold")).pack(side="left", padx=7)\n        tk.Button(screen_head, text="Refresh", command=self.refresh_screen, bg="#0d141e", fg="#7c899b", activebackground="#18212d", activeforeground="#eef4fa", relief="flat", bd=0, font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side="right")\n        self.screen_preview = tk.Label(screen_card, text="Screen preview will appear here", bg="#080c12", fg="#596779", font=("Segoe UI", 8), height=8)\n        self.screen_preview.pack(fill="x", padx=10, pady=(2, 8))\n        self.screen_preview.bind("<Button-1>", lambda _e: self.refresh_screen())\n        self._schedule_screen_refresh()\n\n        # Live task state: phase, progress and current step.\n        task_state = tk.Frame(outer, bg="#0d141e", highlightthickness=1, highlightbackground="#1b2937")\n        task_state.pack(fill="x", padx=14, pady=(0, 8))\n        task_top = tk.Frame(task_state, bg="#0d141e")\n        task_top.pack(fill="x", padx=10, pady=(7, 2))\n        self.task_phase = tk.StringVar(value="Ready")\n        self.task_progress = tk.StringVar(value="0%")\n        self.task_step = tk.StringVar(value="No active task")\n        tk.Label(task_top, textvariable=self.task_phase, bg="#0d141e", fg="#dfe8f2", font=("Segoe UI", 8, "bold")).pack(side="left")\n        tk.Label(task_top, textvariable=self.task_progress, bg="#0d141e", fg="#79dcff", font=("Segoe UI", 8, "bold")).pack(side="right")\n        self.task_bar = tk.Canvas(task_state, height=4, bg="#182331", highlightthickness=0, bd=0)\n        self.task_bar.pack(fill="x", padx=10, pady=3)\n        self.task_bar.bind("<Configure>", lambda _e: self._render_task_progress())\n        tk.Label(task_state, textvariable=self.task_step, bg="#0d141e", fg="#7e8b9d", font=("Segoe UI", 7)).pack(anchor="w", padx=10, pady=(1, 7))\n\n        # Activity / response surface
+        # Live computer view: local-only screen preview, refreshed without blocking the UI.
+        screen_card = tk.Frame(outer, bg="#0d141e", highlightthickness=1, highlightbackground="#1b2937")
+        screen_card.pack(fill="x", padx=14, pady=(0, 8))
+        screen_head = tk.Frame(screen_card, bg="#0d141e")
+        screen_head.pack(fill="x", padx=10, pady=(7, 3))
+        tk.Label(screen_head, text="LIVE SCREEN", bg="#0d141e", fg="#e4eaf1", font=("Segoe UI", 8, "bold")).pack(side="left")
+        self.screen_state = tk.StringVar(value="Local preview")
+        tk.Label(screen_head, textvariable=self.screen_state, bg="#0d141e", fg="#67e8a5", font=("Segoe UI", 7, "bold")).pack(side="left", padx=7)
+        tk.Button(screen_head, text="Refresh", command=self.refresh_screen, bg="#0d141e", fg="#7c899b", activebackground="#18212d", activeforeground="#eef4fa", relief="flat", bd=0, font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side="right")
+        self.screen_preview = tk.Label(screen_card, text="Screen preview will appear here", bg="#080c12", fg="#596779", font=("Segoe UI", 8), height=8)
+        self.screen_preview.pack(fill="x", padx=10, pady=(2, 8))
+        self.screen_preview.bind("<Button-1>", lambda _e: self.refresh_screen())
+        self._schedule_screen_refresh()
+
+        # Live task state: phase, progress and current step.
+        task_state = tk.Frame(outer, bg="#0d141e", highlightthickness=1, highlightbackground="#1b2937")
+        task_state.pack(fill="x", padx=14, pady=(0, 8))
+        task_top = tk.Frame(task_state, bg="#0d141e")
+        task_top.pack(fill="x", padx=10, pady=(7, 2))
+        self.task_phase = tk.StringVar(value="Ready")
+        self.task_progress = tk.StringVar(value="0%")
+        self.task_step = tk.StringVar(value="No active task")
+        tk.Label(task_top, textvariable=self.task_phase, bg="#0d141e", fg="#dfe8f2", font=("Segoe UI", 8, "bold")).pack(side="left")
+        tk.Label(task_top, textvariable=self.task_progress, bg="#0d141e", fg="#79dcff", font=("Segoe UI", 8, "bold")).pack(side="right")
+        self.task_bar = tk.Canvas(task_state, height=4, bg="#182331", highlightthickness=0, bd=0)
+        self.task_bar.pack(fill="x", padx=10, pady=3)
+        self.task_bar.bind("<Configure>", lambda _e: self._render_task_progress())
+        tk.Label(task_state, textvariable=self.task_step, bg="#0d141e", fg="#7e8b9d", font=("Segoe UI", 7)).pack(anchor="w", padx=10, pady=(1, 7))
+
+        # Activity / response surface
         activity_head = tk.Frame(outer, bg="#080c12")
         activity_head.pack(fill="x", padx=16)
         tk.Label(activity_head, text="TASK TIMELINE", bg="#080c12", fg="#e4eaf1",
@@ -419,7 +448,63 @@ class App(tk.Tk):
         except Exception as exc:
             self.after(0, lambda: messagebox.showerror("Voice error", str(exc)))
 
-    def _schedule_screen_refresh(self):\n        if not self._expanded or not self.live_screen_enabled:\n            return\n        if self._screen_refresh_job is not None:\n            try:\n                self.after_cancel(self._screen_refresh_job)\n            except Exception:\n                pass\n        self._screen_refresh_job = self.after(1800, self._auto_refresh_screen)\n\n    def _auto_refresh_screen(self):\n        self._screen_refresh_job = None\n        if not self._expanded or not self.live_screen_enabled:\n            return\n        self.refresh_screen(auto=True)\n\n    def refresh_screen(self, auto=False):\n        if self._screen_refreshing or not self._expanded:\n            return\n        self._screen_refreshing = True\n        self.screen_state.set("Updating…" if not auto else "Live")\n        threading.Thread(target=self._screen_preview_worker, daemon=True).start()\n\n    def _screen_preview_worker(self):\n        try:\n            image_bytes = self.computer.screenshot_bytes()\n            self.after(0, lambda data=image_bytes: self._update_screen_preview(data))\n        except Exception as exc:\n            error = str(exc)\n            self.after(0, lambda error=error: self._screen_preview_failed(error))\n\n    def _update_screen_preview(self, image_bytes):\n        try:\n            from PIL import Image, ImageTk\n            image = Image.open(BytesIO(image_bytes)).convert("RGB")\n            max_width = max(280, min(self.panel_width - 48, 700))\n            max_height = 220\n            image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)\n            self._screen_photo = ImageTk.PhotoImage(image)\n            self.screen_preview.configure(image=self._screen_photo, text="", height=1)\n            self.screen_state.set("LIVE • local")\n        except Exception as exc:\n            self._screen_preview_failed(str(exc))\n        finally:\n            self._screen_refreshing = False\n            self._schedule_screen_refresh()\n\n    def _screen_preview_failed(self, error):\n        self._screen_refreshing = False\n        if hasattr(self, "screen_preview"):\n            self.screen_preview.configure(image="", text="Screen preview unavailable")\n        if hasattr(self, "screen_state"):\n            self.screen_state.set("Unavailable")\n        self._schedule_screen_refresh()\n        self.append(self.log, "SCREEN -> " + error)\n\n    def see_screen(self):
+    def _schedule_screen_refresh(self):
+        if not self._expanded or not self.live_screen_enabled:
+            return
+        if self._screen_refresh_job is not None:
+            try:
+                self.after_cancel(self._screen_refresh_job)
+            except Exception:
+                pass
+        self._screen_refresh_job = self.after(1800, self._auto_refresh_screen)
+
+    def _auto_refresh_screen(self):
+        self._screen_refresh_job = None
+        if not self._expanded or not self.live_screen_enabled:
+            return
+        self.refresh_screen(auto=True)
+
+    def refresh_screen(self, auto=False):
+        if self._screen_refreshing or not self._expanded:
+            return
+        self._screen_refreshing = True
+        self.screen_state.set("Updating…" if not auto else "Live")
+        threading.Thread(target=self._screen_preview_worker, daemon=True).start()
+
+    def _screen_preview_worker(self):
+        try:
+            image_bytes = self.computer.screenshot_bytes()
+            self.after(0, lambda data=image_bytes: self._update_screen_preview(data))
+        except Exception as exc:
+            error = str(exc)
+            self.after(0, lambda error=error: self._screen_preview_failed(error))
+
+    def _update_screen_preview(self, image_bytes):
+        try:
+            from PIL import Image, ImageTk
+            image = Image.open(BytesIO(image_bytes)).convert("RGB")
+            max_width = max(280, min(self.panel_width - 48, 700))
+            max_height = 220
+            image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+            self._screen_photo = ImageTk.PhotoImage(image)
+            self.screen_preview.configure(image=self._screen_photo, text="", height=1)
+            self.screen_state.set("LIVE • local")
+        except Exception as exc:
+            self._screen_preview_failed(str(exc))
+        finally:
+            self._screen_refreshing = False
+            self._schedule_screen_refresh()
+
+    def _screen_preview_failed(self, error):
+        self._screen_refreshing = False
+        if hasattr(self, "screen_preview"):
+            self.screen_preview.configure(image="", text="Screen preview unavailable")
+        if hasattr(self, "screen_state"):
+            self.screen_state.set("Unavailable")
+        self._schedule_screen_refresh()
+        self.append(self.log, "SCREEN -> " + error)
+
+    def see_screen(self):
         self.status.set("Looking at your screen...")
         threading.Thread(target=self.screen_vision_worker, daemon=True).start()
 
