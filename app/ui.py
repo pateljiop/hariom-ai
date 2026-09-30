@@ -13,6 +13,7 @@ from .tools import ToolRegistry
 from .voice import VoiceController
 from .public_apis import PublicAPIs
 from .workspace import Workspace
+from .chat_history import ChatHistoryStore
 
 
 class App(tk.Tk):
@@ -44,6 +45,9 @@ class App(tk.Tk):
         self._robot_photo = None
         self._logo_photo = None
         self.mode = "agent"
+        self.view = "chat"
+        self.history = ChatHistoryStore()
+        self.current_conversation_id = None
 
         self.activity = ActivityBus()
         self.router = AIRouter(self.activity)
@@ -228,9 +232,25 @@ class App(tk.Tk):
         tk.Label(hero, text="Ready when you are.", bg="#080c12", fg="#667386",
                  font=("Segoe UI", 8)).pack()
 
+        # Main navigation: Chat and persistent searchable History.
+        nav = tk.Frame(outer, bg="#080c12")
+        nav.pack(fill="x", padx=14, pady=(0, 8))
+        self.chat_view_button = tk.Button(nav, text="CHAT", command=lambda: self.set_view("chat"),
+                                          relief="flat", bd=0, padx=16, pady=5,
+                                          font=("Segoe UI", 8, "bold"), cursor="hand2")
+        self.chat_view_button.pack(side="left")
+        self.history_view_button = tk.Button(nav, text="HISTORY", command=lambda: self.set_view("history"),
+                                             relief="flat", bd=0, padx=16, pady=5,
+                                             font=("Segoe UI", 8, "bold"), cursor="hand2")
+        self.history_view_button.pack(side="left", padx=5)
+        self.update_view_ui()
+
+        self.chat_surface = tk.Frame(outer, bg="#080c12")
+        self.chat_surface.pack(fill="both", expand=True)
+
         # Mode switch: Chat is conversational; Agent can plan and execute tools.
-        mode_row = tk.Frame(outer, bg="#080c12")
-        mode_row.pack(fill="x", padx=14, pady=(0, 8))
+        mode_row = tk.Frame(self.chat_surface, bg="#080c12")
+        mode_row.pack(fill="x")
         tk.Label(mode_row, text="MODE", bg="#080c12", fg="#617084",
                  font=("Segoe UI", 7, "bold")).pack(side="left", padx=(2, 8))
         self.chat_mode_button = tk.Button(mode_row, text="CHAT", command=lambda: self.set_mode("chat"),
@@ -246,14 +266,11 @@ class App(tk.Tk):
         self.mode_hint.pack(side="left", padx=8)
         self.update_mode_ui()
 
-        # Command surface
-        command_card = tk.Frame(outer, bg="#111822", highlightthickness=1,
+        command_card = tk.Frame(self.chat_surface, bg="#111822", highlightthickness=1,
                                 highlightbackground="#1f2a38")
-        command_card.pack(fill="x", padx=14, pady=(0, 10))
-
+        command_card.pack(fill="x", pady=(0, 10))
         tk.Label(command_card, text="COMMAND", bg="#111822", fg="#617084",
                  font=("Segoe UI", 7, "bold")).pack(anchor="w", padx=12, pady=(9, 3))
-
         self.prompt = tk.Text(command_card, height=3, wrap="word",
                               bg="#0b1018", fg="#eef4fa", insertbackground="#79dcff",
                               selectbackground="#294457", relief="flat", bd=0,
@@ -271,9 +288,8 @@ class App(tk.Tk):
         self.action_button(action_row, "Screen", self.see_screen).pack(side="left", padx=5)
         self.action_button(action_row, "Approve", self.approve_task).pack(side="right")
 
-        # Activity / response surface
-        activity_head = tk.Frame(outer, bg="#080c12")
-        activity_head.pack(fill="x", padx=16)
+        activity_head = tk.Frame(self.chat_surface, bg="#080c12")
+        activity_head.pack(fill="x")
         tk.Label(activity_head, text="TASK TIMELINE", bg="#080c12", fg="#e4eaf1",
                  font=("Segoe UI", 8, "bold")).pack(side="left")
         tk.Label(activity_head, text="LIVE", bg="#080c12", fg="#67e8a5",
@@ -283,14 +299,42 @@ class App(tk.Tk):
                   activeforeground="#eef4fa", relief="flat", bd=0,
                   font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side="right")
 
-        box = tk.Frame(outer, bg="#0b1018", highlightthickness=1,
+        box = tk.Frame(self.chat_surface, bg="#0b1018", highlightthickness=1,
                        highlightbackground="#1a2430")
-        box.pack(fill="both", expand=True, padx=14, pady=(5, 8))
+        box.pack(fill="both", expand=True, pady=(5, 8))
         self.log = tk.Text(box, wrap="word", state="disabled",
                            bg="#0b1018", fg="#b8c4d3", relief="flat", bd=0,
                            font=("Cascadia Mono", 8), padx=10, pady=9,
                            insertbackground="#79dcff")
         self.log.pack(fill="both", expand=True)
+
+        self.history_surface = tk.Frame(outer, bg="#080c12")
+        self.history_surface.pack(fill="both", expand=True)
+        search_row = tk.Frame(self.history_surface, bg="#080c12")
+        search_row.pack(fill="x", pady=(0, 8))
+        self.history_search = tk.Entry(search_row, bg="#0b1018", fg="#eef4fa",
+                                       insertbackground="#79dcff", relief="flat", bd=0,
+                                       font=("Segoe UI", 9))
+        self.history_search.pack(side="left", fill="x", expand=True, ipady=8, padx=(0, 6))
+        self.history_search.insert(0, "Search conversations…")
+        self.history_search.bind("<FocusIn>", self.clear_history_placeholder)
+        self.history_search.bind("<Return>", lambda _e: self.refresh_history())
+        self.action_button(search_row, "Search", self.refresh_history, primary=True).pack(side="right")
+
+        history_box = tk.Frame(self.history_surface, bg="#0b1018", highlightthickness=1,
+                               highlightbackground="#1a2430")
+        history_box.pack(fill="both", expand=True)
+        scrollbar = tk.Scrollbar(history_box, orient="vertical")
+        scrollbar.pack(side="right", fill="y")
+        self.history_list = tk.Listbox(history_box, bg="#0b1018", fg="#c5d0dc",
+                                       selectbackground="#1b789c", selectforeground="#ffffff",
+                                       relief="flat", bd=0, activestyle="none",
+                                       font=("Segoe UI", 9), yscrollcommand=scrollbar.set)
+        self.history_list.pack(fill="both", expand=True, padx=6, pady=6)
+        scrollbar.config(command=self.history_list.yview)
+        self.history_list.bind("<Double-Button-1>", self.open_history_item)
+        self.refresh_history()
+        self.set_view("chat")
 
         footer = tk.Frame(outer, bg="#0e141d", height=34)
         footer.pack(fill="x")
