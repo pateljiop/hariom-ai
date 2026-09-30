@@ -176,12 +176,19 @@ class App(tk.Tk):
         tk.Label(header, text="🤖  HARIOM AI", bg=self.PANEL, fg=self.TEXT, font=("Segoe UI", 12, "bold")).pack(side="left", padx=14)
         tk.Label(header, text="PERSONAL AI", bg=self.PANEL, fg=self.MUTED, font=("Segoe UI", 8, "bold")).pack(side="left")
         tk.Button(header, text="—", command=self.collapse, bg=self.PANEL, fg=self.MUTED, activebackground=self.PANEL, activeforeground=self.TEXT, relief="flat", bd=0, font=("Segoe UI", 13), padx=8).pack(side="right")
+        tk.Button(header, text="+", command=lambda: self.resize_panel(60, 80), bg=self.PANEL, fg=self.MUTED, activebackground=self.PANEL, activeforeground=self.TEXT, relief="flat", bd=0, font=("Segoe UI", 11, "bold"), padx=7).pack(side="right")
+        tk.Button(header, text="-", command=lambda: self.resize_panel(-60, -80), bg=self.PANEL, fg=self.MUTED, activebackground=self.PANEL, activeforeground=self.TEXT, relief="flat", bd=0, font=("Segoe UI", 11, "bold"), padx=7).pack(side="right")
+        tk.Button(header, text="R", command=self.reset_panel_size, bg=self.PANEL, fg=self.MUTED, activebackground=self.PANEL, activeforeground=self.TEXT, relief="flat", bd=0, font=("Segoe UI", 9, "bold"), padx=7).pack(side="right")
         tk.Button(header, text="✕", command=self.quit_app, bg=self.PANEL, fg="#ff8f8f", activebackground=self.PANEL, activeforeground="#ffb0b0", relief="flat", bd=0, font=("Segoe UI", 11, "bold"), padx=8).pack(side="right")
 
         orb = tk.Frame(outer, bg=self.BG, height=118)
         orb.pack(fill="x")
-        self.orb = tk.Label(orb, text="◉", bg=self.BG, fg=self.ACCENT, font=("Segoe UI", 54, "bold"))
-        self.orb.pack(pady=(10, 0))
+        self._logo_photo = self._load_logo(88)
+        if self._logo_photo is not None:
+            self.orb = tk.Label(orb, image=self._logo_photo, bg=self.BG)
+        else:
+            self.orb = tk.Label(orb, text="◉", bg=self.BG, fg=self.ACCENT, font=("Segoe UI", 54, "bold"))
+        self.orb.pack(pady=(6, 0))
         self.status = tk.StringVar(value="Ready")
         tk.Label(orb, textvariable=self.status, bg=self.BG, fg=self.MUTED, font=("Segoe UI", 9)).pack()
 
@@ -365,6 +372,8 @@ class App(tk.Tk):
             self.after(0, lambda: messagebox.showerror("Task error", str(exc)))
 
     def show_task(self, state):
+        if self._expanded:
+            self.geometry("%dx%d+%d+%d" % (self.panel_width, self.panel_height, self.winfo_x(), self.winfo_y()))
         self.status.set("Task: " + state.status.value)
         for i, step in enumerate(state.steps, 1):
             self.append(self.log, "%s. [%s] %s" % (i, step["status"], step["description"]))
