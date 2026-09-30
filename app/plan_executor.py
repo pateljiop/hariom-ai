@@ -54,14 +54,32 @@ class PlanExecutor:
                 plan=plan.to_dict(),
             )
             task_id = created.task_id
-        state = ExecutionState(task_id, max_attempts=plan.max_retries)
-        self._states[task_id] = state
+        state = self._restore_state(task_id)
+        if state is None:
+            state = ExecutionState(task_id, max_attempts=plan.max_retries)
+            self._states[task_id] = state
+        else:
+            state.max_attempts = plan.max_retries
+        state.ensure_steps(plan.actions)
+        self._persist_state(task_id, state)
         self.task_service.transition(task_id, "planning")
         self.task_service.transition(task_id, "validating")
         state.transition("validated", action_count=len(plan.actions))
+        self._persist_state(task_id, state)
         self.task_service.transition(task_id, "executing")
         state.transition("executing")
-        result = self.workflow.prepare(plan.actions, plan.test_target, task_id=task_id)
+        self._persist_state(task_id, state)
+
+        def checkpoint():
+            self._persist_state(task_id, state)
+
+        result = self.workflow.prepare(
+            plan.actions,
+            plan.test_target,
+            task_id=task_id,
+            step_state=state.steps,
+            checkpoint=checkpoint,
+        )
         if result.get("ok"):
             self.task_service.transition(task_id, "testing")
             self.task_service.transition(task_id, "awaiting_commit_approval", request_id=result.get("request_id"))
@@ -190,6 +208,7 @@ class PlanExecutor:
             max_attempts=int(snapshot.get("max_attempts", task.max_retries)),
             events=list(snapshot.get("events", [])),
             result=dict(snapshot.get("result", {})),
+            steps={key: dict(value) for key, value in snapshot.get("steps", {}).items()},
         )
         self._states[task_id] = state
         return state
