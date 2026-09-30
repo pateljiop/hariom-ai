@@ -64,7 +64,7 @@ class TaskExecutor:
             visit(step_id)
         return ordered
 
-    def execute(self, actions, step_state=None, checkpoint: Callable | None = None):
+    def execute(self, actions, step_state=None, checkpoint: Callable | None = None, resume_interrupted=False):
         actions = self.validate(actions)
         results = []
         state = step_state if step_state is not None else {}
@@ -78,6 +78,9 @@ class TaskExecutor:
                 if record.get("result") is not None:
                     results.append(record["result"])
                 continue
+            if record.get("status") == "interrupted" and not resume_interrupted:
+                return {"ok": False, "stopped": True, "index": index, "step_id": step_id,
+                        "error_type": "recovery_required", "error": "Step was interrupted by a restart; explicit resume is required.", "results": results}
             if any(state.get(dep, {}).get("status") in {"failed", "skipped"} for dep in action.dependencies):
                 record.update({"status": "skipped", "error": "dependency_failed"})
                 if checkpoint:
