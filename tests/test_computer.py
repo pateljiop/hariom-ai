@@ -19,6 +19,7 @@ class ComputerControllerTests(unittest.TestCase):
             registry = ToolRegistry(Workspace(d), Mock(), computer=controller)
             self.assertIn("computer_screenshot", registry.names())
             self.assertIn("computer_click", registry.names())
+            self.assertIn("computer_click_target", registry.names())
             self.assertIn("computer_type", registry.names())
             self.assertTrue(registry.get("computer_click").requires_approval)
 
