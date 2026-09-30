@@ -36,6 +36,36 @@ class TaskState:
         })
         self.updated_at = time.time()
 
+    @property
+    def progress(self):
+        total = len(self.steps)
+        if not total:
+            return 0
+        completed = sum(step.get("status") == "completed" for step in self.steps)
+        return int((completed / total) * 100)
+
+    @property
+    def phase(self):
+        return {
+            TaskStatus.PLANNING: "Planning",
+            TaskStatus.RUNNING: "Running",
+            TaskStatus.VERIFYING: "Verifying",
+            TaskStatus.WAITING_APPROVAL: "Waiting for approval",
+            TaskStatus.FAILED: "Failed",
+            TaskStatus.COMPLETED: "Completed",
+        }[self.status]
+
+    def timeline(self):
+        return [
+            {
+                "index": index + 1,
+                "description": step.get("description", ""),
+                "tool": step.get("tool"),
+                "status": step.get("status", "pending"),
+            }
+            for index, step in enumerate(self.steps)
+        ]
+
     def start_step(self, index):
         self.current_step = index
         self.steps[index]["status"] = "running"
