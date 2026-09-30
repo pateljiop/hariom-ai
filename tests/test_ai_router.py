@@ -84,7 +84,9 @@ class AIRouterTests(unittest.TestCase):
         result = self.router.locate_on_screen("GitHub tab", b"image", (1280, 720))
         self.assertTrue(result["found"])
         self.assertEqual(result["x"], 442)
-        self.assertEqual(result["y"], 14)
+        # The locator sends the browser-tab crop to vision, so normalized Y
+        # coordinates are mapped against the cropped image height.
+        self.assertEqual(result["y"], 3)
 
     @patch.object(ai_router.AIRouter, "vision_chat")
     def test_locate_on_screen_parses_pixel_bbox(self, vision):
