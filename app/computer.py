@@ -96,6 +96,17 @@ class ComputerController:
         size = self.screen_size()
         target_text = str(target).strip()
         location = self.locator(target_text, image, (size["width"], size["height"]))
+
+        # If a requested browser tab is not visible, the browser may simply be
+        # behind another foreground window. Perform one bounded Alt+Tab recovery
+        # and re-locate from a fresh screenshot before declaring the target absent.
+        if not location.get("found") and "tab" in target_text.lower():
+            self.activity.emit("COMPUTER -> tab not visible; trying one Alt+Tab recovery")
+            self.hotkey("alt", "tab")
+            self.wait(0.35)
+            image = self.screenshot_bytes()
+            location = self.locator(target_text, image, (size["width"], size["height"]))
+
         if not location.get("found"):
             raise RuntimeError("Target not found: " + str(location.get("reason", target_text)))
 
