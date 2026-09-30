@@ -30,6 +30,20 @@ class PersonalAgentTests(unittest.TestCase):
             self.assertEqual(state.status,TaskStatus.COMPLETED)
             self.assertIn("hello.txt",state.steps[0]["output"])
 
+    def test_screen_click_request_uses_verified_click_tool_without_planner(self):
+        with tempfile.TemporaryDirectory() as d:
+            ws=Workspace(d); activity=Mock()
+            router=Mock()
+            agent=PersonalAgent(router,ws,activity,memory=MemoryStore(Path(d)/"memory.sqlite3"))
+            tool=Mock()
+            tool.requires_approval=True
+            agent.tools._tools["computer_click_target"] = tool
+            state=agent.run("github tab pr click karo")
+            self.assertEqual(state.status,TaskStatus.WAITING_APPROVAL)
+            self.assertEqual(state.steps[0]["tool"],"computer_click_target")
+            self.assertEqual(state.steps[0]["arguments"]["target"],"github tab")
+            router.chat_messages.assert_not_called()
+
     def test_agent_pauses_for_approval(self):
         with tempfile.TemporaryDirectory() as d:
             ws=Workspace(d); activity=Mock()
