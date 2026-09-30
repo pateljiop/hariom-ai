@@ -1,6 +1,10 @@
-"""Agent planning-to-execution facade."""
+"""Validated model-plan execution facade."""
 from .agent_planner import AgentPlanner
 from .plan_executor import PlanExecutor
+
+
+class AgentExecutionError(Exception):
+    """Raised when model output cannot safely enter execution."""
 
 
 class AgentExecutionFacade:
@@ -12,11 +16,17 @@ class AgentExecutionFacade:
         self.planner = AgentPlanner(registry)
 
     def prepare_model_output(self, model_output, task_id=None):
-        plan = self.planner.parse(model_output)
+        try:
+            plan = self.planner.parse(model_output)
+        except Exception as exc:
+            raise AgentExecutionError(str(exc)) from exc
         return self.executor.prepare(plan.to_dict(), task_id=task_id)
 
     def prepare_model_json(self, model_output, task_id=None):
-        plan = self.planner.parse_json(model_output)
+        try:
+            plan = self.planner.parse_json(model_output)
+        except Exception as exc:
+            raise AgentExecutionError(str(exc)) from exc
         return self.executor.prepare(plan.to_dict(), task_id=task_id)
 
     def approve(self, request_id, message):
