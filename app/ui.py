@@ -68,6 +68,31 @@ class App(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self.quit_app)
         self.after(250, self._animate_robot)
 
+    def _asset_path(self, filename):
+        return Path(__file__).resolve().parent.parent / "public" / "assets" / "images" / filename
+
+    def _load_logo(self, size):
+        try:
+            from PIL import Image, ImageTk
+            path = self._asset_path("09_Transparent_Mascot.png")
+            if not path.is_file():
+                return None
+            image = Image.open(path).convert("RGBA")
+            image.thumbnail((size, size), Image.Resampling.LANCZOS)
+            return ImageTk.PhotoImage(image)
+        except Exception:
+            return None
+
+    def resize_panel(self, dw=0, dh=0):
+        self.panel_width = max(self.min_panel_width, min(self.max_panel_width, self.panel_width + int(dw)))
+        self.panel_height = max(self.min_panel_height, min(self.max_panel_height, self.panel_height + int(dh)))
+        if self._expanded:
+            self.geometry("%dx%d+%d+%d" % (self.panel_width, self.panel_height, self.winfo_x(), self.winfo_y()))
+            self.lift()
+
+    def reset_panel_size(self):
+        self.panel_width, self.panel_height = 440, 650
+        self.resize_panel(0, 0)
     def build_robot(self):
         self.robot_frame = tk.Frame(self, bg=self.BG)
         self.robot_frame.pack(fill="both", expand=True)
@@ -82,6 +107,11 @@ class App(tk.Tk):
 
     def draw_robot(self, glow=False):
         self.robot.delete("all")
+        photo = self._load_logo(94)
+        if photo is not None:
+            self._robot_photo = photo
+            self.robot.create_image(58, 54, image=photo)
+            return
         glow_color = "#bdefff" if glow else self.ACCENT
         self.robot.create_oval(12, 8, 104, 100, outline="#253746", width=2)
         self.robot.create_oval(22, 18, 94, 90, fill="#172431", outline=glow_color, width=2)
