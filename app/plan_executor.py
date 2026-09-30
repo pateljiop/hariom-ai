@@ -119,13 +119,19 @@ class PlanExecutor:
 
     def approve(self, request_id, message):
         result = self.workflow.approve(request_id, message)
-        for state in self._states.values():
-            if state.result.get("request_id") == request_id:
-                self.task_service.transition(state.task_id, "completed", request_id=request_id)
-                state.transition("committed")
-                state.result = dict(result)
-                result["state"] = state.snapshot()
-                break
+        approval = self.task_service.store.get_approval(request_id)
+        task_id = approval.get("task_id") if approval else None
+        state = self._states.get(task_id) if task_id else None
+        if task_id:
+            task = self.task_service.get_task(task_id)
+            if task.status.value != "completed":
+                self.task_service.transition(task_id, "completed", request_id=request_id)
+            if state is None:
+                state = ExecutionState(task_id, max_attempts=task.max_retries)
+                self._states[task_id] = state
+            state.transition("committed")
+            state.result = dict(result)
+            result["state"] = state.snapshot()
         return result
 
     def get_state(self, task_id):
