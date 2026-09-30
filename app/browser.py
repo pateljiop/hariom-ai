@@ -51,7 +51,7 @@ class BrowserController:
             raise RuntimeError("No browser session is open.")
         return {"url": self.session.page.url, "title": self.session.page.title()}
 
-    def observe(self, selector="body", include_screenshot=False, screenshot_approved=False):
+    def observe(self, selector="body"):
         """Return fresh browser state for closed-loop agent decisions."""
         if not self.session:
             raise RuntimeError("No browser session is open.")
@@ -61,10 +61,6 @@ class BrowserController:
             "title": page.title(),
             "text": page.locator(selector).inner_text(timeout=10000)[:12000],
         }
-        if include_screenshot:
-            observation["screenshot"] = self.screenshot(
-                approved=screenshot_approved
-            )
         self.activity.emit("BROWSER -> observed current page")
         return observation
 
