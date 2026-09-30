@@ -74,7 +74,8 @@ class ToolRegistry:
         spec = self._tools.get(name)
         if spec is None:
             raise UnknownToolError(f"Unknown tool: {name}")
-        arguments = arguments or {}
+        if arguments is None:
+            arguments = {}
         if not isinstance(arguments, dict):
             raise ToolError("Tool arguments must be an object.")
         if spec.requires_approval and not approved:
