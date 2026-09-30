@@ -24,12 +24,42 @@ class ComputerControlLoop:
         self.max_iterations = max_iterations
         self.approval_checker = approval_checker
 
+    def _screen_geometry(self):
+        result = self.registry.execute("computer.screen_size", {}, approved=False)
+        if not result.get("ok"):
+            raise ComputerLoopError(result.get("error", "Unable to read screen dimensions."))
+        geometry = result.get("result")
+        if not isinstance(geometry, dict):
+            raise ComputerLoopError("Screen dimensions must be an object.")
+        try:
+            width, height = int(geometry["width"]), int(geometry["height"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ComputerLoopError("Invalid screen dimensions.") from exc
+        if not 1 <= width <= 32768 or not 1 <= height <= 32768:
+            raise ComputerLoopError("Screen dimensions are outside safe bounds.")
+        return {"width": width, "height": height}
+
+    @staticmethod
+    def _validate_coordinates(tool, arguments, geometry):
+        if tool != "computer.click":
+            return
+        x, y = arguments.get("x"), arguments.get("y")
+        if x is None or y is None:
+            return
+        if isinstance(x, bool) or isinstance(y, bool):
+            raise ComputerLoopError("Click coordinates must be integers.")
+        if not isinstance(x, int) or not isinstance(y, int):
+            raise ComputerLoopError("Click coordinates must be integers.")
+        if not (0 <= x < geometry["width"] and 0 <= y < geometry["height"]):
+            raise ComputerLoopError("Click coordinates are outside the current screen.")
+
     def _approved(self, tool, arguments):
         if self.approval_checker is None:
             return False
         return bool(self.approval_checker({"tool": tool, "arguments": dict(arguments)}))
 
     def _observe(self):
+        geometry = self._screen_geometry()
         approved = self._approved(self.SCREENSHOT_TOOL, {"persist": False})
         result = self.registry.execute(
             self.SCREENSHOT_TOOL,
@@ -43,7 +73,7 @@ class ComputerControlLoop:
                 "error": result.get("error", "Computer screenshot failed."),
             }
         path = result.get("result")
-        return path, None
+        return {"image_path": path, "screen": geometry}, None
 
     def _validate(self, decision):
         if not isinstance(decision, dict):
@@ -69,16 +99,20 @@ class ComputerControlLoop:
         if not callable(decide):
             raise ComputerLoopError("decide must be callable.")
 
-        image_path = initial_image
+        observation = None
+        if initial_image:
+            observation = {"image_path": initial_image, "screen": self._screen_geometry()}
         history = []
         for iteration in range(1, self.max_iterations + 1):
-            if not image_path:
-                image_path, failure = self._observe()
+            if not observation:
+                observation, failure = self._observe()
                 if failure:
                     return {"ok": False, "iterations": iteration - 1, "history": history, **failure}
 
-            decision = decide(image_path, list(history))
+            decision = decide(observation, list(history))
             action = self._validate(decision)
+            if action is not None:
+                self._validate_coordinates(action["tool"], action["arguments"], observation["screen"])
             if action is None:
                 return {
                     "ok": True, "status": "completed",
@@ -91,18 +125,20 @@ class ComputerControlLoop:
             event = {"iteration": iteration, "action": action, "result": result}
             history.append(event)
             if not result.get("ok"):
-                self._cleanup(image_path)
+                self._cleanup(observation["image_path"])
                 return {
                     "ok": False, "status": "action_failed", "iterations": iteration,
                     "error": result.get("error", "Computer action failed."), "history": history,
+                    "screen": observation["screen"],
                 }
 
-            self._cleanup(image_path)
-            image_path, failure = self._observe()
+            self._cleanup(observation["image_path"])
+            observation, failure = self._observe()
             if failure:
                 return {"ok": False, "iterations": iteration, "history": history, **failure}
 
-        self._cleanup(image_path)
+        if observation:
+            self._cleanup(observation["image_path"])
         return {
             "ok": False, "status": "iteration_limit",
             "iterations": self.max_iterations,
