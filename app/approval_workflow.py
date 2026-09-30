@@ -42,7 +42,7 @@ class ApprovalWorkflow:
         self.approval_ttl_seconds = approval_ttl_seconds
         self._requests: Dict[str, ApprovalRequest] = {}
 
-    def prepare(self, actions, test_target="tests", task_id="", step_state=None, checkpoint: Callable | None = None, max_step_retries=0):
+    def prepare(self, actions, test_target="tests", task_id="", step_state=None, checkpoint: Callable | None = None, max_step_retries=0, expected_files=(), test_commands=()):
         if actions is None:
             raise ApprovalWorkflowError("Actions are required.")
         actions = tuple(actions)
@@ -52,9 +52,12 @@ class ApprovalWorkflow:
             raise
         if not execution["ok"]:
             return {"ok": False, "stage": "execution", "execution": execution}
+        expectation_result = self.executor.verify_expectations(expected_files, test_commands)
+        if not expectation_result["ok"]:
+            return {"ok": False, "stage": "verification", "execution": execution, "expectation_result": expectation_result}
         test_result = self.executor.registry.test_runner.run(test_target)
         if not test_result["ok"]:
-            return {"ok": False, "stage": "verification", "execution": execution, "test_result": test_result}
+            return {"ok": False, "stage": "verification", "execution": execution, "expectation_result": expectation_result, "test_result": test_result}
         diff = self.git.diff()
         request_id = 'approval-' + uuid4().hex
         now = datetime.now(timezone.utc)
