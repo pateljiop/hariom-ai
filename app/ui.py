@@ -218,6 +218,7 @@ class App(tk.Tk):
         footer = tk.Frame(outer, bg=self.PANEL)
         footer.pack(fill="x")
         tk.Label(footer, text="Click robot to return  •  Ctrl+Space", bg=self.PANEL, fg=self.MUTED, font=("Segoe UI", 8)).pack(side="left", padx=12, pady=8)
+        tk.Button(footer, text="Change", command=self.choose_workspace, bg=self.PANEL, fg=self.MUTED, activebackground=self.PANEL, activeforeground=self.TEXT, relief="flat", bd=0, font=("Segoe UI", 8)).pack(side="right", padx=4)
         tk.Button(footer, text="Workspace", command=self.list_workspace, bg=self.PANEL, fg=self.MUTED, activebackground=self.PANEL, activeforeground=self.TEXT, relief="flat", bd=0, font=("Segoe UI", 8)).pack(side="right", padx=8)
 
     def action_button(self, parent, text, command):
