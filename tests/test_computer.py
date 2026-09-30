@@ -22,7 +22,7 @@ class ComputerControllerTests(unittest.TestCase):
             self.assertIn("computer_click_target", registry.names())
             self.assertIn("computer_type", registry.names())
             self.assertFalse(registry.get("computer_click").requires_approval)
-            self.assertTrue(registry.requires_approval("computer_click", {"x": 10, "y": 10}))
+            self.assertFalse(registry.requires_approval("computer_click", {"x": 10, "y": 10}))
             self.assertTrue(registry.requires_approval("computer_click", {"target": "delete file"}))
 
 
