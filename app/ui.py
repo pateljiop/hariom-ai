@@ -53,6 +53,7 @@ class App(tk.Tk):
         self.current_conversation_id = None
         self.active_provider = "Auto"
         self.task_started_at = None
+        self.activity_events = []
 
         self.activity = ActivityBus()
         self.router = AIRouter(self.activity)
@@ -343,11 +344,18 @@ class App(tk.Tk):
                  font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=10, pady=(9, 2))
         tk.Label(activity_panel, text="Safe execution progress", bg="#0b1018", fg="#596779",
                  font=("Segoe UI", 7)).pack(anchor="w", padx=10, pady=(0, 6))
+        self.activity_empty = tk.Label(activity_panel,
+                                       text="No active task\n\nTell Hariom what you want to accomplish.\n\n"
+                                            "• Inspect this project\n• Find the source of an error\n• Create a new feature",
+                                       bg="#0b1018", fg="#667386", justify="center",
+                                       font=("Segoe UI", 8))
+        self.activity_empty.pack(expand=True, fill="both", padx=14, pady=14)
         self.log = tk.Text(activity_panel, wrap="word", state="disabled",
                            bg="#0b1018", fg="#b8c4d3", relief="flat", bd=0,
                            font=("Cascadia Mono", 8), padx=10, pady=7,
                            insertbackground="#79dcff")
         self.log.pack(fill="both", expand=True)
+        self.activity_empty.lower()
         workspace_panel = tk.Frame(split, bg="#0b1018", highlightthickness=1, highlightbackground="#1a2430", width=155)
         workspace_panel.pack(side="right", fill="y")
         workspace_panel.pack_propagate(False)
@@ -582,12 +590,15 @@ class App(tk.Tk):
         return "" if value == "Tell Hariom AI what to do…" else value
 
     def log_line(self, line):
+        self.activity_events.append({"time": time.strftime("%H:%M:%S"), "text": str(line)})
+        self.activity_events = self.activity_events[-80:]
         self.after(0, lambda: self._append_if_open(line))
         self.after(0, lambda: self._set_status(line))
         self.after(0, self.pulse_orb)
 
     def _append_if_open(self, line):
         if hasattr(self, "log") and self._expanded:
+            self.activity_empty.lower()
             self.append(self.log, line)
 
     def _set_status(self, line):
@@ -710,6 +721,12 @@ class App(tk.Tk):
         except Exception as exc:
             self.after(0, lambda: messagebox.showerror("Resume error", str(exc)))
 
+    def activity_details(self, _event=None):
+        if not self.activity_events:
+            return
+        latest = self.activity_events[-1]
+        messagebox.showinfo("Activity details", latest["text"])
+
     def update_approval_ui(self, state):
         if not hasattr(self, "approval_card"):
             return
@@ -756,6 +773,10 @@ class App(tk.Tk):
         self.log.configure(state="normal")
         self.log.delete("1.0", "end")
         self.log.configure(state="disabled")
+        if state.steps:
+            self.activity_empty.lower()
+        else:
+            self.activity_empty.lift()
         for i, step in enumerate(state.steps, 1):
             icon = "✓" if step["status"] == "completed" else ("●" if step["status"] == "running" else ("✕" if step["status"] == "failed" else "○"))
             self.append(self.log, "%s  %s  %s" % (icon, step["status"].title(), step["description"]))
