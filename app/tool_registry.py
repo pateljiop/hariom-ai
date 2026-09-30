@@ -106,7 +106,7 @@ class ToolRegistry:
             decision = self.permission_manager.decide(spec.permission, approved=approved)
             if not decision.allowed:
                 raise ToolApprovalRequired(f"Tool '{name}' requires approval for permission '{spec.permission}'.")
-        if spec.requires_approval and not approved and not self.permission_manager.has(spec.permission) if spec.permission else spec.requires_approval and not approved:
+        if spec.requires_approval and not approved and not (spec.permission and self.permission_manager.has(spec.permission)):
             raise ToolApprovalRequired(f"Tool '{name}' requires approval.")
         if arguments is None:
             arguments = {}
