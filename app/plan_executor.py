@@ -2,6 +2,7 @@
 from .approval_workflow import ApprovalWorkflow
 from .execution_state import ExecutionState
 from .recovery import RecoveryCoordinator
+from .task import TaskStep
 from .task_executor import TaskAction, TaskExecutionError
 from .task_plan import TaskPlan
 from .task_service import TaskService, TaskServiceError
@@ -29,7 +30,9 @@ class PlanExecutor:
                     plan.user_request or "agent task",
                     objective=plan.objective or plan.user_request or "agent task",
                     task_id=task_id,
-                    dependencies=tuple(plan.dependencies),
+                    steps=tuple(plan.steps),
+                    steps=tuple(plan.steps),
+                dependencies=tuple(plan.dependencies),
                     expected_files=tuple(plan.expected_files),
                     test_commands=tuple(plan.test_commands),
                     risk_level=plan.risk_level,
