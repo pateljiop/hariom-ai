@@ -58,6 +58,17 @@ class TaskExecutorStepStateTests(unittest.TestCase):
         self.assertFalse(resumed["ok"])
         self.assertEqual(state["b"]["status"], "skipped")
 
+    def test_interrupted_step_requires_explicit_resume(self):
+        executor, registry = self._executor()
+        state = {'a': {'step_id': 'a', 'status': 'interrupted', 'attempts': 1, 'result': None, 'error': 'interrupted_by_restart'}}
+        result = executor.execute([TaskAction('tool.a', {}, step_id='a')], step_state=state)
+        self.assertFalse(result['ok'])
+        self.assertEqual(result['error_type'], 'recovery_required')
+        registry.execute.assert_not_called()
+        result = executor.execute([TaskAction('tool.a', {}, step_id='a')], step_state=state, resume_interrupted=True)
+        self.assertTrue(result['ok'])
+        self.assertEqual(state['a']['status'], 'succeeded')
+
     def test_approval_required_returns_current_step_to_pending(self):
         executor, registry = self._executor()
         registry.execute.side_effect = ToolApprovalRequired("approval needed")
