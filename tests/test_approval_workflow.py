@@ -48,6 +48,8 @@ class ApprovalWorkflowTests(unittest.TestCase):
         self.git.commit.return_value = "committed"
         with tempfile.TemporaryDirectory() as root:
             store = TaskStore(f"{root}/tasks.sqlite3")
+            from app.task_service import TaskService
+            TaskService(store).create_task("persist approval", task_id="task-1")
             workflow = ApprovalWorkflow(self.executor, self.git, store=store)
             prepared = workflow.prepare([TaskAction("workspace.write", {"path": "x", "content": "y"})], task_id="task-1")
             reloaded = ApprovalWorkflow(self.executor, self.git, store=store)
