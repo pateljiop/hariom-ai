@@ -210,8 +210,38 @@ class PlanExecutor:
             result=dict(snapshot.get("result", {})),
             steps={key: dict(value) for key, value in snapshot.get("steps", {}).items()},
         )
+        if state.recover_interrupted_steps():
+            self._persist_state(task_id, state)
         self._states[task_id] = state
         return state
+
+    def resume(self, task_id):
+        """Explicitly resume a task after an interrupted in-flight step."""
+        state = self._restore_state(task_id)
+        if state is None:
+            raise PlanExecutionError(f"Unknown task: {task_id}")
+        task = self.task_service.get_task(task_id)
+        if not any(step.get("status") == "interrupted" for step in state.steps.values()):
+            raise PlanExecutionError(f"Task '{task_id}' has no interrupted steps requiring resume.")
+        if task.status not in {"executing", "failed", "testing"} and getattr(task.status, "value", task.status) not in {"executing", "failed", "testing"}:
+            raise PlanExecutionError(f"Task '{task_id}' cannot be resumed from status '{task.status.value}'.")
+        plan = TaskPlan.from_dict(task.plan or {})
+        for step in state.steps.values():
+            if step.get("status") == "interrupted":
+                step["status"] = "pending"
+                step["error"] = None
+        self._persist_state(task_id, state)
+
+        def checkpoint():
+            self._persist_state(task_id, state)
+
+        result = self.workflow.prepare(
+            plan.actions, plan.test_target, task_id=task_id,
+            step_state=state.steps, checkpoint=checkpoint,
+        )
+        state.result = dict(result)
+        self._persist_state(task_id, state)
+        return {"ok": result.get("ok", False), "result": result, "state": state.snapshot()}
 
     @staticmethod
     def _make_task_id(plan):
