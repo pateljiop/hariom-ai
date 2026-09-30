@@ -131,7 +131,7 @@ class PersonalAgent:
                 tool = self.tools.get(tool_name)
                 if not tool:
                     raise KeyError("Unknown tool: " + str(tool_name))
-                if tool.requires_approval and not approve:
+                if self.tools.requires_approval(tool_name, step.get("arguments")) and not approve:
                     state.status = TaskStatus.WAITING_APPROVAL
                     self.activity.emit("AGENT -> approval required for " + tool_name)
                     self._checkpoint(state)
