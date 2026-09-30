@@ -14,11 +14,12 @@ class ComputerController:
         "shift", "ctrl", "alt", "win", "capslock",
     }
 
-    def __init__(self, activity, locator=None):
+    def __init__(self, activity, locator=None, state_verifier=None):
         self.activity = activity
         self.system = platform.system()
         self._pg = None
         self.locator = locator
+        self.state_verifier = state_verifier
 
     def _pyautogui(self):
         if self.system != "Windows":
@@ -87,20 +88,61 @@ class ComputerController:
         self.activity.emit(f"COMPUTER -> move mouse ({int(x)}, {int(y)})")
         return {"x": int(x), "y": int(y)}
 
-    def click_target(self, target, button="left", clicks=1):
-        """Freshly locate a visible target and click its verified center."""
+    def click_target(self, target, button="left", clicks=1, verify=True):
+        """Locate, safely click, then verify the resulting UI state when supported."""
         if not self.locator:
             raise RuntimeError("Screen locator is not configured.")
         image = self.screenshot_bytes()
         size = self.screen_size()
-        location = self.locator(str(target), image, (size["width"], size["height"]))
+        target_text = str(target).strip()
+        location = self.locator(target_text, image, (size["width"], size["height"]))
         if not location.get("found"):
-            raise RuntimeError("Target not found: " + str(location.get("reason", target)))
+            raise RuntimeError("Target not found: " + str(location.get("reason", target_text)))
+
+        # Browser tabs live in the top chrome. A vision result far down the page is
+        # not a safe interpretation of a request to click a tab.
+        lowered = target_text.lower()
+        if "tab" in lowered:
+            max_y = max(80, int(size["height"] * 0.18))
+            if int(location["y"]) > max_y:
+                raise RuntimeError(
+                    "Vision located the tab outside the browser tab region "
+                    f"(y={int(location['y'])}, max={max_y})."
+                )
+
         self.activity.emit(
             "COMPUTER -> located %s at (%s, %s), confidence %.2f"
-            % (location.get("label", target), location["x"], location["y"], location.get("confidence", 0.0))
+            % (location.get("label", target_text), location["x"], location["y"], location.get("confidence", 0.0))
         )
-        return self.click(location["x"], location["y"], button=button, clicks=clicks)
+        click_result = self.click(location["x"], location["y"], button=button, clicks=clicks)
+        result = {
+            **click_result,
+            "target": target_text,
+            "location_confidence": float(location.get("confidence", 0.0)),
+            "verified": False,
+        }
+
+        if not verify:
+            return result
+
+        if not self.state_verifier:
+            raise RuntimeError("Click state verification is not configured; refusing to claim success.")
+
+        self.wait(0.35)
+        after = self.screenshot_bytes()
+        verification = self.state_verifier(target_text, after, (size["width"], size["height"]))
+        if not verification.get("verified"):
+            reason = verification.get("reason", "Post-click state verification failed.")
+            self.activity.emit("COMPUTER -> click verification failed: " + str(reason))
+            raise RuntimeError(str(reason))
+
+        result["verified"] = True
+        result["verification_confidence"] = float(verification.get("confidence", 0.0))
+        self.activity.emit(
+            "COMPUTER -> click verified for %s (confidence %.2f)"
+            % (target_text, result["verification_confidence"])
+        )
+        return result
 
     def click(self, x, y, button="left", clicks=1):
         self._check_point(x, y)
