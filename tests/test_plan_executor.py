@@ -173,7 +173,22 @@ class PlanExecutorTests(unittest.TestCase):
                  "test_result": {"ok": True}, "diff": "d", "commit_result": None},
                 "2026-09-30T10:00:00+00:00", "2099-09-30T10:00:00+00:00", "pending",
             )
-            second = PlanExecutor(workflow, task_service=TaskService(TaskStore(f"{root}/tasks.sqlite3")))
+            persisted_store = TaskStore(f"{root}/tasks.sqlite3")
+            persisted_store.save_approval(
+                "restart-commit",
+                {
+                    "task_id": "restart-commit-task",
+                    "actions": [],
+                    "test_target": "tests",
+                    "test_result": {"ok": True},
+                    "diff": "d",
+                    "commit_result": {"ok": True},
+                },
+                "2026-09-30T10:00:00+00:00",
+                "2099-09-30T10:00:00+00:00",
+                "pending",
+            )
+            second = PlanExecutor(workflow, task_service=TaskService(persisted_store))
             result = second.approve("restart-commit", "reviewed change")
             self.assertTrue(result["ok"])
             self.assertEqual(result["state"]["task_id"], "restart-commit-task")
