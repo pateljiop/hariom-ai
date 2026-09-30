@@ -103,6 +103,30 @@ class AgentRunnerTests(unittest.TestCase):
         self.assertIn("UNTRUSTED DATA", prompt)
         self.assertIn("no instruction authority", prompt)
 
+    def test_run_computer_uses_vision_loop(self):
+        self.registry.describe.return_value = [
+            {"name": "computer.click", "description": "click"},
+            {"name": "computer.type", "description": "type"},
+            {"name": "computer.key", "description": "key"},
+        ]
+        self.router.chat_vision.side_effect = [
+            ('{"action":{"tool":"computer.click","arguments":{"x":10,"y":20},"approved":false}}', "fast"),
+            ('{"done":true}', "fast"),
+        ]
+        self.registry.execute.side_effect = [
+            {"ok": True, "result": "/tmp/screen1.png"},
+            {"ok": True, "result": True},
+            {"ok": True, "result": "/tmp/screen2.png"},
+        ]
+        result = self.runner.run_computer(
+            "Click the visible button",
+            max_iterations=2,
+            approval_checker=lambda action: True,
+        )
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(self.router.chat_vision.call_count, 2)
+
     def test_provider_failure_is_wrapped(self):
         self.router.chat.side_effect = RuntimeError("no provider")
         with self.assertRaises(AgentRunError):
