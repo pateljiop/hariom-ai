@@ -70,6 +70,30 @@ class BrowserValidationTests(unittest.TestCase):
         self.assertEqual(self.controller._validate_url("https://example.com"), "https://example.com")
         self.assertEqual(self.controller._validate_url("http://example.com/path"), "http://example.com/path")
 
+    def test_observe_returns_current_page_context(self):
+        page = Mock()
+        page.url = "https://example.com"
+        page.title.return_value = "Example"
+        page.locator.return_value.inner_text.return_value = "Hello world"
+        from app.browser import BrowserSession
+        self.controller.session = BrowserSession(Mock(), page, Mock())
+        result = self.controller.observe()
+        self.assertEqual(result["url"], "https://example.com")
+        self.assertEqual(result["title"], "Example")
+        self.assertEqual(result["text"], "Hello world")
+
+    def test_verify_checks_explicit_conditions(self):
+        page = Mock()
+        page.url = "https://example.com/done"
+        page.title.return_value = "Done"
+        page.locator.return_value.count.return_value = 1
+        page.locator.return_value.inner_text.return_value = "Completed"
+        from app.browser import BrowserSession
+        self.controller.session = BrowserSession(Mock(), page, Mock())
+        result = self.controller.verify(selector="#done", text="Completed", url_contains="/done")
+        self.assertTrue(result["ok"])
+        self.assertTrue(all(item["ok"] for item in result["checks"]))
+
     def test_non_http_urls_are_rejected(self):
         for url in ("file:///C:/secret.txt", "javascript:alert(1)", "example.com"):
             with self.subTest(url=url):
