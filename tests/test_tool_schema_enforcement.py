@@ -38,6 +38,19 @@ class ToolSchemaEnforcementTests(unittest.TestCase):
         registry = ToolRegistry(permission_manager=PermissionManager())
         self.assertTrue(registry.permission_manager.decide(Permission.TERMINAL_EXECUTE, approved=True).allowed)
 
+    def test_requires_explicit_approval_even_when_permission_is_granted(self):
+        registry = ToolRegistry()
+        registry.permission_manager.grant(Permission.BROWSER_CLICK)
+        with self.assertRaises(ToolApprovalRequired):
+            registry.execute("browser.click", {"selector": "#submit"})
+
+    def test_explicit_approval_allows_gated_tool(self):
+        registry = ToolRegistry()
+        registry.permission_manager.grant(Permission.BROWSER_CLICK)
+        registry.browser.click = lambda selector, approved=False: {"selector": selector}
+        result = registry.execute("browser.click", {"selector": "#submit"}, approved=True)
+        self.assertTrue(result["ok"])
+
     def test_describe_includes_schema_fields(self):
         registry = ToolRegistry()
         item = next(x for x in registry.describe() if x["name"] == "workspace.write")
