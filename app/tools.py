@@ -29,6 +29,8 @@ class ToolRegistry:
 
         if browser:
             self.register(Tool("browser_open", "Open a public http/https URL in the controlled browser.", browser.open))
+            self.register(Tool("browser_set_browser", "Select the controlled browser: Brave or Playwright Chromium.", browser.set_browser))
+            self.register(Tool("browser_status", "Report the selected controlled browser and availability.", browser.browser_status))
             self.register(Tool("browser_current_page", "Get the current browser URL and title.", browser.current_page))
             self.register(Tool("browser_read", "Read visible text from a browser page.", browser.read_text))
             self.register(Tool("browser_click", "Click an element selected by CSS.", browser.click))
