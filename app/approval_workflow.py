@@ -71,7 +71,8 @@ class ApprovalWorkflow:
         self._persist(request, "pending")
         return {
             "ok": True, "stage": "approval", "request_id": request_id,
-            "execution": execution, "test_result": test_result, "diff": diff,
+            "execution": execution, "expectation_result": expectation_result,
+            "test_result": test_result, "diff": diff,
             "expires_at": request.expires_at,
         }
 
