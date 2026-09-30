@@ -45,7 +45,11 @@ class ToolRegistry:
         self.workspace = workspace or Workspace()
         self.activity = activity
         self.permission_manager = permission_manager or PermissionManager(
-            grants=(Permission.WORKSPACE_READ, Permission.WORKSPACE_WRITE)
+            grants=(
+                Permission.WORKSPACE_READ,
+                Permission.WORKSPACE_WRITE,
+                Permission.TERMINAL_EXECUTE,
+            )
         )
         self.patcher = WorkspacePatcher(self.workspace)
         self.test_runner = TestRunner(self.workspace.root)
