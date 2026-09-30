@@ -289,8 +289,8 @@ class AIRouter:
                 raise RuntimeError("Vision locator returned invalid normalized bounds.")
             # Normalized grounding coordinates are relative to the exact image
             # sent to the vision provider. For tab requests that image is cropped.
-            x = ((xmin + xmax) / 2000.0) * vision_width
-            y = ((ymin + ymax) / 2000.0) * vision_height
+            x = ((xmin + xmax) / 2000.0) * width
+            y = ((ymin + ymax) / 2000.0) * height
         else:
             try:
                 x, y = float(data["x"]), float(data["y"])
