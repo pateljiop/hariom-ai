@@ -1,6 +1,6 @@
-"""Structured tool registry for the agent execution layer."""
-from dataclasses import dataclass
-from typing import Any, Callable, Dict
+"""Structured tool registry with schema and central permission enforcement."""
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, Optional
 
 from .terminal import run_command
 from .workspace import Workspace
@@ -8,6 +8,7 @@ from .workspace_patcher import TextPatch, WorkspacePatcher
 from .test_runner import TestRunner
 from .git_manager import GitManager
 from .tool_schema import ToolSchema, ToolSchemaError
+from .permissions import Permission, PermissionManager
 
 
 class ToolError(Exception):
@@ -29,12 +30,23 @@ class ToolSpec:
     handler: Callable[..., Any]
     requires_approval: bool = False
     schema: ToolSchema = ToolSchema()
+    version: str = "1.0"
+    return_schema: Optional[Dict[str, Any]] = None
+    risk: str = "low"
+    permission: Optional[str] = None
+    timeout: int = 120
+    retry: int = 0
+    rollback: str = "none"
+    limits: Dict[str, Any] = field(default_factory=dict)
 
 
 class ToolRegistry:
-    def __init__(self, workspace=None, activity=None):
+    def __init__(self, workspace=None, activity=None, permission_manager=None):
         self.workspace = workspace or Workspace()
         self.activity = activity
+        self.permission_manager = permission_manager or PermissionManager(
+            grants=(Permission.WORKSPACE_READ, Permission.WORKSPACE_WRITE)
+        )
         self.patcher = WorkspacePatcher(self.workspace)
         self.test_runner = TestRunner(self.workspace.root)
         self.git = GitManager(self.workspace.root)
@@ -42,24 +54,38 @@ class ToolRegistry:
         self._register_defaults()
 
     def _register_defaults(self):
-        self.register(ToolSpec("workspace.list", "List files in the workspace.", lambda: [str(p.relative_to(self.workspace.root)) for p in self.workspace.list_files()]))
-        self.register(ToolSpec("workspace.read", "Read a UTF-8 text file from the workspace.", self.workspace.read_file, schema=ToolSchema(required=("path",), types={"path": (str,)})))
-        self.register(ToolSpec("workspace.write", "Write UTF-8 text to a file in the workspace.", self.workspace.write_file, schema=ToolSchema(required=("path", "content"), types={"path": (str,), "content": (str,)})))
-        self.register(ToolSpec("terminal.run", "Run a shell command with existing risky-command approval controls.", self._run_terminal, schema=ToolSchema(required=("command",), optional=("approved",), types={"command": (str,), "approved": (bool,)})))
-        self.register(ToolSpec("workspace.patch", "Replace an exact text fragment in one workspace file.", self._patch_workspace, schema=ToolSchema(required=("path", "old", "new"), optional=("expected_count",), types={"path": (str,), "old": (str,), "new": (str,), "expected_count": (int,)})))
-        self.register(ToolSpec("tests.run", "Run Python unittest discovery inside the workspace.", self._run_tests, schema=ToolSchema(optional=("target",), types={"target": (str,)})))
-        self.register(ToolSpec("git.status", "Show workspace Git status.", self.git.status))
-        self.register(ToolSpec("git.diff", "Show the current Git diff.", self.git.diff))
-        self.register(ToolSpec("git.branch", "Create a new isolated Git branch.", self.git.create_branch, schema=ToolSchema(required=("name",), types={"name": (str,)})))
-        self.register(ToolSpec("git.commit", "Commit workspace changes; explicit approval is required.", self.git.commit, requires_approval=True, schema=ToolSchema(required=("message",), optional=("approved",), types={"message": (str,), "approved": (bool,)})))
+        self.register(ToolSpec("workspace.list", "List files in the workspace.", lambda: [str(p.relative_to(self.workspace.root)) for p in self.workspace.list_files()], permission=Permission.WORKSPACE_READ.value))
+        self.register(ToolSpec("workspace.read", "Read a UTF-8 text file from the workspace.", self.workspace.read_file, schema=ToolSchema(required=("path",), types={"path": (str,)}), permission=Permission.WORKSPACE_READ.value))
+        self.register(ToolSpec("workspace.write", "Write UTF-8 text to a file in the workspace.", self.workspace.write_file, schema=ToolSchema(required=("path", "content"), types={"path": (str,), "content": (str,)}), permission=Permission.WORKSPACE_WRITE.value))
+        self.register(ToolSpec("terminal.run", "Run a shell command with existing risky-command approval controls.", self._run_terminal, schema=ToolSchema(required=("command",), optional=("approved",), types={"command": (str,), "approved": (bool,)}), permission=Permission.TERMINAL_EXECUTE.value, risk="high", requires_approval=True))
+        self.register(ToolSpec("workspace.patch", "Replace an exact text fragment in one workspace file.", self._patch_workspace, schema=ToolSchema(required=("path", "old", "new"), optional=("expected_count",), types={"path": (str,), "old": (str,), "new": (str,), "expected_count": (int,)}), permission=Permission.WORKSPACE_WRITE.value))
+        self.register(ToolSpec("tests.run", "Run Python unittest discovery inside the workspace.", self._run_tests, schema=ToolSchema(optional=("target",), types={"target": (str,)}), permission=Permission.TERMINAL_EXECUTE.value, risk="medium"))
+        self.register(ToolSpec("git.status", "Show workspace Git status.", self.git.status, permission=Permission.WORKSPACE_READ.value))
+        self.register(ToolSpec("git.diff", "Show the current Git diff.", self.git.diff, permission=Permission.WORKSPACE_READ.value))
+        self.register(ToolSpec("git.branch", "Create a new isolated Git branch.", self.git.create_branch, schema=ToolSchema(required=("name",), types={"name": (str,)}), permission=Permission.WORKSPACE_WRITE.value))
+        self.register(ToolSpec("git.commit", "Commit workspace changes; explicit approval is required.", self.git.commit, requires_approval=True, schema=ToolSchema(required=("message",), optional=("approved",), types={"message": (str,), "approved": (bool,)}), permission=Permission.GIT_COMMIT.value, risk="high"))
 
     def register(self, spec):
         if not isinstance(spec, ToolSpec) or not spec.name:
             raise ValueError("A valid ToolSpec is required.")
+        if spec.timeout <= 0 or spec.retry < 0:
+            raise ValueError("Tool timeout must be positive and retry must be non-negative.")
+        if spec.risk not in {"low", "medium", "high", "critical"}:
+            raise ValueError("Tool risk must be low, medium, high, or critical.")
         self._tools[spec.name] = spec
 
     def describe(self):
-        return [{"name": s.name, "description": s.description, "requires_approval": s.requires_approval, "schema": {"required": list(s.schema.required), "optional": list(s.schema.optional)}} for s in self._tools.values()]
+        return [
+            {
+                "name": s.name, "description": s.description, "version": s.version,
+                "requires_approval": s.requires_approval, "risk": s.risk,
+                "permission": s.permission, "timeout": s.timeout, "retry": s.retry,
+                "rollback": s.rollback, "limits": dict(s.limits),
+                "return_schema": s.return_schema,
+                "schema": s.schema.to_dict(),
+            }
+            for s in self._tools.values()
+        ]
 
     def validate_arguments(self, name, arguments=None):
         spec = self._tools.get(name)
@@ -76,7 +102,11 @@ class ToolRegistry:
     def execute(self, name, arguments=None, approved=False):
         self.validate_arguments(name, arguments)
         spec = self._tools[name]
-        if spec.requires_approval and not approved:
+        if spec.permission:
+            decision = self.permission_manager.decide(spec.permission, approved=approved)
+            if not decision.allowed:
+                raise ToolApprovalRequired(f"Tool '{name}' requires approval for permission '{spec.permission}'.")
+        if spec.requires_approval and not approved and not self.permission_manager.has(spec.permission) if spec.permission else spec.requires_approval and not approved:
             raise ToolApprovalRequired(f"Tool '{name}' requires approval.")
         if arguments is None:
             arguments = {}
