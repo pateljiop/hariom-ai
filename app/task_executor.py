@@ -64,6 +64,25 @@ class TaskExecutor:
             visit(step_id)
         return ordered
 
+    @staticmethod
+    def _skip_dependents(remaining, state, checkpoint):
+        changed = True
+        while changed:
+            changed = False
+            for action in remaining:
+                step_id = action.step_id
+                if not step_id or state.get(step_id, {}).get("status") in {"succeeded", "failed", "skipped"}:
+                    continue
+                if any(state.get(dep, {}).get("status") in {"failed", "skipped"} for dep in action.dependencies):
+                    record = state.setdefault(step_id, {
+                        "step_id": step_id, "status": "pending", "attempts": 0,
+                        "result": None, "error": None,
+                    })
+                    record.update({"status": "skipped", "error": "dependency_failed"})
+                    changed = True
+                    if checkpoint:
+                        checkpoint()
+
     def execute(self, actions, step_state=None, checkpoint: Callable | None = None, resume_interrupted=False):
         actions = self.validate(actions)
         results = []
@@ -99,12 +118,14 @@ class TaskExecutor:
                         "error_type": "approval_required", "error": str(exc), "results": results}
             except ToolError as exc:
                 record.update({"status": "failed", "error": str(exc)})
+                self._skip_dependents(actions[index + 1:], state, checkpoint)
                 if checkpoint:
                     checkpoint()
                 return {"ok": False, "stopped": True, "index": index, "step_id": step_id,
                         "error_type": "tool_error", "error": str(exc), "results": results}
             if not result.get("ok"):
                 record.update({"status": "failed", "error": result.get("error"), "result": result})
+                self._skip_dependents(actions[index + 1:], state, checkpoint)
                 if checkpoint:
                     checkpoint()
                 return {"ok": False, "stopped": True, "index": index, "step_id": step_id,
