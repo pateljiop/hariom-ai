@@ -56,7 +56,7 @@ class ToolRegistry:
         self.patcher = WorkspacePatcher(self.workspace)
         self.test_runner = TestRunner(self.workspace.root)
         self.git = GitManager(self.workspace.root)
-        self.browser = BrowserController()
+        self.browser = BrowserController(self.activity)
         self.computer = ComputerController()
         self._tools: Dict[str, ToolSpec] = {}
         self._register_defaults()
