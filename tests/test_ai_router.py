@@ -95,6 +95,25 @@ class AIRouterTests(unittest.TestCase):
         self.assertEqual(result["y"], 26)
 
     @patch.object(ai_router.AIRouter, "vision_chat")
+    def test_verify_click_state_requires_confident_verified_json(self, vision):
+        vision.return_value = (
+            '{"verified":true,"confidence":0.91,"reason":"GitHub tab is active"}',
+            "openai",
+        )
+        result = self.router.verify_click_state("GitHub tab", b"image", (1280, 720))
+        self.assertTrue(result["verified"])
+        self.assertEqual(result["confidence"], 0.91)
+
+    @patch.object(ai_router.AIRouter, "vision_chat")
+    def test_verify_click_state_rejects_unverified_json(self, vision):
+        vision.return_value = (
+            '{"verified":false,"confidence":0.95,"reason":"GitHub tab is visible but inactive"}',
+            "openai",
+        )
+        result = self.router.verify_click_state("GitHub tab", b"image", (1280, 720))
+        self.assertFalse(result["verified"])
+
+    @patch.object(ai_router.AIRouter, "vision_chat")
     def test_locate_on_screen_rejects_low_confidence(self, vision):
         vision.return_value = (
             '{"found":true,"x":100,"y":100,"confidence":0.42}',
