@@ -5,13 +5,21 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / '.env')
 
-APP_DIR = Path(os.getenv('APPDATA', ROOT / 'runtime')) / 'HariomAI'
+# Persistent Hariom AI data lives on D: by default so C: is not used for
+# memory, cache, router state, task checkpoints or other runtime storage.
+# Override with HARIOM_DATA_DIR when a different data drive is desired.
+DATA_DIR = Path(os.getenv('HARIOM_DATA_DIR', r'D:\HariomAI')).expanduser().resolve()
+APP_DIR = DATA_DIR / 'data'
 APP_DIR.mkdir(parents=True, exist_ok=True)
 
 WORKSPACE = Path(
-    os.getenv('HARIOM_WORKSPACE', Path.home() / 'HariomAI' / 'projects')
-).resolve()
+    os.getenv('HARIOM_WORKSPACE', str(DATA_DIR / 'projects'))
+).expanduser().resolve()
 WORKSPACE.mkdir(parents=True, exist_ok=True)
+
+# Keep persistent runtime categories together on the data drive.
+for _directory in ('memory', 'logs', 'database', 'tasks', 'cache', 'output', 'screenshots'):
+    (APP_DIR / _directory).mkdir(parents=True, exist_ok=True)
 
 PROVIDERS = {
     'openai': {
