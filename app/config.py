@@ -8,7 +8,8 @@ load_dotenv(ROOT / '.env')
 # Persistent Hariom AI data lives on D: by default so C: is not used for
 # memory, cache, router state, task checkpoints or other runtime storage.
 # Override with HARIOM_DATA_DIR when a different data drive is desired.
-DATA_DIR = Path(os.getenv('HARIOM_DATA_DIR', r'D:\HariomAI')).expanduser().resolve()
+DEFAULT_DATA_DIR = r'D:\HariomAI' if os.name == 'nt' else str(ROOT / 'runtime' / 'HariomAI')
+DATA_DIR = Path(os.getenv('HARIOM_DATA_DIR', DEFAULT_DATA_DIR)).expanduser().resolve()
 APP_DIR = DATA_DIR / 'data'
 APP_DIR.mkdir(parents=True, exist_ok=True)
 
