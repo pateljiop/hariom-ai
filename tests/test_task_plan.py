@@ -40,6 +40,40 @@ class TaskPlanTests(unittest.TestCase):
         self.assertEqual(len(plan.steps), 1)
         self.assertEqual(plan.actions[0].tool, "workspace.list")
 
+    def test_rejects_duplicate_step_ids(self):
+        with self.assertRaises(PlanValidationError):
+            TaskPlan.from_dict({
+                "steps": [
+                    {"step_id": "same", "tool": "workspace.list"},
+                    {"step_id": "same", "tool": "workspace.list"},
+                ]
+            })
+
+    def test_rejects_unknown_step_dependency(self):
+        with self.assertRaises(PlanValidationError):
+            TaskPlan.from_dict({
+                "steps": [
+                    {"step_id": "build", "tool": "workspace.list", "dependencies": ["missing"]}
+                ]
+            })
+
+    def test_rejects_self_dependency(self):
+        with self.assertRaises(PlanValidationError):
+            TaskPlan.from_dict({
+                "steps": [
+                    {"step_id": "build", "tool": "workspace.list", "dependencies": ["build"]}
+                ]
+            })
+
+    def test_rejects_circular_dependencies(self):
+        with self.assertRaises(PlanValidationError):
+            TaskPlan.from_dict({
+                "steps": [
+                    {"step_id": "a", "tool": "workspace.list", "dependencies": ["b"]},
+                    {"step_id": "b", "tool": "workspace.list", "dependencies": ["a"]},
+                ]
+            })
+
     def test_defaults_arguments_and_test_target(self):
         plan = TaskPlan.from_dict({
             "actions": [{"tool": "workspace.list"}]
