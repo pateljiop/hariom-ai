@@ -14,6 +14,7 @@ class AIRouterTests(unittest.TestCase):
             "fast": {"key":"key-fast","model":"fast-model","base":"https://example.test/fast"},
             "fallback": {"key":"key-fallback","model":"fallback-model","base":"https://example.test/fallback"},
         })
+        self.router.health.clear()
 
     def tearDown(self):
         ai_router.PROVIDERS.clear()
