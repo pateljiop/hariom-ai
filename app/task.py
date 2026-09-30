@@ -80,8 +80,33 @@ class Task:
         if not isinstance(self.rollback_strategy, str) or not self.rollback_strategy.strip():
             raise ValueError("rollback_strategy must be a non-empty string.")
 
+    _ALLOWED_TRANSITIONS = {
+        TaskStatus.CREATED: {TaskStatus.PLANNING, TaskStatus.CANCELLED},
+        TaskStatus.PLANNING: {TaskStatus.VALIDATING, TaskStatus.FAILED, TaskStatus.CANCELLED},
+        TaskStatus.VALIDATING: {TaskStatus.AWAITING_APPROVAL, TaskStatus.APPROVED, TaskStatus.FAILED, TaskStatus.CANCELLED},
+        TaskStatus.AWAITING_APPROVAL: {TaskStatus.APPROVED, TaskStatus.FAILED, TaskStatus.CANCELLED},
+        TaskStatus.APPROVED: {TaskStatus.EXECUTING, TaskStatus.CANCELLED},
+        TaskStatus.EXECUTING: {TaskStatus.TESTING, TaskStatus.FAILED, TaskStatus.TIMED_OUT, TaskStatus.CANCELLED},
+        TaskStatus.TESTING: {TaskStatus.REPAIRING, TaskStatus.AWAITING_COMMIT_APPROVAL, TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.TIMED_OUT, TaskStatus.CANCELLED},
+        TaskStatus.REPAIRING: {TaskStatus.TESTING, TaskStatus.FAILED, TaskStatus.TIMED_OUT, TaskStatus.CANCELLED},
+        TaskStatus.AWAITING_COMMIT_APPROVAL: {TaskStatus.COMMITTING, TaskStatus.FAILED, TaskStatus.CANCELLED},
+        TaskStatus.COMMITTING: {TaskStatus.COMPLETED, TaskStatus.ROLLED_BACK, TaskStatus.FAILED, TaskStatus.TIMED_OUT},
+        TaskStatus.FAILED: {TaskStatus.REPAIRING, TaskStatus.CANCELLED},
+        TaskStatus.TIMED_OUT: {TaskStatus.REPAIRING, TaskStatus.CANCELLED},
+        TaskStatus.CANCELLED: set(),
+        TaskStatus.COMPLETED: set(),
+        TaskStatus.ROLLED_BACK: set(),
+    }
+
     def transition(self, status, **data):
         status = status if isinstance(status, TaskStatus) else TaskStatus(status)
+        if status == self.status:
+            raise ValueError(f"Task is already in status '{status.value}'.")
+        allowed = self._ALLOWED_TRANSITIONS.get(self.status, set())
+        if status not in allowed:
+            raise ValueError(
+                f"Invalid task transition: '{self.status.value}' -> '{status.value}'."
+            )
         now = datetime.now(timezone.utc).isoformat()
         event = {"timestamp": now, "status": status.value, **data}
         self.status = status
