@@ -60,3 +60,15 @@ class AgentRunnerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TrustBoundaryTests(unittest.TestCase):
+    def test_planning_prompt_marks_external_content_untrusted(self):
+        prompt = AgentRunner._planning_prompt([])
+        self.assertIn("UNTRUSTED DATA", prompt)
+        self.assertIn("Only direct user intent", prompt)
+        self.assertIn("bypass approval", prompt)
+
+
+if __name__ == "__main__":
+    unittest.main()
