@@ -1,4 +1,6 @@
+import base64
 import json
+import mimetypes
 import time
 from collections import defaultdict
 
@@ -62,9 +64,32 @@ class AIRouter:
     def chat_messages(self, messages, preferred=None, profile='hariom/auto'):
         return self.chat_request(messages, preferred=preferred, profile=profile)
 
+    def chat_vision(self, image_path, prompt, system='', preferred=None, profile='hariom/auto'):
+        """Send one local image to a vision-capable provider."""
+        from pathlib import Path
+        path = Path(image_path).expanduser().resolve()
+        if not path.is_file():
+            raise ValueError('Vision image does not exist.')
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise ValueError('Vision prompt must be a non-empty string.')
+        data = base64.b64encode(path.read_bytes()).decode('ascii')
+        mime = mimetypes.guess_type(path.name)[0] or 'image/png'
+        content = [
+            {'type': 'text', 'text': prompt.strip()},
+            {'type': 'image_url', 'image_url': {'url': f'data:{mime};base64,{data}'}},
+        ]
+        messages = []
+        if system:
+            messages.append({'role': 'system', 'content': system})
+        messages.append({'role': 'user', 'content': content})
+        result, provider = self.chat_request(
+            messages, preferred=preferred, profile=profile, vision=True, use_cache=False
+        )
+        return result.get('content', ''), provider
+
     def chat_request(self, messages, preferred=None, profile='hariom/auto',
                      tools=None, tool_choice=None, response_format=None,
-                     use_cache=True):
+                     use_cache=True, vision=False):
         if not messages:
             raise ValueError('messages is required')
         if profile not in ROUTING_PROFILES:
@@ -82,7 +107,7 @@ class AIRouter:
                 self.activity.emit('AI CACHE -> hit')
                 return cached['message'], cached['provider']
 
-        candidates = self._rank(preferred=preferred, profile=profile, tools=tools, response_format=response_format)
+        candidates = self._rank(preferred=preferred, profile=profile, tools=tools, response_format=response_format, vision=vision)
         errors = []
         if not candidates:
             raise RuntimeError('No AI provider is configured or compatible with this request.')
@@ -116,7 +141,7 @@ class AIRouter:
 
         raise RuntimeError('All configured AI providers failed. ' + ' | '.join(errors))
 
-    def _rank(self, preferred=None, profile='hariom/auto', tools=None, response_format=None):
+    def _rank(self, preferred=None, profile='hariom/auto', tools=None, response_format=None, vision=False):
         now = time.time()
         p = ROUTING_PROFILES.get(profile, {})
         candidates = []
@@ -129,6 +154,8 @@ class AIRouter:
             if tools and not cfg.get('supports_tools', False):
                 continue
             if response_format and not cfg.get('supports_json', False):
+                continue
+            if vision and not cfg.get('supports_vision', False):
                 continue
             models = cfg.get('models') or [cfg.get('model')]
             for index, model in enumerate(models):
@@ -282,9 +309,22 @@ class AIRouter:
                 if isinstance(content, str):
                     system.append(content)
                 continue
+            parts = []
             if isinstance(content, str):
-                contents.append({'role': 'model' if role == 'assistant' else 'user',
-                                 'parts': [{'text': content}]})
+                parts.append({'text': content})
+            elif isinstance(content, list):
+                for item in content:
+                    if item.get('type') == 'text':
+                        parts.append({'text': item.get('text', '')})
+                    elif item.get('type') == 'image_url':
+                        url_data = item.get('image_url', {}).get('url', '')
+                        if not url_data.startswith('data:') or ';base64,' not in url_data:
+                            raise RuntimeError('Gemini vision requires a base64 data URL.')
+                        header, encoded = url_data.split(';base64,', 1)
+                        mime = header[5:] or 'image/png'
+                        parts.append({'inline_data': {'mime_type': mime, 'data': encoded}})
+            if parts:
+                contents.append({'role': 'model' if role == 'assistant' else 'user', 'parts': parts})
         payload = {'contents': contents}
         if system:
             payload['systemInstruction'] = {'parts': [{'text': '\n'.join(system)}]}
