@@ -102,12 +102,12 @@ class PersonalAgent:
         # Handle natural Hinglish forms such as:
         # "github tab pr click karo", "github tab pe click kar do".
         match = re.search(
-            r"(?i)^(.+?)\s+(?:pr|par|pe|on)\s+(?:click|tap|press)\\b.*$",
+            r"(?i)^(.+?)\s+(?:pr|par|pe|on)\s+(?:click|tap|press)\b.*$",
             text,
         )
         if match:
-            return re.sub(r"(?i)\\s+$", "", match.group(1)).strip()
-        match = re.search(r"(?i)(?:click|tap|press)\s+(?:on\s+)?(.+?)(?:\\s+(?:karo|kar do|krdo|please))?$", text)
+            return re.sub(r"(?i)\s+$", "", match.group(1)).strip()
+        match = re.search(r"(?i)(?:click|tap|press)\s+(?:on\s+)?(.+?)(?:\s+(?:karo|kar do|krdo|please))?$", text)
         return match.group(1).strip() if match else text
 
     def execute(self, state, approve=False, max_attempts=2):
