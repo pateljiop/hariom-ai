@@ -38,8 +38,8 @@ class PlanExecutorTests(unittest.TestCase):
                 "actions": [{"tool": "workspace.write", "arguments": {"path": "a", "content": "b"}}],
             })
             restored = service.get_task("task-persist")
-            self.assertEqual(restored.status.value, "awaiting_approval")
-            self.assertTrue(any(e["status"] == "awaiting_approval" for e in service.events("task-persist")))
+            self.assertEqual(restored.status.value, "awaiting_commit_approval")
+            self.assertTrue(any(e["status"] == "awaiting_commit_approval" for e in service.events("task-persist")))
             self.assertEqual(result["request_id"], "persisted")
 
     def test_prepare_failure_exposes_failed_state(self):
