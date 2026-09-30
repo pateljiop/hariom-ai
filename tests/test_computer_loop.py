@@ -14,8 +14,10 @@ class ComputerControlLoopTests(unittest.TestCase):
 
     def test_visual_loop_captures_after_action_and_completes(self):
         self.registry.execute.side_effect = [
+            self._ok("computer.screen_size", {"width": 1920, "height": 1080}),
             self._ok("computer.screenshot", "/tmp/screen1.png"),
             self._ok("computer.click", True),
+            self._ok("computer.screen_size", {"width": 1920, "height": 1080}),
             self._ok("computer.screenshot", "/tmp/screen2.png"),
         ]
         decisions = iter([
@@ -44,6 +46,26 @@ class ComputerControlLoopTests(unittest.TestCase):
         )
         self.assertFalse(result["ok"])
         self.assertEqual(result["status"], "action_failed")
+
+    def test_click_outside_screen_is_rejected_before_action(self):
+        self.registry.side_effect = None
+        self.registry.execute.side_effect = [
+            self._ok("computer.screen_size", {"width": 1920, "height": 1080}),
+            self._ok("computer.screenshot", "/tmp/screen.png"),
+        ]
+        with self.assertRaises(ComputerLoopError):
+            ComputerControlLoop(self.registry).run(
+                lambda image, history: {
+                    "action": {"tool": "computer.click", "arguments": {"x": 1920, "y": 100}, "approved": True}
+                }
+            )
+
+    def test_invalid_screen_geometry_is_rejected(self):
+        self.registry.execute.return_value = self._ok(
+            "computer.screen_size", {"width": 0, "height": 1080}
+        )
+        with self.assertRaises(ComputerLoopError):
+            ComputerControlLoop(self.registry).run(lambda image, history: {"done": True})
 
     def test_non_desktop_tool_is_rejected(self):
         with self.assertRaises(ComputerLoopError):
