@@ -245,6 +245,7 @@ class App(tk.Tk):
                                              relief="flat", bd=0, padx=16, pady=5,
                                              font=("Segoe UI", 8, "bold"), cursor="hand2")
         self.history_view_button.pack(side="left", padx=5)
+        self.action_button(nav, "NEW CHAT", self.new_chat, primary=True).pack(side="right")
         self.update_view_ui()
 
         self.chat_surface = tk.Frame(outer, bg="#080c12")
@@ -352,6 +353,18 @@ class App(tk.Tk):
                   font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side="right")
         tk.Button(footer, text="Brave", command=lambda: self.select_browser("brave"), bg="#0e141d", fg="#7c899b", activebackground="#18212d", activeforeground="#eef4fa", relief="flat", bd=0, font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side="right", padx=8)
         tk.Button(footer, text="Chromium", command=lambda: self.select_browser("chromium"), bg="#0e141d", fg="#7c899b", activebackground="#18212d", activeforeground="#eef4fa", relief="flat", bd=0, font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side="right")
+
+    def new_chat(self):
+        self.current_conversation_id = None
+        if hasattr(self, "log"):
+            self.log.configure(state="normal")
+            self.log.delete("1.0", "end")
+            self.log.configure(state="disabled")
+        if hasattr(self, "prompt"):
+            self.prompt.delete("1.0", "end")
+            self.prompt.insert("1.0", "Tell Hariom AI what to do…")
+        self.set_view("chat")
+        self.status.set("New chat")
 
     def set_mode(self, mode):
         if mode not in ("chat", "agent"):
