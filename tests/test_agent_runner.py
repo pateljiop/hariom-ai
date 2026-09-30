@@ -114,8 +114,10 @@ class AgentRunnerTests(unittest.TestCase):
             ('{"done":true}', "fast"),
         ]
         self.registry.execute.side_effect = [
+            {"ok": True, "result": {"width": 1920, "height": 1080}},
             {"ok": True, "result": "/tmp/screen1.png"},
             {"ok": True, "result": True},
+            {"ok": True, "result": {"width": 1920, "height": 1080}},
             {"ok": True, "result": "/tmp/screen2.png"},
         ]
         result = self.runner.run_computer(
