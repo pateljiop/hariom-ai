@@ -166,63 +166,132 @@ class App(tk.Tk):
     def build_panel(self):
         for child in list(self.winfo_children()):
             child.destroy()
-        outer = tk.Frame(self, bg=self.BG, highlightthickness=1, highlightbackground="#34414f")
+
+        # Product-grade dark glass layout: clear hierarchy, generous spacing,
+        # restrained controls, and an always-visible system state.
+        outer = tk.Frame(self, bg="#080c12", highlightthickness=1, highlightbackground="#263241")
         outer.pack(fill="both", expand=True)
 
-        header = tk.Frame(outer, bg=self.PANEL, height=48)
+        header = tk.Frame(outer, bg="#0e141d", height=58)
         header.pack(fill="x")
         header.bind("<ButtonPress-1>", self.start_drag)
         header.bind("<B1-Motion>", self.drag)
-        tk.Label(header, text="🤖  HARIOM AI", bg=self.PANEL, fg=self.TEXT, font=("Segoe UI", 12, "bold")).pack(side="left", padx=14)
-        tk.Label(header, text="PERSONAL AI", bg=self.PANEL, fg=self.MUTED, font=("Segoe UI", 8, "bold")).pack(side="left")
-        tk.Button(header, text="—", command=self.collapse, bg=self.PANEL, fg=self.MUTED, activebackground=self.PANEL, activeforeground=self.TEXT, relief="flat", bd=0, font=("Segoe UI", 13), padx=8).pack(side="right")
-        tk.Button(header, text="+", command=lambda: self.resize_panel(60, 80), bg=self.PANEL, fg=self.MUTED, activebackground=self.PANEL, activeforeground=self.TEXT, relief="flat", bd=0, font=("Segoe UI", 11, "bold"), padx=7).pack(side="right")
-        tk.Button(header, text="-", command=lambda: self.resize_panel(-60, -80), bg=self.PANEL, fg=self.MUTED, activebackground=self.PANEL, activeforeground=self.TEXT, relief="flat", bd=0, font=("Segoe UI", 11, "bold"), padx=7).pack(side="right")
-        tk.Button(header, text="R", command=self.reset_panel_size, bg=self.PANEL, fg=self.MUTED, activebackground=self.PANEL, activeforeground=self.TEXT, relief="flat", bd=0, font=("Segoe UI", 9, "bold"), padx=7).pack(side="right")
-        tk.Button(header, text="✕", command=self.quit_app, bg=self.PANEL, fg="#ff8f8f", activebackground=self.PANEL, activeforeground="#ffb0b0", relief="flat", bd=0, font=("Segoe UI", 11, "bold"), padx=8).pack(side="right")
 
-        orb = tk.Frame(outer, bg=self.BG, height=118)
-        orb.pack(fill="x")
-        self._logo_photo = self._load_logo(88)
-        if self._logo_photo is not None:
-            self.orb = tk.Label(orb, image=self._logo_photo, bg=self.BG)
-        else:
-            self.orb = tk.Label(orb, text="◉", bg=self.BG, fg=self.ACCENT, font=("Segoe UI", 54, "bold"))
-        self.orb.pack(pady=(6, 0))
+        brand = tk.Frame(header, bg="#0e141d")
+        brand.pack(side="left", padx=(16, 0), pady=10)
+        brand.bind("<ButtonPress-1>", self.start_drag)
+        brand.bind("<B1-Motion>", self.drag)
+        tk.Label(brand, text="HARIOM", bg="#0e141d", fg="#f4f7fb",
+                 font=("Segoe UI", 12, "bold")).pack(side="left")
+        tk.Label(brand, text=" AI", bg="#0e141d", fg="#79dcff",
+                 font=("Segoe UI", 12, "bold")).pack(side="left")
+        tk.Label(brand, text="  •  PERSONAL AGENT", bg="#0e141d", fg="#667386",
+                 font=("Segoe UI", 7, "bold")).pack(side="left", padx=(6, 0))
+
+        controls = tk.Frame(header, bg="#0e141d")
+        controls.pack(side="right", padx=8)
+        for label, command in (
+            ("−", self.collapse),
+            ("□", lambda: self.resize_panel(60, 80)),
+            ("×", self.quit_app),
+        ):
+            fg = "#ff8f9a" if label == "×" else "#8290a3"
+            tk.Button(controls, text=label, command=command, bg="#0e141d", fg=fg,
+                      activebackground="#18212d", activeforeground="#ffffff",
+                      relief="flat", bd=0, font=("Segoe UI", 11), width=3,
+                      cursor="hand2").pack(side="left")
+
+        # Status strip
+        status_bar = tk.Frame(outer, bg="#0b1119", height=30)
+        status_bar.pack(fill="x")
+        self._status_dot = tk.Label(status_bar, text="●", bg="#0b1119", fg="#67e8a5",
+                                    font=("Segoe UI", 8))
+        self._status_dot.pack(side="left", padx=(16, 5))
         self.status = tk.StringVar(value="Ready")
-        tk.Label(orb, textvariable=self.status, bg=self.BG, fg=self.MUTED, font=("Segoe UI", 9)).pack()
+        tk.Label(status_bar, textvariable=self.status, bg="#0b1119", fg="#aab5c4",
+                 font=("Segoe UI", 8)).pack(side="left")
+        tk.Label(status_bar, text="LOCAL WORKSPACE", bg="#0b1119", fg="#596779",
+                 font=("Segoe UI", 7, "bold")).pack(side="right", padx=16)
 
-        command = tk.Frame(outer, bg=self.PANEL, padx=12, pady=10)
-        command.pack(fill="x", padx=12, pady=(0, 10))
-        self.prompt = tk.Text(command, height=3, wrap="word", bg=self.ENTRY, fg=self.TEXT, insertbackground=self.ACCENT, relief="flat", bd=0, font=("Segoe UI", 10), padx=10, pady=8)
-        self.prompt.pack(fill="x")
-        self.prompt.insert("1.0", "Ask Hariom AI...")
+        # Assistant identity / breathing area
+        hero = tk.Frame(outer, bg="#080c12", height=112)
+        hero.pack(fill="x")
+        self._logo_photo = self._load_logo(72)
+        if self._logo_photo is not None:
+            self.orb = tk.Label(hero, image=self._logo_photo, bg="#080c12")
+        else:
+            self.orb = tk.Label(hero, text="◉", bg="#080c12", fg="#79dcff",
+                                font=("Segoe UI", 48, "bold"))
+        self.orb.pack(pady=(10, 0))
+        tk.Label(hero, text="Ready when you are.", bg="#080c12", fg="#667386",
+                 font=("Segoe UI", 8)).pack()
+
+        # Command surface
+        command_card = tk.Frame(outer, bg="#111822", highlightthickness=1,
+                                highlightbackground="#1f2a38")
+        command_card.pack(fill="x", padx=14, pady=(0, 10))
+
+        tk.Label(command_card, text="COMMAND", bg="#111822", fg="#617084",
+                 font=("Segoe UI", 7, "bold")).pack(anchor="w", padx=12, pady=(9, 3))
+
+        self.prompt = tk.Text(command_card, height=3, wrap="word",
+                              bg="#0b1018", fg="#eef4fa", insertbackground="#79dcff",
+                              selectbackground="#294457", relief="flat", bd=0,
+                              font=("Segoe UI", 10), padx=11, pady=9)
+        self.prompt.pack(fill="x", padx=8)
+        self.prompt.insert("1.0", "Tell Hariom AI what to do…")
         self.prompt.bind("<FocusIn>", self.clear_placeholder)
         self.prompt.bind("<Control-Return>", lambda _e: self.run_task())
 
-        actions = tk.Frame(command, bg=self.PANEL)
-        actions.pack(fill="x", pady=(8, 0))
-        self.action_button(actions, "Ask", self.ask).pack(side="left")
-        self.action_button(actions, "Run", self.run_task).pack(side="left", padx=4)
-        self.action_button(actions, "🎙 Voice", self.voice_command).pack(side="left")
-        self.action_button(actions, "👁 Screen", self.see_screen).pack(side="left", padx=4)
-        self.action_button(actions, "Approve", self.approve_task).pack(side="left")
-        self.action_button(actions, "Resume", self.resume_saved).pack(side="right")
+        action_row = tk.Frame(command_card, bg="#111822")
+        action_row.pack(fill="x", padx=8, pady=8)
+        self.action_button(action_row, "Ask", self.ask, primary=True).pack(side="left")
+        self.action_button(action_row, "Run", self.run_task).pack(side="left", padx=5)
+        self.action_button(action_row, "Voice", self.voice_command).pack(side="left")
+        self.action_button(action_row, "Screen", self.see_screen).pack(side="left", padx=5)
+        self.action_button(action_row, "Approve", self.approve_task).pack(side="right")
 
-        tk.Label(outer, text="LIVE ACTIVITY", bg=self.BG, fg=self.MUTED, font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=16)
-        box = tk.Frame(outer, bg=self.ENTRY)
-        box.pack(fill="both", expand=True, padx=12, pady=(5, 8))
-        self.log = tk.Text(box, wrap="word", state="disabled", bg=self.ENTRY, fg="#b8c2d1", relief="flat", bd=0, font=("Consolas", 8), padx=9, pady=8)
+        # Activity / response surface
+        activity_head = tk.Frame(outer, bg="#080c12")
+        activity_head.pack(fill="x", padx=16)
+        tk.Label(activity_head, text="ACTIVITY", bg="#080c12", fg="#e4eaf1",
+                 font=("Segoe UI", 8, "bold")).pack(side="left")
+        tk.Label(activity_head, text="LIVE", bg="#080c12", fg="#67e8a5",
+                 font=("Segoe UI", 7, "bold")).pack(side="left", padx=7)
+        tk.Button(activity_head, text="Resume", command=self.resume_saved,
+                  bg="#080c12", fg="#69778a", activebackground="#111822",
+                  activeforeground="#eef4fa", relief="flat", bd=0,
+                  font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side="right")
+
+        box = tk.Frame(outer, bg="#0b1018", highlightthickness=1,
+                       highlightbackground="#1a2430")
+        box.pack(fill="both", expand=True, padx=14, pady=(5, 8))
+        self.log = tk.Text(box, wrap="word", state="disabled",
+                           bg="#0b1018", fg="#b8c4d3", relief="flat", bd=0,
+                           font=("Cascadia Mono", 8), padx=10, pady=9,
+                           insertbackground="#79dcff")
         self.log.pack(fill="both", expand=True)
 
-        footer = tk.Frame(outer, bg=self.PANEL)
+        footer = tk.Frame(outer, bg="#0e141d", height=34)
         footer.pack(fill="x")
-        tk.Label(footer, text="Click robot to return  •  Ctrl+Space", bg=self.PANEL, fg=self.MUTED, font=("Segoe UI", 8)).pack(side="left", padx=12, pady=8)
-        tk.Button(footer, text="Change", command=self.choose_workspace, bg=self.PANEL, fg=self.MUTED, activebackground=self.PANEL, activeforeground=self.TEXT, relief="flat", bd=0, font=("Segoe UI", 8)).pack(side="right", padx=4)
-        tk.Button(footer, text="Workspace", command=self.list_workspace, bg=self.PANEL, fg=self.MUTED, activebackground=self.PANEL, activeforeground=self.TEXT, relief="flat", bd=0, font=("Segoe UI", 8)).pack(side="right", padx=8)
+        tk.Label(footer, text="Ctrl+Space  show/hide", bg="#0e141d", fg="#586779",
+                 font=("Segoe UI", 7)).pack(side="left", padx=14, pady=8)
+        tk.Button(footer, text="Workspace", command=self.list_workspace,
+                  bg="#0e141d", fg="#7c899b", activebackground="#18212d",
+                  activeforeground="#eef4fa", relief="flat", bd=0,
+                  font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side="right", padx=8)
+        tk.Button(footer, text="Change", command=self.choose_workspace,
+                  bg="#0e141d", fg="#7c899b", activebackground="#18212d",
+                  activeforeground="#eef4fa", relief="flat", bd=0,
+                  font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side="right")
 
-    def action_button(self, parent, text, command):
-        return tk.Button(parent, text=text, command=command, bg="#222936", fg=self.TEXT, activebackground="#303a4b", activeforeground=self.TEXT, relief="flat", bd=0, padx=8, pady=5, font=("Segoe UI", 8, "bold"), cursor="hand2")
+    def action_button(self, parent, text, command, primary=False):
+        bg = "#1b789c" if primary else "#1a2330"
+        active = "#238db5" if primary else "#253142"
+        return tk.Button(parent, text=text, command=command, bg=bg, fg="#f3f7fb",
+                         activebackground=active, activeforeground="#ffffff",
+                         relief="flat", bd=0, padx=11, pady=6,
+                         font=("Segoe UI", 8, "bold"), cursor="hand2")
 
     def start_drag(self, event):
         self._drag_x, self._drag_y = event.x, event.y
