@@ -16,6 +16,7 @@ from .voice import VoiceController
 from .public_apis import PublicAPIs
 from .workspace import Workspace
 from .chat_history import ChatHistoryStore
+from .conversation_context import build_context
 
 
 class App(tk.Tk):
@@ -580,26 +581,7 @@ class App(tk.Tk):
                 self.current_conversation_id = uuid.uuid4().hex
             conversation_id = self.current_conversation_id
             previous = self.history.conversation(conversation_id)
-            messages = [{"role": "system", "content": self.agent.intelligence.system_prompt()}]
-            # Keep context bounded so long-lived chats do not grow the request
-            # indefinitely. Prefer the newest messages while preserving pairs.
-            context = []
-            budget = 12000
-            used = 0
-            for message in reversed(previous[-40:]):
-                role = message["role"]
-                content = str(message["content"])
-                if role not in ("user", "assistant"):
-                    continue
-                remaining = budget - used
-                if remaining <= 0:
-                    break
-                if len(content) > remaining:
-                    content = content[-remaining:]
-                context.append({"role": role, "content": content})
-                used += len(content)
-            messages.extend(reversed(context))
-            messages.append({"role": "user", "content": prompt})
+            messages = build_context(previous, self.agent.intelligence.system_prompt())
             self.history.add(conversation_id, "user", prompt)
             message, provider = self.router.chat_messages(messages, use_cache=False)
             text = message.get("content", "")
