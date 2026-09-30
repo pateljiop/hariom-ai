@@ -37,6 +37,11 @@ class TerminalSafetyTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             run_command("git push --force", Mock())
 
+    def test_unapproved_shell_metacharacters_require_approval(self):
+        activity = Mock()
+        with self.assertRaises(PermissionError):
+            run_command("python -c \"print(1)\" & whoami", activity)
+
     def test_approved_command_runs(self):
         activity = Mock()
         code, output = run_command("python -c \"print('ok')\"", activity, approved=True)
