@@ -12,8 +12,9 @@ class PlanExecutionError(Exception):
 
 
 class PlanExecutor:
-    def __init__(self, workflow=None):
-        self.workflow = workflow or ApprovalWorkflow()
+    def __init__(self, workflow=None, task_service=None):
+        self.task_service = task_service or TaskService()
+        self.workflow = workflow or ApprovalWorkflow(store=self.task_service.store)
         self._states = {}
 
     def prepare(self, payload, task_id=None):
@@ -23,7 +24,7 @@ class PlanExecutor:
         self._states[task_id] = state
         state.transition("validated", action_count=len(plan.actions))
         state.transition("executing")
-        result = self.workflow.prepare(plan.actions, plan.test_target)
+        result = self.workflow.prepare(plan.actions, plan.test_target, task_id=task_id)
         if result.get("ok"):
             self.task_service.transition(task_id, "awaiting_approval", request_id=result.get("request_id"))
             state.transition("approval", request_id=result.get("request_id"))
