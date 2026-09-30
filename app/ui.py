@@ -34,6 +34,7 @@ class App(tk.Tk):
         self._drag_x = self._drag_y = 0
         self._expanded = False
         self.current_task = None
+        self.project_profile = "Current Workspace"
         self.panel_width = 440
         self.panel_height = 650
         self.min_panel_width = 360
@@ -273,7 +274,7 @@ class App(tk.Tk):
         # Activity / response surface
         activity_head = tk.Frame(outer, bg="#080c12")
         activity_head.pack(fill="x", padx=16)
-        tk.Label(activity_head, text="ACTIVITY", bg="#080c12", fg="#e4eaf1",
+        tk.Label(activity_head, text="TASK TIMELINE", bg="#080c12", fg="#e4eaf1",
                  font=("Segoe UI", 8, "bold")).pack(side="left")
         tk.Label(activity_head, text="LIVE", bg="#080c12", fg="#67e8a5",
                  font=("Segoe UI", 7, "bold")).pack(side="left", padx=7)
