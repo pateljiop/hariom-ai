@@ -11,6 +11,7 @@ class TaskAction:
     arguments: Dict[str, Any]
     approved: bool = False
     dependencies: tuple = ()
+    step_id: str = ""
 
 
 class TaskExecutionError(Exception):
