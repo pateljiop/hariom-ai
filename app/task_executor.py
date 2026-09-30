@@ -108,10 +108,10 @@ class TaskExecutor:
                 if checkpoint:
                     checkpoint()
                 continue
-            record.update({"status": "running", "attempts": int(record.get("attempts", 0)) + 1, "error": None})
-            if checkpoint:
-                checkpoint()
             while True:
+                record.update({"status": "running", "attempts": int(record.get("attempts", 0)) + 1, "error": None})
+                if checkpoint:
+                    checkpoint()
                 try:
                     result = self.registry.execute(action.tool, action.arguments, approved=action.approved)
                 except ToolApprovalRequired as exc:
@@ -121,11 +121,9 @@ class TaskExecutor:
                     return {"ok": False, "stopped": True, "index": index, "step_id": step_id,
                             "error_type": "approval_required", "error": str(exc), "results": results}
                 except ToolError as exc:
-                    if action.retryable and int(record.get("attempts", 0)) <= max_step_retries:
+                    retry = action.retryable and int(record.get("attempts", 0)) <= max_step_retries
+                    if retry:
                         record.update({"status": "pending", "error": str(exc)})
-                        if checkpoint:
-                            checkpoint()
-                        record.update({"status": "running", "attempts": int(record.get("attempts", 0)) + 1})
                         if checkpoint:
                             checkpoint()
                         continue
@@ -136,11 +134,9 @@ class TaskExecutor:
                     return {"ok": False, "stopped": True, "index": index, "step_id": step_id,
                             "error_type": "tool_error", "error": str(exc), "results": results}
                 if not result.get("ok"):
-                    if action.retryable and int(record.get("attempts", 0)) <= max_step_retries:
+                    retry = action.retryable and int(record.get("attempts", 0)) <= max_step_retries
+                    if retry:
                         record.update({"status": "pending", "error": result.get("error"), "result": result})
-                        if checkpoint:
-                            checkpoint()
-                        record.update({"status": "running", "attempts": int(record.get("attempts", 0)) + 1})
                         if checkpoint:
                             checkpoint()
                         continue
@@ -150,9 +146,9 @@ class TaskExecutor:
                         checkpoint()
                     return {"ok": False, "stopped": True, "index": index, "step_id": step_id,
                             "error_type": "execution_error", "error": result.get("error"), "results": results}
+                record.update({"status": "succeeded", "result": result, "error": None})
+                results.append(result)
+                if checkpoint:
+                    checkpoint()
                 break
-            record.update({"status": "succeeded", "result": result, "error": None})
-            results.append(result)
-            if checkpoint:
-                checkpoint()
         return {"ok": True, "stopped": False, "results": results}
