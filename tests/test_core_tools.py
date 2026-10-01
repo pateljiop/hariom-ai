@@ -343,6 +343,11 @@ class GitManagerTests(unittest.TestCase):
             with self.assertRaises(PermissionError):
                 GitManager(root).commit("test")
 
+    def test_protected_branch_is_rejected(self):
+        git = GitManager(".")
+        with self.assertRaisesRegex(GitError, "Protected branch"):
+            git._validate_branch_name("main")
+
     def test_invalid_branch_name_is_rejected(self):
         with tempfile.TemporaryDirectory() as root:
             with self.assertRaises(GitError):
