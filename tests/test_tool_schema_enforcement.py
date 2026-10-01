@@ -53,6 +53,30 @@ class ToolSchemaEnforcementTests(unittest.TestCase):
         result = registry.execute("browser.click", {"selector": "#submit", "approved": True}, approved=True)
         self.assertTrue(result["ok"], result)
 
+    def test_task_bound_approval_requires_matching_task_tool_and_arguments(self):
+        registry = ToolRegistry(permission_manager=PermissionManager())
+        args = {"command": "echo ok"}
+        with self.assertRaises(ToolApprovalRequired):
+            registry.execute("terminal.run", args, approved=True, task_id="task-1")
+        approval = {
+            "task_id": "task-1",
+            "tool": "terminal.run",
+            "permission": Permission.TERMINAL_EXECUTE.value,
+            "arguments_hash": registry.permission_manager.argument_fingerprint(args),
+        }
+        result = registry.execute("terminal.run", args, approved=True, task_id="task-1", approval=approval)
+        self.assertTrue(result["ok"], result)
+
+    def test_task_bound_approval_rejects_argument_replay(self):
+        registry = ToolRegistry(permission_manager=PermissionManager())
+        approval = {
+            "task_id": "task-1",
+            "tool": "terminal.run",
+            "arguments_hash": registry.permission_manager.argument_fingerprint({"command": "echo one"}),
+        }
+        with self.assertRaises(ToolApprovalRequired):
+            registry.execute("terminal.run", {"command": "echo two"}, approved=True, task_id="task-1", approval=approval)
+
     def test_describe_includes_schema_fields(self):
         registry = ToolRegistry()
         item = next(x for x in registry.describe() if x["name"] == "workspace.write")
