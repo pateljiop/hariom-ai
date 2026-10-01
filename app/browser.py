@@ -90,6 +90,26 @@ class BrowserController:
             raise RuntimeError("No browser session is open.")
         return self.session.page.locator(selector).inner_text(timeout=10000)[:12000]
 
+    def find(self, selector, text=None):
+        """Find matching elements and return bounded metadata without mutating the page."""
+        if not self.session:
+            raise RuntimeError("No browser session is open.")
+        locator = self.session.page.locator(selector)
+        count = locator.count()
+        matches = []
+        for index in range(min(count, 50)):
+            item = locator.nth(index)
+            item_text = item.inner_text(timeout=10000)[:1000]
+            if text is not None and str(text) not in item_text:
+                continue
+            matches.append({
+                "index": index,
+                "text": item_text,
+                "visible": item.is_visible(),
+            })
+        self.activity.emit("BROWSER -> found matching elements")
+        return {"selector": selector, "count": len(matches), "matches": matches}
+
     def click(self, selector, approved=False):
         if not self.session:
             raise RuntimeError("No browser session is open.")
