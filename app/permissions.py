@@ -29,12 +29,20 @@ class PermissionManager:
     def __init__(self, grants=None):
         self._grants = set(grants or ())
 
-    def decide(self, permission, approved=False):
+    def decide(self, permission, approved=False, *, task_id=None, tool=None, arguments=None, approval=None):
         permission = permission if isinstance(permission, Permission) else Permission(permission)
         if permission.value in self._grants:
             return PermissionDecision(True, False, "permission_granted")
         if approved:
-            return PermissionDecision(True, False, "explicit_approval")
+            if approval is None:
+                return PermissionDecision(True, False, "explicit_approval")
+            if not isinstance(approval, dict):
+                return PermissionDecision(False, True, "invalid_approval")
+            if task_id and approval.get("task_id") != task_id:
+                return PermissionDecision(False, True, "approval_task_mismatch")
+            if tool and approval.get("tool") != tool:
+                return PermissionDecision(False, True, "approval_tool_mismatch")
+            return PermissionDecision(True, False, "bound_approval")
         return PermissionDecision(False, True, "approval_required")
 
     def grant(self, permission):
