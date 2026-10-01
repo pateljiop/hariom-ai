@@ -8,6 +8,7 @@ from .task_engine import TaskState, TaskStatus, TaskCheckpointStore
 from .config import APP_DIR
 from .tools import ToolRegistry
 from .verification import Verifier
+from .test_runner import TestRunner
 
 
 SYSTEM_PROMPT = """You are Hariom AI, a personal computer/workspace assistant.
@@ -208,6 +209,7 @@ class Agent(PersonalAgent):
         self.approval_callback = approval_callback
         self.tools = ToolRegistry(workspace, activity)
         self.verifier = Verifier()
+        self.test_runner = TestRunner(workspace.root)
         self._legacy_results = []
 
     def _execute(self, action, arguments=None):
@@ -245,8 +247,21 @@ class Agent(PersonalAgent):
             if result.returncode == 0:
                 result = subprocess.run(["git", "commit", "-m", str(arguments.get("message", ""))], cwd=self.workspace.root, capture_output=True, text=True)
             return {"action": action, "exit_code": result.returncode, "output": (result.stdout + result.stderr)[-4000:]}
+        if action == "run_tests":
+            result = self.test_runner.run_command(arguments.get("command", ""))
+            return {
+                "action": action,
+                "exit_code": result.get("returncode"),
+                "output": result.get("output", ""),
+                "ok": result.get("ok", False),
+            }
         tool_map = {"write_file": "write_file", "run_command": "run_command", "read_file": "read_file", "list_files": "list_files"}
         name = tool_map.get(action, action)
+        if name == "write_file":
+            if "path" not in arguments:
+                raise ValueError("write_file requires 'path'.")
+            if "content" not in arguments:
+                raise ValueError("write_file requires 'content'.")
         result = self.tools.execute(name, arguments, approved=True)
         return {"action": action, "exit_code": 0, "output": result}
 
