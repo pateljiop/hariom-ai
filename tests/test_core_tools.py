@@ -284,6 +284,18 @@ class TestRunnerTests(unittest.TestCase):
             self.assertIn("ok", result)
             self.assertFalse(result["timed_out"])
 
+    def test_workspace_listing_excludes_symlinks(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as outside:
+            target = Path(outside) / "secret.txt"
+            target.write_text("secret", encoding="utf-8")
+            link = Path(root) / "link.txt"
+            try:
+                link.symlink_to(target)
+            except (OSError, NotImplementedError):
+                self.skipTest("symlinks are unavailable on this platform")
+            files = Workspace(root).list_files()
+            self.assertNotIn(link, files)
+
     def test_runner_rejects_empty_target(self):
         with tempfile.TemporaryDirectory() as root:
             with self.assertRaises(TestRunnerError):
