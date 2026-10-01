@@ -137,7 +137,7 @@ class TaskPlan:
     def to_dict(self):
         return {
             "actions": [
-                {"tool": action.tool, "arguments": dict(action.arguments), "approved": action.approved, "retryable": action.retryable, "expected_files": list(action.expected_files), "test_commands": list(action.test_commands)}
+                {"tool": action.tool, "arguments": dict(action.arguments), "approved": action.approved, "step_id": action.step_id, "dependencies": list(action.dependencies), "retryable": action.retryable, "expected_files": list(action.expected_files), "test_commands": list(action.test_commands)}
                 for action in self.actions
             ],
             "test_target": self.test_target,

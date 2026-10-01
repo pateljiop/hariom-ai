@@ -134,6 +134,29 @@ class ToolRegistry:
             for s in self._tools.values()
         ]
 
+    def approval_requirements(self, actions):
+        """Return unapproved actions that require explicit approval."""
+        requirements = []
+        for action in tuple(actions or ()):
+            spec = self._tools.get(action.tool)
+            if spec is None:
+                raise UnknownToolError(f"Unknown tool: {action.tool}")
+            if getattr(action, "approved", False):
+                continue
+            requires = bool(spec.requires_approval)
+            if spec.permission:
+                decision = self.permission_manager.decide(spec.permission, approved=False)
+                requires = requires or decision.requires_approval
+            if requires:
+                requirements.append({
+                    "step_id": action.step_id,
+                    "tool": action.tool,
+                    "risk": spec.risk,
+                    "permission": spec.permission,
+                    "reason": "explicit approval required",
+                })
+        return requirements
+
     def validate_arguments(self, name, arguments=None):
         spec = self._tools.get(name)
         if spec is None:

@@ -66,6 +66,23 @@ class PlanExecutor:
         self.task_service.transition(task_id, "validating")
         state.transition("validated", action_count=len(plan.actions))
         self._persist_state(task_id, state)
+        approval_requirements = self.workflow.executor.registry.approval_requirements(plan.actions)
+        if approval_requirements:
+            self.task_service.transition(task_id, "awaiting_approval", requirements=approval_requirements)
+            state.transition("approval_required", requirements=approval_requirements)
+            result = {
+                "ok": False, "stage": "awaiting_approval", "status": "awaiting_approval",
+                "task_id": task_id,
+                "approval": {"type": "action", "requirements": approval_requirements},
+                "plan": plan.to_dict(),
+            }
+            state.result = dict(result)
+            result["state"] = state.snapshot()
+            self._persist_state(task_id, state)
+            return result
+        return self._execute_validated_plan(plan, task_id, state)
+
+    def _execute_validated_plan(self, plan, task_id, state):
         self.task_service.transition(task_id, "executing")
         state.transition("executing")
         self._persist_state(task_id, state)
@@ -74,14 +91,10 @@ class PlanExecutor:
             self._persist_state(task_id, state)
 
         result = self.workflow.prepare(
-            plan.actions,
-            plan.test_target,
-            task_id=task_id,
-            step_state=state.steps,
-            checkpoint=checkpoint,
+            plan.actions, plan.test_target, task_id=task_id,
+            step_state=state.steps, checkpoint=checkpoint,
             max_step_retries=plan.max_retries,
-            expected_files=plan.expected_files,
-            test_commands=plan.test_commands,
+            expected_files=plan.expected_files, test_commands=plan.test_commands,
         )
         if result.get("ok"):
             self.task_service.transition(task_id, "testing")
@@ -96,6 +109,54 @@ class PlanExecutor:
         result["state"] = state.snapshot()
         self._persist_state(task_id, state)
         return result
+
+    def approve_actions(self, task_id, step_ids=None):
+        """Approve pending action steps, then resume execution safely."""
+        task = self.task_service.get_task(task_id)
+        if task.status.value != "awaiting_approval":
+            raise PlanExecutionError(f"Task '{task_id}' is not awaiting action approval.")
+        plan = TaskPlan.from_dict(task.plan or {})
+        requested = set(step_ids or [action.step_id for action in plan.actions])
+        if not requested:
+            raise PlanExecutionError("At least one step_id is required.")
+        known = {action.step_id for action in plan.actions}
+        unknown = requested - known
+        if unknown:
+            raise PlanExecutionError("Unknown approval step(s): " + ", ".join(sorted(unknown)))
+        actions = []
+        for action in plan.actions:
+            if action.step_id in requested:
+                action = TaskAction(
+                    action.tool, dict(action.arguments), True, action.dependencies,
+                    action.step_id, action.retryable, action.expected_files, action.test_commands
+                )
+            actions.append(action)
+        updated = TaskPlan(
+            tuple(actions), plan.test_target, plan.task_id, plan.user_request,
+            plan.objective, plan.steps, plan.dependencies, plan.expected_files,
+            plan.test_commands, plan.risk_level, plan.required_approvals,
+            plan.rollback_strategy, plan.max_retries
+        )
+        task.plan = updated.to_dict()
+        self.task_service.store.save(task)
+        state = self._restore_state(task_id)
+        remaining = self.workflow.executor.registry.approval_requirements(updated.actions)
+        if remaining:
+            state.transition("approval_required", requirements=remaining)
+            result = {
+                "ok": False, "stage": "awaiting_approval", "status": "awaiting_approval",
+                "task_id": task_id,
+                "approval": {"type": "action", "requirements": remaining},
+                "plan": updated.to_dict(),
+            }
+            state.result = dict(result)
+            result["state"] = state.snapshot()
+            self._persist_state(task_id, state)
+            return result
+        self.task_service.transition(task_id, "approved", approved_steps=sorted(requested))
+        state.transition("approved", approved_steps=sorted(requested))
+        self._persist_state(task_id, state)
+        return self._execute_validated_plan(updated, task_id, state)
 
     def recover(self, task_id, repair_actions, test_target=None):
         state = self._restore_state(task_id)
