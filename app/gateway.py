@@ -161,6 +161,15 @@ class Handler(BaseHTTPRequestHandler):
                     result = workstation.cancel(task_id)
                     result['reason'] = reason
                     self._send(200, result)
+                elif suffix == ['approve-actions']:
+                    step_ids = payload.get('step_ids')
+                    if step_ids is not None and (
+                        not isinstance(step_ids, list)
+                        or any(not isinstance(step_id, str) or not step_id.strip() for step_id in step_ids)
+                    ):
+                        raise ClientRequestError('step_ids must be a list of non-empty strings')
+                    result = workstation.approve_actions(task_id, step_ids=step_ids)
+                    self._send(200, result)
                 elif suffix == ['approve']:
                     request_id = payload.get('request_id')
                     message = payload.get('message')
