@@ -55,16 +55,19 @@ class ToolSchemaEnforcementTests(unittest.TestCase):
 
     def test_task_bound_approval_requires_matching_task_tool_and_arguments(self):
         registry = ToolRegistry(permission_manager=PermissionManager())
-        args = {"command": "echo ok"}
+        args = {"selector": "#submit"}
+        registry._tools["browser.click"] = registry._tools["browser.click"].__class__(
+            **{**registry._tools["browser.click"].__dict__, "handler": lambda selector, approved=False: {"selector": selector}}
+        )
         with self.assertRaises(ToolApprovalRequired):
-            registry.execute("terminal.run", args, approved=True, task_id="task-1")
+            registry.execute("browser.click", args, approved=True, task_id="task-1")
         approval = {
             "task_id": "task-1",
-            "tool": "terminal.run",
-            "permission": Permission.TERMINAL_EXECUTE.value,
+            "tool": "browser.click",
+            "permission": Permission.BROWSER_CLICK.value,
             "arguments_hash": registry.permission_manager.argument_fingerprint(args),
         }
-        result = registry.execute("terminal.run", args, approved=True, task_id="task-1", approval=approval)
+        result = registry.execute("browser.click", args, approved=True, task_id="task-1", approval=approval)
         self.assertTrue(result["ok"], result)
 
     def test_task_bound_approval_rejects_argument_replay(self):
