@@ -10,12 +10,12 @@ class TaskAction:
     tool: str
     arguments: Dict[str, Any]
     approved: bool = False
-    approval_token: str = ""
     dependencies: tuple = ()
     step_id: str = ""
     retryable: bool = False
     expected_files: tuple = ()
     test_commands: tuple = ()
+    approval_token: str = ""
 
 
 class TaskExecutionError(Exception):
