@@ -182,6 +182,8 @@ class PlanExecutor:
                     }
                     state.transition("failed", error_type="post_commit_verification")
                     self._persist_state(task_id, state)
+                    result["ok"] = False
+                    result["stage"] = "post_commit_verification"
                     result["state"] = state.snapshot()
                     result["verification"] = verification
                     return result
