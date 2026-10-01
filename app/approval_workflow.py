@@ -47,7 +47,10 @@ class ApprovalWorkflow:
             raise ApprovalWorkflowError("Actions are required.")
         actions = tuple(actions)
         try:
-            execution = self.executor.execute(actions, step_state=step_state, checkpoint=checkpoint, max_step_retries=max_step_retries)
+            execution = self.executor.execute(
+                actions, step_state=step_state, checkpoint=checkpoint,
+                max_step_retries=max_step_retries, task_id=task_id or None
+            )
         except TaskExecutionError:
             raise
         if not execution["ok"]:
