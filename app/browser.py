@@ -179,8 +179,8 @@ class BrowserController:
 
     def cleanup_temp(self, path):
         target = Path(path).expanduser().resolve()
-        if not target.name.startswith("hariom-browser-"):
-            raise ValueError("Only browser temporary artifacts can be cleaned up.")
+        if target not in self._temporary_artifacts:
+            raise ValueError("Only tracked browser temporary artifacts can be cleaned up.")
         if target.exists():
             target.unlink()
         self._temporary_artifacts.discard(target)
