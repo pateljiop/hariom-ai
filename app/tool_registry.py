@@ -99,8 +99,16 @@ class ToolRegistry:
             raise ValueError("ToolSpec.permission must be a string or None.")
         if not isinstance(spec.limits, dict):
             raise ValueError("ToolSpec.limits must be an object.")
-        if spec.timeout <= 0 or spec.retry < 0:
-            raise ValueError("Tool timeout must be positive and retry must be non-negative.")
+        if not isinstance(spec.version, str) or not spec.version.strip():
+            raise ValueError("ToolSpec.version must be a non-empty string.")
+        if not isinstance(spec.timeout, int) or isinstance(spec.timeout, bool) or spec.timeout <= 0:
+            raise ValueError("ToolSpec.timeout must be a positive integer.")
+        if not isinstance(spec.retry, int) or isinstance(spec.retry, bool) or spec.retry < 0:
+            raise ValueError("ToolSpec.retry must be a non-negative integer.")
+        if not isinstance(spec.rollback, str) or not spec.rollback.strip():
+            raise ValueError("ToolSpec.rollback must be a non-empty string.")
+        if not isinstance(spec.requires_approval, bool):
+            raise ValueError("ToolSpec.requires_approval must be boolean.")
         if spec.risk not in {"low", "medium", "high", "critical"}:
             raise ValueError("Tool risk must be low, medium, high, or critical.")
         self._tools[spec.name] = spec
