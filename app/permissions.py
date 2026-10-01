@@ -38,11 +38,11 @@ class ApprovalAuthority:
         self._consumed = set()
 
     @staticmethod
-    def _payload(task_id, tool, permission, arguments, expires_at, nonce):
+    def _payload(task_id, tool, permissions, arguments, expires_at, nonce):
         return json.dumps({
             "task_id": task_id or "",
             "tool": tool or "",
-            "permission": permission,
+            "permissions": sorted(permissions),
             "arguments_hash": PermissionManager.argument_fingerprint(arguments),
             "expires_at": expires_at,
             "nonce": nonce,
@@ -51,10 +51,21 @@ class ApprovalAuthority:
     def issue(self, *, task_id, tool, permission, arguments, ttl_seconds=1800):
         if not task_id or not tool:
             raise ValueError("task_id and tool are required for bound approval.")
-        expires_at = (datetime.now(timezone.utc).timestamp() + ttl_seconds)
-        expires_text = datetime.fromtimestamp(expires_at, timezone.utc).isoformat()
+        permissions = {str(p) for p in (permission if isinstance(permission, (list, tuple, set)) else [permission])}
+        if not permissions:
+            raise ValueError("At least one permission is required.")
+        expires_at = datetime.fromtimestamp(
+            datetime.now(timezone.utc).timestamp() + ttl_seconds, timezone.utc
+        ).isoformat()
         nonce = secrets.token_urlsafe(18)
-        payload = self._payload(task_id, tool, str(permission), arguments, expires_text, nonce)
+        record = {
+            "task_id": task_id, "tool": tool, "permissions": permissions,
+            "arguments": arguments or {},
+            "arguments_hash": PermissionManager.argument_fingerprint(arguments),
+            "expires_at": expires_at,
+        }
+        self._issued[nonce] = record
+        payload = self._payload(task_id, tool, permissions, arguments, expires_at, nonce)
         signature = hmac.new(self._secret, payload, hashlib.sha256).hexdigest()
         return f"v1.{nonce}.{signature}"
 
@@ -65,14 +76,11 @@ class ApprovalAuthority:
         if len(parts) != 3 or parts[0] != "v1":
             return PermissionDecision(False, True, "invalid_approval_token")
         nonce, signature = parts[1], parts[2]
-        # Token metadata is intentionally not trusted from the caller. We retain
-        # the bound request data in the signed token, but need the expiry to verify
-        # it; decode it from the signed token payload stored in the nonce registry.
-        record = getattr(self, "_issued", {}).get(nonce)
+        record = self._issued.get(nonce)
         if record is None:
             return PermissionDecision(False, True, "unknown_approval_token")
         payload = self._payload(
-            record["task_id"], record["tool"], record["permission"],
+            record["task_id"], record["tool"], record["permissions"],
             record["arguments"], record["expires_at"], nonce
         )
         expected = hmac.new(self._secret, payload, hashlib.sha256).hexdigest()
@@ -84,31 +92,12 @@ class ApprovalAuthority:
             return PermissionDecision(False, True, "approval_expired")
         if record["task_id"] != task_id or record["tool"] != tool:
             return PermissionDecision(False, True, "approval_binding_mismatch")
-        if record["permission"] != str(permission):
+        if permission not in record["permissions"]:
             return PermissionDecision(False, True, "approval_permission_mismatch")
         if record["arguments_hash"] != PermissionManager.argument_fingerprint(arguments):
             return PermissionDecision(False, True, "approval_arguments_mismatch")
         self._consumed.add(nonce)
         return PermissionDecision(True, False, "bound_approval_token")
-
-    def issue(self, *, task_id, tool, permission, arguments, ttl_seconds=1800):
-        if not task_id or not tool:
-            raise ValueError("task_id and tool are required for bound approval.")
-        expires_at = datetime.fromtimestamp(
-            datetime.now(timezone.utc).timestamp() + ttl_seconds, timezone.utc
-        ).isoformat()
-        nonce = secrets.token_urlsafe(18)
-        record = {
-            "task_id": task_id, "tool": tool, "permission": str(permission),
-            "arguments": arguments or {}, "arguments_hash": PermissionManager.argument_fingerprint(arguments),
-            "expires_at": expires_at,
-        }
-        if not hasattr(self, "_issued"):
-            self._issued = {}
-        self._issued[nonce] = record
-        payload = self._payload(task_id, tool, str(permission), arguments, expires_at, nonce)
-        signature = hmac.new(self._secret, payload, hashlib.sha256).hexdigest()
-        return f"v1.{nonce}.{signature}"
 
 
 class PermissionManager:
