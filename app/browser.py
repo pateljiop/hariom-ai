@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import ipaddress
 import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
@@ -58,10 +59,32 @@ class BrowserController:
                 "'pip install playwright' and 'playwright install chromium'."
             ) from exc
 
+    @staticmethod
+    def _host_is_private(host):
+        host = str(host).strip().lower().rstrip(".")
+        if not host:
+            return True
+        if host in {"localhost", "localhost.localdomain"} or host.endswith(".localhost"):
+            return True
+        try:
+            address = ipaddress.ip_address(host)
+        except ValueError:
+            return False
+        return any((
+            address.is_private,
+            address.is_loopback,
+            address.is_link_local,
+            address.is_multicast,
+            address.is_unspecified,
+            address.is_reserved,
+        ))
+
     def _validate_url(self, url):
         parsed = urlparse(str(url))
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
             raise ValueError("Only valid http/https URLs are allowed.")
+        if self._host_is_private(parsed.hostname):
+            raise PermissionError("Browser navigation to local/private network destinations is blocked.")
         return str(url)
 
     def open(self, url):
