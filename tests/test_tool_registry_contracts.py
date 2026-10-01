@@ -99,6 +99,22 @@ class ToolRegistryContractTests(unittest.TestCase):
                 approval={"task_id": "task-1", "tool": "browser.open", "permission": "external_network"},
             )
 
+    def test_side_effect_token_cannot_be_replayed(self):
+        args = {"selector": "#submit"}
+        token = self.registry.permission_manager.issue_approval_token(
+            task_id="task-replay", tool="browser.click",
+            permission=["browser.click", "external_side_effect"],
+            arguments=args, ttl_seconds=60,
+        )
+        self.registry.browser.click = lambda **kwargs: True
+        self.assertTrue(self.registry.execute(
+            "browser.click", args, task_id="task-replay", approval_token=token
+        )["ok"])
+        with self.assertRaises(ToolApprovalRequired):
+            self.registry.execute(
+                "browser.click", args, task_id="task-replay", approval_token=token
+            )
+
     def test_computer_hotkey_requires_approval(self):
         spec = next(item for item in self.registry.describe() if item["name"] == "computer.hotkey")
         self.assertTrue(spec["requires_approval"])
