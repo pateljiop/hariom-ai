@@ -108,7 +108,10 @@ class Workstation:
         except Exception:
             return []
         recovered = []
-        terminal = {"completed", "cancelled", "rolled_back"}
+        terminal = {
+            "completed", "cancelled", "rolled_back",
+            "awaiting_commit_approval", "committing",
+        }
         for task in tasks:
             if not isinstance(task.result, dict) or not task.result.get("background"):
                 continue
