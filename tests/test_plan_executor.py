@@ -198,6 +198,32 @@ class PlanExecutorTests(unittest.TestCase):
             self.assertEqual(restored["stage"], "committed")
             self.assertEqual(restored["result"]["request_id"], "restart-commit")
 
+    def test_approve_does_not_complete_when_post_commit_verification_fails(self):
+        workflow = Mock()
+        workflow.prepare.return_value = {"ok": True, "stage": "approval", "request_id": "verify-fail", "diff": "d"}
+        workflow.approve.return_value = {
+            "ok": True, "request_id": "verify-fail",
+            "commit": {"pre_commit_head": "a" * 40, "post_commit_head": "b" * 40},
+        }
+        workflow.executor.verify_expectations.return_value = {"ok": False, "missing_files": ["missing.txt"]}
+        executor = PlanExecutor(workflow)
+
+        prepared = executor.prepare({
+            "task_id": "verify-fail-task",
+            "actions": [{"tool": "workspace.write", "arguments": {"path": "a", "content": "b"}}],
+            "expected_files": ["missing.txt"],
+        })
+
+        result = executor.approve("verify-fail", "reviewed change")
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["stage"], "post_commit_verification")
+        self.assertEqual(result["state"]["stage"], "failed")
+        self.assertEqual(
+            executor.task_service.get_task(prepared["state"]["task_id"]).status.value,
+            "failed",
+        )
+
     def test_get_state_unknown_task_raises(self):
         executor = PlanExecutor(Mock())
         with self.assertRaises(PlanExecutionError):
