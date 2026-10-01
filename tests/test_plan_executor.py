@@ -228,6 +228,96 @@ class PlanExecutorTests(unittest.TestCase):
             "failed",
         )
 
+    def test_failed_post_commit_verification_persists_rollback_candidate(self):
+        workflow = Mock()
+        workflow.prepare.return_value = {
+            "ok": True, "stage": "approval", "request_id": "rollback-candidate", "diff": "d"
+        }
+        workflow.approve.return_value = {
+            "ok": True, "request_id": "rollback-candidate",
+            "commit": {
+                "pre_commit_head": "a" * 40,
+                "post_commit_head": "b" * 40,
+                "branch_name": "feature",
+            },
+        }
+        workflow.executor.verify_expectations.return_value = {"ok": False}
+        executor = PlanExecutor(workflow)
+        result = executor.prepare({
+            "task_id": "rollback-candidate-task",
+            "actions": [{"tool": "workspace.write", "arguments": {"path": "a", "content": "b"}}],
+        })
+        failed = executor.approve("rollback-candidate", "reviewed change")
+        candidate = failed["rollback_candidate"]
+        self.assertEqual(candidate["pre_commit_head"], "a" * 40)
+        self.assertEqual(candidate["post_commit_head"], "b" * 40)
+        stored = executor.task_service.get_task(result["state"]["task_id"])
+        self.assertEqual(
+            stored.result["execution_state"]["result"]["rollback_candidate"],
+            candidate,
+        )
+
+    def test_rollback_requires_explicit_approval(self):
+        workflow = Mock()
+        workflow.prepare.return_value = {
+            "ok": True, "stage": "approval", "request_id": "rollback-approval", "diff": "d"
+        }
+        workflow.approve.return_value = {
+            "ok": True, "request_id": "rollback-approval",
+            "commit": {
+                "pre_commit_head": "a" * 40,
+                "post_commit_head": "b" * 40,
+                "branch_name": "feature",
+            },
+        }
+        workflow.executor.verify_expectations.return_value = {"ok": False}
+        executor = PlanExecutor(workflow)
+        prepared = executor.prepare({
+            "task_id": "rollback-approval-task",
+            "actions": [{"tool": "workspace.write", "arguments": {"path": "a", "content": "b"}}],
+        })
+        executor.approve("rollback-approval", "reviewed change")
+        with self.assertRaises(PermissionError):
+            executor.rollback(prepared["state"]["task_id"])
+
+    def test_explicit_rollback_compensates_failed_commit(self):
+        workflow = Mock()
+        workflow.prepare.return_value = {
+            "ok": True, "stage": "approval", "request_id": "rollback-ok", "diff": "d"
+        }
+        workflow.approve.return_value = {
+            "ok": True, "request_id": "rollback-ok",
+            "commit": {
+                "pre_commit_head": "a" * 40,
+                "post_commit_head": "b" * 40,
+                "branch_name": "feature",
+            },
+        }
+        workflow.executor.verify_expectations.return_value = {"ok": False}
+        workflow.git.current_branch.return_value = "feature"
+        workflow.git.rollback_to_commit.return_value = {
+            "branch": "feature",
+            "target_sha": "a" * 40,
+            "reverted_sha": "b" * 40,
+            "rollback_sha": "c" * 40,
+        }
+        executor = PlanExecutor(workflow)
+        prepared = executor.prepare({
+            "task_id": "rollback-ok-task",
+            "actions": [{"tool": "workspace.write", "arguments": {"path": "a", "content": "b"}}],
+        })
+        executor.approve("rollback-ok", "reviewed change")
+        result = executor.rollback(prepared["state"]["task_id"], approved=True)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["stage"], "rolled_back")
+        self.assertEqual(
+            executor.task_service.get_task(prepared["state"]["task_id"]).status.value,
+            "rolled_back",
+        )
+        workflow.git.rollback_to_commit.assert_called_once_with(
+            "a" * 40, "b" * 40, approved=True
+        )
+
     def test_get_state_unknown_task_raises(self):
         executor = PlanExecutor(Mock())
         with self.assertRaises(PlanExecutionError):
