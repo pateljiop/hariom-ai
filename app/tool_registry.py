@@ -85,6 +85,7 @@ class ToolRegistry:
         self.register(ToolSpec("git.diff", "Show the current Git diff.", self.git.diff, permission=Permission.WORKSPACE_READ.value))
         self.register(ToolSpec("git.branch", "Create a new isolated Git branch.", self.git.create_branch, schema=ToolSchema(required=("name",), types={"name": (str,)}), permission=Permission.WORKSPACE_WRITE.value))
         self.register(ToolSpec("git.commit", "Commit workspace changes; explicit approval is required.", self.git.commit, requires_approval=True, schema=ToolSchema(required=("message",), optional=("approved",), types={"message": (str,), "approved": (bool,)}), permission=Permission.GIT_COMMIT.value, risk="high"))
+        self.register(ToolSpec("git.merge", "Merge an isolated branch; explicit approval is required.", self.git.merge_branch, requires_approval=True, schema=ToolSchema(required=("name",), optional=("approved",), types={"name": (str,), "approved": (bool,)}), permission=Permission.GIT_COMMIT.value, risk="critical"))
 
     def register(self, spec):
         if not isinstance(spec, ToolSpec) or not spec.name:
