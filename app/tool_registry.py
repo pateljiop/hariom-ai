@@ -172,6 +172,13 @@ class ToolRegistry:
             if not decision.allowed:
                 raise ToolApprovalRequired(f"Tool '{name}' requires approval for permission '{spec.permission}'.")
         for extra_permission in self.additional_permissions(name, arguments):
+            if extra_permission in {
+                Permission.SECRETS_ACCESS.value,
+                Permission.EXTERNAL_SIDE_EFFECT.value,
+            } and approval_token is None:
+                raise ToolApprovalRequired(
+                    f"Tool '{name}' requires a bound approval token for '{extra_permission}'."
+                )
             decision = self.permission_manager.decide(
                 extra_permission, approved=approved, task_id=task_id, tool=name,
                 arguments=arguments, approval=approval, approval_token=approval_token,
