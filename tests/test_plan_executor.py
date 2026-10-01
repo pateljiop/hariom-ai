@@ -242,16 +242,33 @@ class PlanExecutorTests(unittest.TestCase):
             },
         }
         workflow.executor.verify_expectations.return_value = {"ok": False}
-        executor = PlanExecutor(workflow)
-        result = executor.prepare({
-            "task_id": "rollback-candidate-task",
-            "actions": [{"tool": "workspace.write", "arguments": {"path": "a", "content": "b"}}],
-        })
-        failed = executor.approve("rollback-candidate", "reviewed change")
-        candidate = failed["rollback_candidate"]
-        self.assertEqual(candidate["pre_commit_head"], "a" * 40)
-        self.assertEqual(candidate["post_commit_head"], "b" * 40)
-        stored = executor.task_service.get_task(result["state"]["task_id"])
+        import tempfile
+        with tempfile.TemporaryDirectory() as root:
+            service = TaskService(TaskStore(f"{root}/tasks.sqlite3"))
+            executor = PlanExecutor(workflow, task_service=service)
+            result = executor.prepare({
+                "task_id": "rollback-candidate-task",
+                "actions": [{"tool": "workspace.write", "arguments": {"path": "a", "content": "b"}}],
+            })
+            service.store.save_approval(
+                "rollback-candidate",
+                {
+                    "task_id": result["state"]["task_id"],
+                    "actions": [],
+                    "test_target": "tests",
+                    "test_result": {"ok": True},
+                    "diff": "d",
+                    "commit_result": None,
+                },
+                "2026-09-30T10:00:00+00:00",
+                "2099-09-30T10:00:00+00:00",
+                "pending",
+            )
+            failed = executor.approve("rollback-candidate", "reviewed change")
+            candidate = failed["rollback_candidate"]
+            self.assertEqual(candidate["pre_commit_head"], "a" * 40)
+            self.assertEqual(candidate["post_commit_head"], "b" * 40)
+            stored = executor.task_service.get_task(result["state"]["task_id"])
         self.assertEqual(
             stored.result["execution_state"]["result"]["rollback_candidate"],
             candidate,
