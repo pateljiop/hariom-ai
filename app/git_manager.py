@@ -49,6 +49,10 @@ class GitManager:
     def status(self):
         return self._run("status", "--short")
 
+    def current_branch(self):
+        self._ensure_repo()
+        return self._run("branch", "--show-current")
+
     def diff(self):
         return self._run("diff", "--")
 
@@ -71,7 +75,7 @@ class GitManager:
         if not approved:
             raise PermissionError("Git merge requires explicit approval.")
         name = self._validate_branch_name(name)
-        current = self._run("branch", "--show-current")
+        current = self.current_branch()
         if current in self.PROTECTED_BRANCHES:
             raise GitError("Protected branch cannot be a merge target.")
         if current == name:
