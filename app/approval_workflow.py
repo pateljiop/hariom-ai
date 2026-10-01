@@ -101,15 +101,16 @@ class ApprovalWorkflow:
             raise ApprovalWorkflowError("Git commit did not advance HEAD; commit verification failed.")
         if self.git.current_branch() != request.branch_name:
             raise ApprovalWorkflowError("Git branch changed during commit; commit verification failed.")
-        consumed = ApprovalRequest(**{**request.__dict__, "approved": True, "commit_result": {
+        commit_result = {
             "result": result,
             "pre_commit_head": pre_commit_head,
             "post_commit_head": post_commit_head,
-        }})
+        }
+        consumed = ApprovalRequest(**{**request.__dict__, "approved": True, "commit_result": commit_result})
         self._requests[request_id] = consumed
         self._persist(consumed, "approved")
         tokens = self.issue_action_tokens(request_id)
-        return {"ok": True, "request_id": request_id, "commit": result, "approval_tokens": tokens}
+        return {"ok": True, "request_id": request_id, "commit": commit_result, "approval_tokens": tokens}
 
     def issue_action_tokens(self, request_id):
         request = self._load(request_id)
@@ -125,9 +126,7 @@ class ApprovalWorkflow:
             if spec is None or not spec.get("permission"):
                 continue
             permissions = [spec["permission"]]
-            permissions.extend(self.executor.registry.additional_permissions(
-                action.tool, action.arguments
-            ))
+            permissions.extend(self.executor.registry.additional_permissions(action.tool, action.arguments))
             tokens[action.step_id or action.tool] = self.executor.registry.permission_manager.issue_approval_token(
                 task_id=request.task_id,
                 tool=action.tool,
