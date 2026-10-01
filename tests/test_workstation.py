@@ -4,6 +4,7 @@ from pathlib import Path
 
 from app.activity import ActivityBus
 from app.workstation import Workstation
+from app.workspace import Workspace
 
 
 class FakeRouter:
@@ -16,7 +17,7 @@ class WorkstationTests(unittest.TestCase):
     def test_ui_uses_shared_registry_and_router(self):
         with tempfile.TemporaryDirectory() as tmp:
             activity = ActivityBus()
-            ws = Workstation(activity=activity, workspace=Path(tmp), max_workers=1)
+            ws = Workstation(activity=activity, workspace=Workspace(tmp), max_workers=1)
             try:
                 ws.attach_router(FakeRouter())
                 self.assertIs(ws.agent.facade.planner.tool_registry, ws.registry)
