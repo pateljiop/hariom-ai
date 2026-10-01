@@ -40,6 +40,14 @@ class GitManager:
     def diff(self):
         return self._run("diff", "--")
 
+    def review_diff(self):
+        """Return the complete uncommitted diff, including staged changes."""
+        return self._run("diff", "HEAD", "--")
+
+    def current_branch(self):
+        """Return the branch bound to a pending approval."""
+        return self._run("branch", "--show-current")
+
     def create_branch(self, name):
         if not isinstance(name, str) or not name.strip() or name.startswith("-") or any(x in name for x in ["..", "~", "^"]):
             raise GitError("Invalid branch name.")

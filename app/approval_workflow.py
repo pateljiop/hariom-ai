@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, Dict, Optional
 from uuid import uuid4
 
+from .git_manager import GitManager
 from .task_executor import TaskAction, TaskExecutor, TaskExecutionError
 
 
@@ -28,6 +29,7 @@ class ApprovalRequest:
     diff: str
     approved: bool = False
     task_id: str = ""
+    branch: str = ""
     created_at: str = ""
     expires_at: str = ""
     rejected: bool = False
@@ -58,13 +60,14 @@ class ApprovalWorkflow:
         test_result = self.executor.registry.test_runner.run(test_target)
         if not test_result["ok"]:
             return {"ok": False, "stage": "verification", "execution": execution, "expectation_result": expectation_result, "test_result": test_result}
-        diff = self.git.diff()
+        diff = self._review_diff()
         request_id = 'approval-' + uuid4().hex
         now = datetime.now(timezone.utc)
         expires = now + timedelta(seconds=self.approval_ttl_seconds)
         request = ApprovalRequest(
             request_id=request_id, actions=actions, test_target=test_target,
             test_result=test_result, diff=diff, task_id=task_id,
+            branch=self._current_branch(),
             created_at=now.isoformat(), expires_at=expires.isoformat(),
         )
         self._requests[request_id] = request
@@ -85,7 +88,10 @@ class ApprovalWorkflow:
             raise ApprovalWorkflowError("Commit message is required.")
         if datetime.now(timezone.utc) >= datetime.fromisoformat(request.expires_at):
             raise ApprovalDeniedError("Approval request has expired.")
-        if self.git.diff() != request.diff:
+        current_branch = self._current_branch()
+        if request.branch and current_branch != request.branch:
+            raise ApprovalWorkflowError("Workspace branch changed after review; approval is invalid.")
+        if self._review_diff() != request.diff:
             raise ApprovalWorkflowError("Workspace diff changed after review; approval is invalid.")
         result = self.git.commit(message, approved=True)
         consumed = ApprovalRequest(**{**request.__dict__, "approved": True, "commit_result": result})
@@ -117,6 +123,7 @@ class ApprovalWorkflow:
                     ) for x in saved["actions"]),
                     test_target=saved["test_target"], test_result=saved["test_result"],
                     diff=saved["diff"], task_id=saved.get("task_id", ""),
+                    branch=saved.get("branch", ""),
                     created_at=saved["created_at"], expires_at=saved["expires_at"],
                     approved=saved["status"] == "approved",
                     rejected=saved["status"] == "rejected",
@@ -136,6 +143,7 @@ class ApprovalWorkflow:
             return
         payload = {
             "task_id": request.task_id,
+            "branch": request.branch,
             "actions": [{
                 "tool": a.tool, "arguments": dict(a.arguments), "approved": a.approved,
                 "dependencies": list(a.dependencies), "step_id": a.step_id, "retryable": a.retryable,
@@ -147,6 +155,16 @@ class ApprovalWorkflow:
             "commit_result": request.commit_result,
         }
         self.store.save_approval(request.request_id, payload, request.created_at, request.expires_at, status)
+
+    def _review_diff(self):
+        if isinstance(self.git, GitManager):
+            return self.git.review_diff()
+        return self.git.diff()
+
+    def _current_branch(self):
+        if isinstance(self.git, GitManager):
+            return self.git.current_branch()
+        return ""
 
     @staticmethod
     def _make_request_id(actions, test_target, diff):
