@@ -14,6 +14,14 @@ class TaskServiceTests(unittest.TestCase):
             self.assertTrue(task.task_id.startswith("task-"))
             restored = service.get_task(task.task_id)
             self.assertEqual(restored.user_request, "Read README")
+            self.assertEqual(restored.branch_name, "")
+
+    def test_branch_binding_persists_across_reload(self):
+        with tempfile.TemporaryDirectory() as root:
+            service = TaskService(TaskStore(f"{root}/tasks.sqlite3"))
+            task = service.create_task("Branch-bound task", branch_name="feature/security")
+            restored = service.get_task(task.task_id)
+            self.assertEqual(restored.branch_name, "feature/security")
 
     def test_transition_and_event_are_persisted(self):
         with tempfile.TemporaryDirectory() as root:
