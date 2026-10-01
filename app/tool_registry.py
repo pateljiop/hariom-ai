@@ -56,8 +56,8 @@ class ToolRegistry:
         self.patcher = WorkspacePatcher(self.workspace)
         self.test_runner = TestRunner(self.workspace.root)
         self.git = GitManager(self.workspace.root)
-        self.browser = BrowserController(self.activity)
-        self.computer = ComputerController(self.activity)
+        self.browser = BrowserController(self.activity, workspace=self.workspace)
+        self.computer = ComputerController(self.activity, workspace=self.workspace)
         self._tools: Dict[str, ToolSpec] = {}
         self._register_defaults()
 
@@ -147,6 +147,19 @@ class ToolRegistry:
             raise ToolError(str(exc)) from exc
         return True
 
+    def additional_permissions(self, name, arguments=None):
+        arguments = arguments or {}
+        required = []
+        if name == "browser.type":
+            selector = arguments.get("selector", "")
+            if arguments.get("sensitive") is True or self.browser.selector_is_sensitive(selector):
+                required.append(Permission.SECRETS_ACCESS.value)
+        if name == "computer.type" and arguments.get("sensitive") is True:
+            required.append(Permission.SECRETS_ACCESS.value)
+        if name == "browser.click" and self.browser.selector_has_side_effect(arguments.get("selector", "")):
+            required.append(Permission.EXTERNAL_SIDE_EFFECT.value)
+        return tuple(required)
+
     def execute(self, name, arguments=None, approved=False, *, task_id=None, approval=None, approval_token=None):
         self.validate_arguments(name, arguments)
         spec = self._tools[name]
@@ -158,14 +171,16 @@ class ToolRegistry:
             )
             if not decision.allowed:
                 raise ToolApprovalRequired(f"Tool '{name}' requires approval for permission '{spec.permission}'.")
-        if arguments and arguments.get("sensitive") is True:
+        for extra_permission in self.additional_permissions(name, arguments):
             decision = self.permission_manager.decide(
-                Permission.SECRETS_ACCESS, approved=False, task_id=task_id, tool=name,
-                arguments=arguments, approval_token=approval_token,
+                extra_permission, approved=approved, task_id=task_id, tool=name,
+                arguments=arguments, approval=approval, approval_token=approval_token,
                 consume_token=False
             )
             if not decision.allowed:
-                raise ToolApprovalRequired("Sensitive input requires secrets_access approval.")
+                raise ToolApprovalRequired(
+                    f"Tool '{name}' requires approval for permission '{extra_permission}'."
+                )
         if spec.requires_approval and not approved and approval_token is None and name != "terminal.run":
             raise ToolApprovalRequired(f"Tool '{name}' requires explicit approval.")
         if approval_token is not None and not self.permission_manager.approval_authority.consume(approval_token):
