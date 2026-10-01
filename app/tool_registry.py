@@ -68,7 +68,7 @@ class ToolRegistry:
         self.register(ToolSpec("terminal.run", "Run a shell command with existing risky-command approval controls.", self._run_terminal, schema=ToolSchema(required=("command",), optional=("approved",), types={"command": (str,), "approved": (bool,)}), permission=Permission.TERMINAL_EXECUTE.value, risk="high", requires_approval=True, return_schema={"type": "object"}))
         self.register(ToolSpec("workspace.patch", "Replace an exact text fragment in one workspace file.", self._patch_workspace, schema=ToolSchema(required=("path", "old", "new"), optional=("expected_count",), types={"path": (str,), "old": (str,), "new": (str,), "expected_count": (int,)}), permission=Permission.WORKSPACE_WRITE.value, return_schema={"type": "object"}))
         self.register(ToolSpec("tests.run", "Run Python unittest discovery inside the workspace.", self._run_tests, schema=ToolSchema(optional=("target",), types={"target": (str,)}), permission=Permission.TERMINAL_EXECUTE.value, risk="medium", return_schema={"type": "object"}))
-        self.register(ToolSpec("browser.open", "Open a URL in the browser.", self.browser.open, schema=ToolSchema(required=("url",), types={"url": (str,)}), permission=Permission.BROWSER_READ.value, risk="medium", return_schema={"type": "object"}))
+        self.register(ToolSpec("browser.open", "Open a URL in the browser.", self.browser.open, schema=ToolSchema(required=("url",), types={"url": (str,)}), permission=Permission.EXTERNAL_NETWORK.value, requires_approval=True, risk="high", return_schema={"type": "object"}))
         self.register(ToolSpec("browser.read", "Read the current browser page.", self.browser.read_text, schema=ToolSchema(optional=("selector",), types={"selector": (str,)}), permission=Permission.BROWSER_READ.value, risk="low", return_schema={"type": "string"}))
         self.register(ToolSpec("browser.observe", "Observe the current browser URL, title, and visible text.", self.browser.observe, schema=ToolSchema(optional=("selector",), types={"selector": (str,)}), permission=Permission.BROWSER_READ.value, risk="low", return_schema={"type": "object"}))
         self.register(ToolSpec("browser.verify", "Verify explicit browser state conditions.", self.browser.verify, schema=ToolSchema(optional=("selector", "text", "url_contains"), types={"selector": (str,), "text": (str,), "url_contains": (str,)}), permission=Permission.BROWSER_READ.value, risk="low", return_schema={"type": "object"}))
@@ -154,6 +154,10 @@ class ToolRegistry:
             decision = self.permission_manager.decide(spec.permission, approved=approved, task_id=task_id, tool=name, arguments=arguments, approval=approval)
             if not decision.allowed:
                 raise ToolApprovalRequired(f"Tool '{name}' requires approval for permission '{spec.permission}'.")
+        if arguments and arguments.get("sensitive") is True:
+            decision = self.permission_manager.decide(Permission.SECRETS_ACCESS, approved=approved, task_id=task_id, tool=name, arguments=arguments, approval=approval)
+            if not decision.allowed:
+                raise ToolApprovalRequired("Sensitive input requires secrets_access approval.")
         if spec.requires_approval and not approved and name != "terminal.run":
             raise ToolApprovalRequired(f"Tool '{name}' requires explicit approval.")
         if arguments is None:
