@@ -13,6 +13,14 @@ SHELL_META = re.compile(r"[;&|<>`$()]")
 MAX_OUTPUT = 12000
 TIMEOUT_SECONDS = 120
 MAX_COMMAND_LENGTH = 4000
+SECRET_ENV_RE = re.compile(r"(?:^|_)(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD|PASSWD|PRIVATE[_-]?KEY)(?:$|_)", re.I)
+SECRET_ASSIGNMENT_RE = re.compile(r"(\b(?:api[_-]?key|token|secret|password|passwd|private[_-]?key)\b\s*[=:]\s*)(["']?)[^\s,;&|]+", re.I)
+
+def _redact(value):
+    return SECRET_ASSIGNMENT_RE.sub(r"\1\2[REDACTED]", str(value))
+
+def _safe_environment():
+    return {k: v for k, v in os.environ.items() if not SECRET_ENV_RE.search(k)}
 
 def _parse_command(command, approved=False):
     if not isinstance(command, str) or not command.strip():
@@ -49,8 +57,8 @@ def run_command(command, activity, approved=False):
     normalized = command.strip().lower()
     if not approved and any(x in normalized for x in RISKY):
         raise PermissionError("Risky command blocked. Explicit approval required.")
-    activity.emit("TERMINAL -> " + command)
-    env = {k: v for k, v in os.environ.items() if k not in {"OPENAI_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_TOKEN"}}
+    activity.emit("TERMINAL -> " + _redact(command))
+    env = _safe_environment()
     creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     try:
         if os.name == "nt":
@@ -70,9 +78,9 @@ def run_command(command, activity, approved=False):
             partial = (stdout or "") + ("\n" + stderr if stderr else "")
             if not partial:
                 partial = (exc.stdout or "") + ("\n" + exc.stderr if exc.stderr else "")
-            return 124, partial[-MAX_OUTPUT:]
+            return 124, _redact(partial[-MAX_OUTPUT:])
     except (OSError, subprocess.SubprocessError) as exc:
         raise RuntimeError(f"Command execution failed: {exc}") from exc
     out = (stdout or "") + ("\n" + stderr if stderr else "")
     activity.emit(f"TERMINAL -> exit code {process.returncode}")
-    return process.returncode, out[-MAX_OUTPUT:]
+    return process.returncode, _redact(out[-MAX_OUTPUT:])
