@@ -101,6 +101,8 @@ class ApprovalWorkflow:
         request = self._load(request_id)
         if not request.approved:
             raise ApprovalDeniedError("Approval request must be approved before action tokens are issued.")
+        if datetime.now(timezone.utc) >= datetime.fromisoformat(request.expires_at):
+            raise ApprovalDeniedError("Approval request has expired.")
         if not request.task_id:
             return {}
         tokens = {}
