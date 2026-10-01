@@ -11,6 +11,7 @@ class BrowserSession:
     browser: object
     page: object
     playwright: object
+    context: object = None
 
 
 class BrowserController:
@@ -70,16 +71,35 @@ class BrowserController:
         self._resolve_public_host(parsed.hostname)
         return str(url)
 
+    def _route_request(self, route):
+        """Re-check every intercepted HTTP(S) request before it reaches the network."""
+        url = route.request.url
+        parsed = urlparse(url)
+        if parsed.scheme in {"http", "https"}:
+            try:
+                self._resolve_public_host(parsed.hostname)
+            except (PermissionError, ValueError):
+                self.activity.emit("BROWSER -> blocked private/local network request")
+                route.abort("blockedbyclient")
+                return
+        route.continue_()
+
     def open(self, url):
         url = self._validate_url(url)
         if self.session is None:
             playwright = self._playwright()().start()
             browser = playwright.chromium.launch(headless=self.headless)
-            page = browser.new_page()
-            self.session = BrowserSession(browser, page, playwright)
+            context = browser.new_context(service_workers="block")
+            context.route("**/*", self._route_request)
+            page = context.new_page()
+            self.session = BrowserSession(browser, page, playwright, context)
         self.session.page.goto(url, wait_until="domcontentloaded")
-        self.activity.emit("BROWSER -> opened " + url)
-        return {"url": self.session.page.url, "title": self.session.page.title()}
+        # Redirects can change the final destination; reject a private final URL
+        # even though the initial destination was public.
+        final_url = self.session.page.url
+        self._validate_url(final_url)
+        self.activity.emit("BROWSER -> opened " + final_url)
+        return {"url": final_url, "title": self.session.page.title()}
 
     def current_page(self):
         if not self.session:
@@ -186,7 +206,10 @@ class BrowserController:
         if not self.session:
             return False
         try:
-            self.session.browser.close()
+            if self.session.context is not None:
+                self.session.context.close()
+            else:
+                self.session.browser.close()
         finally:
             self.session.playwright.stop()
             self.session = None
