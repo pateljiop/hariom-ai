@@ -147,6 +147,14 @@ class BrowserController:
         self.activity.emit("BROWSER -> screenshot temporary")
         return str(target)
 
+    def cleanup_temp(self, path):
+        target = Path(path).expanduser().resolve()
+        if not target.name.startswith("hariom-browser-"):
+            raise ValueError("Only browser temporary artifacts can be cleaned up.")
+        if target.exists():
+            target.unlink()
+        return True
+
     def close(self):
         if not self.session:
             return False
