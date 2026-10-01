@@ -6,10 +6,9 @@ from urllib.parse import urlparse
 from .activity import ActivityBus
 from .ai_router import AIRouter
 from .config import GATEWAY_API_KEY, GATEWAY_HOST, GATEWAY_PORT, PROVIDERS, ROUTING_PROFILES
-from .plan_executor import PlanExecutor
 from .task_plan import TaskPlan
-from .task_service import TaskService, TaskServiceError
-from .task_queue import TaskQueue
+from .task_service import TaskServiceError
+from .workstation import Workstation
 
 
 class ClientRequestError(ValueError):
@@ -17,9 +16,10 @@ class ClientRequestError(ValueError):
 
 activity = ActivityBus()
 router = AIRouter(activity)
-task_service = TaskService()
-plan_executor = PlanExecutor(task_service=task_service)
-task_queue = TaskQueue(max_workers=2)
+workstation = Workstation(activity=activity, max_workers=2).attach_router(router)
+task_service = workstation.task_service
+plan_executor = workstation.executor
+task_queue = workstation.queue
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -158,8 +158,9 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(200, task_queue.status(task_id))
                 elif suffix == ['cancel']:
                     reason = payload.get('reason', 'cancelled by user')
-                    task = task_service.cancel_task(task_id, reason=reason)
-                    self._send(200, self._task_response(task))
+                    result = workstation.cancel(task_id)
+                    result['reason'] = reason
+                    self._send(200, result)
                 elif suffix == ['approve']:
                     request_id = payload.get('request_id')
                     message = payload.get('message')
@@ -178,8 +179,7 @@ class Handler(BaseHTTPRequestHandler):
                     approval = task_service.store.get_approval(request_id)
                     if not approval or approval.get('task_id') != task_id:
                         raise ClientRequestError('Approval request does not belong to this task')
-                    result = plan_executor.workflow.reject(request_id, reason)
-                    task_service.cancel_task(task_id, reason=reason)
+                    result = workstation.reject(request_id, reason)
                     self._send(200, result)
                 else:
                     self._send(404, {'error': {'message': 'Not found'}})
