@@ -208,6 +208,9 @@ class PlanExecutorTests(unittest.TestCase):
         test_runner = Mock()
         test_runner.run.side_effect = [{"ok": False}, {"ok": True}]
         workflow.executor.registry.test_runner = test_runner
+        workflow.executor.registry.describe.return_value = [{"name": "workspace.write", "permission": "workspace.write"}]
+        workflow.executor.registry.additional_permissions.return_value = ()
+        workflow.executor.registry.permission_manager.issue_approval_token.return_value = "approval-token"
         workflow.executor.execute.return_value = {"ok": True, "results": []}
         import tempfile
         with tempfile.TemporaryDirectory() as root:
