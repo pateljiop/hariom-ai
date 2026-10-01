@@ -161,7 +161,18 @@ class Workstation:
         return result
 
     def reject(self, request_id, reason="rejected by user"):
+        approval = self.task_service.store.get_approval(request_id)
+        task_id = approval.get("task_id") if approval else None
         result = self.agent.facade.executor.workflow.reject(request_id, reason)
+        if task_id:
+            try:
+                task = self.task_service.get_task(task_id)
+                if task.status.value == "awaiting_commit_approval":
+                    self.task_service.cancel_task(task_id, reason=reason)
+            except Exception:
+                # Rejection itself is already persisted; do not hide it behind a
+                # secondary lifecycle cleanup failure.
+                pass
         self.activity.emit("APPROVAL -> rejected " + request_id)
         return result
 

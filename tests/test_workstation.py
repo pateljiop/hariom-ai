@@ -1,5 +1,8 @@
 import tempfile
 import unittest
+from unittest.mock import Mock
+
+from app.task import Task, TaskStatus
 from pathlib import Path
 
 from app.activity import ActivityBus
@@ -14,6 +17,27 @@ class FakeRouter:
 
 
 class WorkstationTests(unittest.TestCase):
+
+    def test_reject_cancels_commit_pending_task(self):
+        ws = Workstation.__new__(Workstation)
+        ws.task_service = Mock()
+        ws.task_service.store.get_approval.return_value = {"task_id": "task-1"}
+        ws.task_service.get_task.return_value = Task(
+            "task-1", "request", "request", status=TaskStatus.AWAITING_COMMIT_APPROVAL
+        )
+        ws.agent = Mock()
+        ws.agent.facade.executor.workflow.reject.return_value = {
+            "ok": True, "request_id": "approval-1", "rejected": True
+        }
+        ws.activity = Mock()
+
+        result = ws.reject("approval-1", "no longer needed")
+
+        self.assertTrue(result["rejected"])
+        ws.task_service.cancel_task.assert_called_once_with(
+            "task-1", reason="no longer needed"
+        )
+
     def test_ui_uses_shared_registry_and_router(self):
         with tempfile.TemporaryDirectory() as tmp:
             activity = ActivityBus()
