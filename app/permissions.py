@@ -20,6 +20,7 @@ class Permission(str, Enum):
     COMPUTER_SCREENSHOT = "computer.screenshot"
     COMPUTER_KEYBOARD = "computer.keyboard"
     EXTERNAL_NETWORK = "external_network"
+    EXTERNAL_SIDE_EFFECT = "external_side_effect"
     SECRETS_ACCESS = "secrets_access"
 
 
