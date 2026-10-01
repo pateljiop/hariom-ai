@@ -25,11 +25,13 @@ class BrowserController:
         "logout", "authorize", "transfer", "withdraw",
     )
 
-    def __init__(self, activity, headless=True, workspace=None):
+    def __init__(self, activity, headless=True, workspace=None, action_timeout_ms=15000):
         self.activity = activity
         self.headless = headless
         self.workspace = workspace
+        self.action_timeout_ms = max(1000, int(action_timeout_ms))
         self.session = None
+        self._temporary_artifacts = set()
 
     @classmethod
     def selector_is_sensitive(cls, selector):
@@ -69,7 +71,7 @@ class BrowserController:
             browser = playwright.chromium.launch(headless=self.headless)
             page = browser.new_page()
             self.session = BrowserSession(browser, page, playwright)
-        self.session.page.goto(url, wait_until="domcontentloaded")
+        self.session.page.goto(url, wait_until="domcontentloaded", timeout=self.action_timeout_ms)
         self.activity.emit("BROWSER -> opened " + url)
         return {"url": self.session.page.url, "title": self.session.page.title()}
 
@@ -86,7 +88,7 @@ class BrowserController:
         observation = {
             "url": page.url,
             "title": page.title(),
-            "text": page.locator(selector).inner_text(timeout=10000)[:12000],
+            "text": page.locator(selector).inner_text(timeout=self.action_timeout_ms)[:12000],
         }
         self.activity.emit("BROWSER -> observed current page")
         return observation
@@ -171,6 +173,7 @@ class BrowserController:
         with tempfile.NamedTemporaryFile(prefix="hariom-browser-", suffix=".png", delete=False) as tmp:
             target = Path(tmp.name)
         self.session.page.screenshot(path=str(target), full_page=True)
+        self._temporary_artifacts.add(target)
         self.activity.emit("BROWSER -> screenshot temporary")
         return str(target)
 
@@ -180,6 +183,7 @@ class BrowserController:
             raise ValueError("Only browser temporary artifacts can be cleaned up.")
         if target.exists():
             target.unlink()
+        self._temporary_artifacts.discard(target)
         return True
 
     def close(self):
@@ -190,5 +194,11 @@ class BrowserController:
         finally:
             self.session.playwright.stop()
             self.session = None
+            for artifact in tuple(self._temporary_artifacts):
+                try:
+                    artifact.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            self._temporary_artifacts.clear()
         self.activity.emit("BROWSER -> closed")
         return True
