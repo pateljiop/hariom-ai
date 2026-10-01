@@ -35,6 +35,38 @@ class ToolRegistryContractTests(unittest.TestCase):
         with self.assertRaises(ToolApprovalRequired):
             self.registry.execute("browser.type", {"selector": "#password", "text": "secret", "sensitive": True}, approved=True)
 
+    def test_trusted_approval_token_executes_task_bound_tool_once(self):
+        token = self.registry.permission_manager.issue_approval_token(
+            task_id="task-1", tool="workspace.write",
+            permission="workspace.write",
+            arguments={"path": "token.txt", "content": "ok"},
+            ttl_seconds=60,
+        )
+        result = self.registry.execute(
+            "workspace.write",
+            {"path": "token.txt", "content": "ok"},
+            task_id="task-1",
+            approval_token=token,
+        )
+        self.assertTrue(result["ok"])
+        with self.assertRaises(ToolApprovalRequired):
+            self.registry.execute(
+                "workspace.write",
+                {"path": "token.txt", "content": "ok"},
+                task_id="task-1",
+                approval_token=token,
+            )
+
+    def test_legacy_approval_dict_is_not_authorization(self):
+        with self.assertRaises(ToolApprovalRequired):
+            self.registry.execute(
+                "browser.open",
+                {"url": "https://example.com"},
+                approved=True,
+                task_id="task-1",
+                approval={"task_id": "task-1", "tool": "browser.open", "permission": "external_network"},
+            )
+
     def test_computer_hotkey_requires_approval(self):
         spec = next(item for item in self.registry.describe() if item["name"] == "computer.hotkey")
         self.assertTrue(spec["requires_approval"])
