@@ -137,6 +137,21 @@ class BrowserValidationTests(unittest.TestCase):
 
 
 class ComputerSafetyTests(unittest.TestCase):
+    def test_computer_temp_cleanup_requires_tracked_artifact(self):
+        controller = ComputerController(Mock())
+        temp = Path(tempfile.mkstemp(prefix="hariom-screen-", suffix=".png")[1])
+        with self.assertRaises(ValueError):
+            controller.cleanup_temp(temp)
+        temp.unlink()
+
+    def test_computer_temp_cleanup_removes_tracked_artifact(self):
+        controller = ComputerController(Mock())
+        temp = Path(tempfile.mkstemp(prefix="hariom-screen-", suffix=".png")[1])
+        controller._temporary_artifacts.add(temp)
+        self.assertTrue(controller.cleanup_temp(temp))
+        self.assertFalse(temp.exists())
+        self.assertNotIn(temp, controller._temporary_artifacts)
+
     @patch("app.computer.platform.system", return_value="Linux")
     def test_computer_control_is_windows_only(self, _system):
         controller = ComputerController(Mock())
