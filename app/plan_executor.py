@@ -2,7 +2,6 @@
 from .approval_workflow import ApprovalWorkflow
 from .execution_state import ExecutionState
 from .recovery import RecoveryCoordinator
-from .task import TaskStep
 from .task_executor import TaskAction, TaskExecutionError
 from .task_plan import TaskPlan
 from .task_service import TaskService, TaskServiceError
@@ -31,7 +30,7 @@ class PlanExecutor:
                     objective=plan.objective or plan.user_request or "agent task",
                     task_id=task_id,
                     steps=tuple(plan.steps),
-                dependencies=tuple(plan.dependencies),
+                    dependencies=tuple(plan.dependencies),
                     expected_files=tuple(plan.expected_files),
                     test_commands=tuple(plan.test_commands),
                     risk_level=plan.risk_level,
@@ -164,6 +163,35 @@ class PlanExecutor:
             task = self.task_service.get_task(task_id)
             if task.status.value == "awaiting_commit_approval":
                 self.task_service.transition(task_id, "committing", request_id=request_id)
+                plan = TaskPlan.from_dict(task.plan or {})
+                verification = self.workflow.executor.verify_expectations(
+                    plan.expected_files, plan.test_commands
+                )
+                if verification.get("ok"):
+                    verification["test_result"] = self.workflow.executor.registry.test_runner.run(
+                        plan.test_target
+                    )
+                    verification["ok"] = bool(verification["test_result"].get("ok"))
+                if not verification.get("ok"):
+                    self.task_service.transition(
+                        task_id,
+                        "failed",
+                        error_type="post_commit_verification",
+                    )
+                    if state is None:
+                        state = ExecutionState(task_id, max_attempts=task.max_retries)
+                        self._states[task_id] = state
+                    state.result = {
+                        "ok": False,
+                        "stage": "post_commit_verification",
+                        "commit": result.get("commit"),
+                        "verification": verification,
+                    }
+                    state.transition("failed", error_type="post_commit_verification")
+                    self._persist_state(task_id, state)
+                    result["state"] = state.snapshot()
+                    result["verification"] = verification
+                    return result
                 self.task_service.transition(task_id, "completed", request_id=request_id)
             elif task.status.value != "completed":
                 raise PlanExecutionError(
@@ -175,8 +203,10 @@ class PlanExecutor:
             if state.stage != "committed":
                 state.transition("committed")
             state.result = dict(result)
+            state.result["post_commit_verification"] = verification
             self._persist_state(task_id, state)
             result["state"] = state.snapshot()
+            result["post_commit_verification"] = verification
         return result
 
     def get_state(self, task_id):
