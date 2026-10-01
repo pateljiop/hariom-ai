@@ -19,7 +19,7 @@ class GitManagerSecurityTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             git.merge_branch("feature", approved=True)
         self.assertEqual(git._run.call_args_list[0].args, ("branch", "--show-current"))
-        self.assertEqual(git._run.call_args_list[1].args, ("diff", "HEAD", "feature", "--"))
+        self.assertEqual(git._run.call_args_list[2].args, ("diff", "HEAD", "feature", "--"))
 
 
 if __name__ == "__main__":
