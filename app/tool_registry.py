@@ -146,11 +146,11 @@ class ToolRegistry:
             raise ToolError(str(exc)) from exc
         return True
 
-    def execute(self, name, arguments=None, approved=False):
+    def execute(self, name, arguments=None, approved=False, *, task_id=None, approval=None):
         self.validate_arguments(name, arguments)
         spec = self._tools[name]
         if spec.permission:
-            decision = self.permission_manager.decide(spec.permission, approved=approved)
+            decision = self.permission_manager.decide(spec.permission, approved=approved, task_id=task_id, tool=name, arguments=arguments, approval=approval)
             if not decision.allowed:
                 raise ToolApprovalRequired(f"Tool '{name}' requires approval for permission '{spec.permission}'.")
         if spec.requires_approval and not approved and name != "terminal.run":
