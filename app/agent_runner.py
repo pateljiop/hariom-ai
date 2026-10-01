@@ -61,6 +61,9 @@ class AgentRunner:
         if not isinstance(max_repairs, int) or isinstance(max_repairs, bool) or not 0 <= max_repairs <= 3:
             raise AgentRunError("max_repairs must be an integer between 0 and 3.")
         result = self.prepare(request, preferred=preferred, profile=profile, task_id=task_id)
+        if result.get("status") == "awaiting_approval":
+            result["repairs"] = 0
+            return result
         repairs = 0
         resolved_task_id = task_id
         state = result.get("state") if isinstance(result, dict) else None
