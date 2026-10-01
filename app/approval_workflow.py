@@ -111,9 +111,12 @@ class ApprovalWorkflow:
                 request = ApprovalRequest(
                     request_id=request_id,
                     actions=tuple(TaskAction(
-                        x["tool"], x.get("arguments", {}), x.get("approved", False),
-                        tuple(x.get("dependencies", [])), x.get("step_id", ""), x.get("retryable", False),
-                        tuple(x.get("expected_files", [])), tuple(x.get("test_commands", []))
+                        tool=x["tool"], arguments=x.get("arguments", {}), approved=x.get("approved", False),
+                        approval_token=x.get("approval_token", ""),
+                        dependencies=tuple(x.get("dependencies", [])), step_id=x.get("step_id", ""),
+                        retryable=x.get("retryable", False),
+                        expected_files=tuple(x.get("expected_files", [])),
+                        test_commands=tuple(x.get("test_commands", []))
                     ) for x in saved["actions"]),
                     test_target=saved["test_target"], test_result=saved["test_result"],
                     diff=saved["diff"], task_id=saved.get("task_id", ""),
@@ -138,6 +141,7 @@ class ApprovalWorkflow:
             "task_id": request.task_id,
             "actions": [{
                 "tool": a.tool, "arguments": dict(a.arguments), "approved": a.approved,
+                "approval_token": a.approval_token,
                 "dependencies": list(a.dependencies), "step_id": a.step_id, "retryable": a.retryable,
                 "expected_files": list(a.expected_files), "test_commands": list(a.test_commands),
             } for a in request.actions],
