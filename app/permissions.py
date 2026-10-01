@@ -41,7 +41,7 @@ class PermissionManager:
 
     def decide(self, permission, approved=False, *, task_id=None, tool=None, arguments=None, approval=None):
         permission = permission if isinstance(permission, Permission) else Permission(permission)
-        if permission.value in self._grants:
+        if task_id is None and permission.value in self._grants:
             return PermissionDecision(True, False, "permission_granted")
         if not approved:
             return PermissionDecision(False, True, "approval_required")
