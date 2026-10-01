@@ -49,7 +49,12 @@ class Workspace:
         return target
 
     def _safe_path(self, path):
-        target = (self.root / path).resolve()
+        if not isinstance(path, (str, Path)):
+            raise TypeError("Workspace path must be text.")
+        candidate = self.root / path
+        if candidate.is_symlink():
+            raise ValueError("Symlink paths are not allowed.")
+        target = candidate.resolve()
 
         if target != self.root and self.root not in target.parents:
             raise ValueError("Path is outside the workspace.")
