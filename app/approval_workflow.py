@@ -105,6 +105,7 @@ class ApprovalWorkflow:
             "result": result,
             "pre_commit_head": pre_commit_head,
             "post_commit_head": post_commit_head,
+            "branch_name": request.branch_name,
         }
         consumed = ApprovalRequest(**{**request.__dict__, "approved": True, "commit_result": commit_result})
         self._requests[request_id] = consumed
