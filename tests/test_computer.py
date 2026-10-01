@@ -22,6 +22,16 @@ class ComputerControllerTests(unittest.TestCase):
             self.assertIn("computer_type", registry.names())
             self.assertTrue(registry.get("computer_click").requires_approval)
 
+    def test_hotkey_requires_explicit_approval(self):
+        controller = ComputerController(Mock())
+        controller.system = "Windows"
+        fake = Mock()
+        with patch.object(controller, "_pyautogui", return_value=fake):
+            with self.assertRaises(PermissionError):
+                controller.hotkey(["ctrl", "c"])
+            controller.hotkey(["ctrl", "c"], approved=True)
+            fake.hotkey.assert_called_once_with("ctrl", "c")
+
     def test_mouse_bounds_are_checked(self):
         controller = ComputerController(Mock())
         controller.system = "Windows"
