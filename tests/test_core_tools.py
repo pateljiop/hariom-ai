@@ -393,6 +393,8 @@ class GitManagerTests(unittest.TestCase):
     def test_commit_blocks_detected_secret_even_with_approval(self):
         with tempfile.TemporaryDirectory() as root:
             git = GitManager(root)
+            git._ensure_repo = Mock()
+            git._run = Mock(side_effect=lambda *args: "feature/test" if args == ("branch", "--show-current") else "")
             git.diff = Mock(return_value="+OPENAI_API_KEY = \"sk-proj-123456789012345678\"")
             with self.assertRaisesRegex(PermissionError, "secret"):
                 git.commit("commit secret", approved=True)
