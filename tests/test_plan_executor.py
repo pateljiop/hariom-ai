@@ -18,8 +18,24 @@ class PlanExecutorTests(unittest.TestCase):
         ordered = executor._dependency_order(actions)
         self.assertEqual([a.step_id for a in ordered], ["a", "b", "c"])
 
+    def test_prepare_rejects_branch_mismatch_for_existing_task(self):
+        workflow = Mock()
+        workflow.git.current_branch.return_value = "feature/current"
+        workflow.prepare.return_value = {"ok": True, "stage": "approval", "request_id": "branch-test"}
+        import tempfile
+        with tempfile.TemporaryDirectory() as root:
+            service = TaskService(TaskStore(f"{root}/tasks.sqlite3"))
+            service.create_task("existing", task_id="branch-bound", branch_name="feature/other")
+            executor = PlanExecutor(workflow, task_service=service)
+            with self.assertRaises(PlanExecutionError):
+                executor.prepare({
+                    "task_id": "branch-bound",
+                    "actions": [{"tool": "workspace.write", "arguments": {"path": "a", "content": "b"}}],
+                })
+
     def test_prepare_converts_plan_and_returns_review_payload(self):
         workflow = Mock()
+        workflow.git.current_branch.return_value = "feature/test"
         workflow.prepare.return_value = {"ok": True, "stage": "approval", "request_id": "abc", "diff": "d"}
         executor = PlanExecutor(workflow)
 
@@ -36,6 +52,7 @@ class PlanExecutorTests(unittest.TestCase):
 
     def test_prepare_persists_task_lifecycle(self):
         workflow = Mock()
+        workflow.git.current_branch.return_value = "feature/test"
         workflow.prepare.return_value = {"ok": True, "stage": "approval", "request_id": "persisted"}
         import tempfile
         with tempfile.TemporaryDirectory() as root:
@@ -54,6 +71,7 @@ class PlanExecutorTests(unittest.TestCase):
 
     def test_prepare_failure_exposes_failed_state(self):
         workflow = Mock()
+        workflow.git.current_branch.return_value = "feature/test"
         workflow.prepare.return_value = {"ok": False, "stage": "verification"}
         executor = PlanExecutor(workflow)
 
@@ -71,6 +89,7 @@ class PlanExecutorTests(unittest.TestCase):
 
     def test_recover_repairs_and_reverifies_with_bounded_attempts(self):
         workflow = Mock()
+        workflow.git.current_branch.return_value = "feature/test"
         workflow.prepare.return_value = {"ok": False, "stage": "verification"}
         test_runner = Mock()
         test_runner.run.side_effect = [{"ok": False}, {"ok": True}]
@@ -102,6 +121,7 @@ class PlanExecutorTests(unittest.TestCase):
 
     def test_approve_updates_matching_task_state(self):
         workflow = Mock()
+        workflow.git.current_branch.return_value = "feature/test"
         workflow.prepare.return_value = {"ok": True, "stage": "approval", "request_id": "abc", "diff": "d"}
         workflow.approve.return_value = {"ok": True, "request_id": "abc", "commit": {"ok": True}}
         workflow.executor.verify_expectations.return_value = {"ok": True}
@@ -119,6 +139,7 @@ class PlanExecutorTests(unittest.TestCase):
 
     def test_get_state_restores_persisted_execution_state_after_restart(self):
         workflow = Mock()
+        workflow.git.current_branch.return_value = "feature/test"
         workflow.prepare.return_value = {"ok": True, "stage": "approval", "request_id": "restart-approval", "diff": "d"}
         import tempfile
         with tempfile.TemporaryDirectory() as root:
@@ -139,6 +160,7 @@ class PlanExecutorTests(unittest.TestCase):
 
     def test_recover_uses_persisted_state_after_restart(self):
         workflow = Mock()
+        workflow.git.current_branch.return_value = "feature/test"
         workflow.prepare.return_value = {"ok": False, "stage": "verification"}
         test_runner = Mock()
         test_runner.run.side_effect = [{"ok": False}, {"ok": True}]
@@ -159,6 +181,7 @@ class PlanExecutorTests(unittest.TestCase):
 
     def test_approve_restores_state_after_restart(self):
         workflow = Mock()
+        workflow.git.current_branch.return_value = "feature/test"
         workflow.prepare.return_value = {"ok": True, "stage": "approval", "request_id": "restart-commit", "diff": "d"}
         workflow.approve.return_value = {"ok": True, "request_id": "restart-commit", "commit": {"ok": True}}
         workflow.executor.verify_expectations.return_value = {"ok": True}
@@ -204,6 +227,7 @@ class PlanExecutorTests(unittest.TestCase):
 
     def test_approve_does_not_complete_when_post_commit_verification_fails(self):
         workflow = Mock()
+        workflow.git.current_branch.return_value = "feature/test"
         workflow.prepare.return_value = {"ok": True, "stage": "approval", "request_id": "verify-fail", "diff": "d"}
         workflow.approve.return_value = {
             "ok": True, "request_id": "verify-fail",
@@ -230,6 +254,7 @@ class PlanExecutorTests(unittest.TestCase):
 
     def test_failed_post_commit_verification_persists_rollback_candidate(self):
         workflow = Mock()
+        workflow.git.current_branch.return_value = "feature/test"
         workflow.prepare.return_value = {
             "ok": True, "stage": "approval", "request_id": "rollback-candidate", "diff": "d"
         }
@@ -238,7 +263,7 @@ class PlanExecutorTests(unittest.TestCase):
             "commit": {
                 "pre_commit_head": "a" * 40,
                 "post_commit_head": "b" * 40,
-                "branch_name": "feature",
+                "branch_name": "feature/test",
             },
         }
         workflow.executor.verify_expectations.return_value = {"ok": False}
@@ -276,6 +301,7 @@ class PlanExecutorTests(unittest.TestCase):
 
     def test_rollback_requires_explicit_approval(self):
         workflow = Mock()
+        workflow.git.current_branch.return_value = "feature/test"
         workflow.prepare.return_value = {
             "ok": True, "stage": "approval", "request_id": "rollback-approval", "diff": "d"
         }
@@ -284,7 +310,7 @@ class PlanExecutorTests(unittest.TestCase):
             "commit": {
                 "pre_commit_head": "a" * 40,
                 "post_commit_head": "b" * 40,
-                "branch_name": "feature",
+                "branch_name": "feature/test",
             },
         }
         workflow.executor.verify_expectations.return_value = {"ok": False}
@@ -299,6 +325,7 @@ class PlanExecutorTests(unittest.TestCase):
 
     def test_explicit_rollback_compensates_failed_commit(self):
         workflow = Mock()
+        workflow.git.current_branch.return_value = "feature/test"
         workflow.prepare.return_value = {
             "ok": True, "stage": "approval", "request_id": "rollback-ok", "diff": "d"
         }
@@ -307,13 +334,13 @@ class PlanExecutorTests(unittest.TestCase):
             "commit": {
                 "pre_commit_head": "a" * 40,
                 "post_commit_head": "b" * 40,
-                "branch_name": "feature",
+                "branch_name": "feature/test",
             },
         }
         workflow.executor.verify_expectations.return_value = {"ok": False}
-        workflow.git.current_branch.return_value = "feature"
+        workflow.git.current_branch.return_value = "feature/test"
         workflow.git.rollback_to_commit.return_value = {
-            "branch": "feature",
+            "branch": "feature/test",
             "target_sha": "a" * 40,
             "reverted_sha": "b" * 40,
             "rollback_sha": "c" * 40,
