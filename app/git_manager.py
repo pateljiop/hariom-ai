@@ -72,10 +72,10 @@ class GitManager:
     def commit(self, message, approved=False):
         if not approved:
             raise PermissionError("Git commit requires explicit approval.")
-        self._ensure_repo()
         if not isinstance(message, str) or not message.strip():
             raise GitError("Commit message is required.")
         findings = self.scan_diff_for_secrets()
         if findings:
             raise PermissionError("Potential secret detected in Git diff; explicit security review required.")
+        self._ensure_repo()
         return self._run("add", "-A") + ("\n" + self._run("commit", "-m", message))
