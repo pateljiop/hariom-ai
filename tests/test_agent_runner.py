@@ -148,7 +148,7 @@ class AgentRunnerTests(unittest.TestCase):
         self.assertEqual(result["status"], "completed")
         self.assertEqual(self.router.chat_request.call_count, 2)
         self.registry.execute.assert_called_once_with("workspace.read", {"path": "a.txt"}, approved=False, task_id=None)
-        tool_message = self.router.chat_request.call_args_list[1].args[0][-1]
+        tool_message = [m for m in self.router.chat_request.call_args_list[1].args[0] if m.get("role") == "tool"][-1]
         self.assertEqual(tool_message["role"], "tool")
         self.assertEqual(tool_message["tool_call_id"], "call-1")
 
