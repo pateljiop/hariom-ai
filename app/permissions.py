@@ -96,8 +96,19 @@ class ApprovalAuthority:
             return PermissionDecision(False, True, "approval_permission_mismatch")
         if record["arguments_hash"] != PermissionManager.argument_fingerprint(arguments):
             return PermissionDecision(False, True, "approval_arguments_mismatch")
-        self._consumed.add(nonce)
         return PermissionDecision(True, False, "bound_approval_token")
+
+    def consume(self, token):
+        if not isinstance(token, str):
+            return False
+        parts = token.split(".", 2)
+        if len(parts) != 3 or parts[0] != "v1":
+            return False
+        nonce = parts[1]
+        if nonce in self._consumed or nonce not in self._issued:
+            return False
+        self._consumed.add(nonce)
+        return True
 
 
 class PermissionManager:
