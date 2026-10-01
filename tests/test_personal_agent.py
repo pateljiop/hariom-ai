@@ -6,6 +6,8 @@ from app.agent import PersonalAgent
 from app.memory import MemoryStore
 from app.task_engine import TaskStatus
 from app.workspace import Workspace
+from app.context import WorkspaceContext
+from app.skills import SkillRegistry
 
 class FakeRouter:
     def chat_messages(self, messages, **kwargs):

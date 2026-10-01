@@ -5,7 +5,10 @@ from tkinter import ttk, messagebox, filedialog
 from .activity import ActivityBus
 from .agent import PersonalAgent
 from .ai_router import AIRouter
-from .config import WORKSPACE
+from .browser import BrowserController
+from .computer import ComputerController
+from .github_tools import GitHubTools
+from .tools import ToolRegistry
 from .workspace import Workspace
 
 
@@ -18,7 +21,11 @@ class App(tk.Tk):
         self.activity = ActivityBus()
         self.router = AIRouter(self.activity)
         self.ws = Workspace()
-        self.agent = PersonalAgent(self.router, self.ws, self.activity)
+        self.browser = BrowserController(self.activity, headless=False)
+        self.computer = ComputerController(self.activity)
+        self.github = GitHubTools(self.activity)
+        self.tools = ToolRegistry(self.ws, self.activity, browser=self.browser, computer=self.computer, github=self.github)
+        self.agent = PersonalAgent(self.router, self.ws, self.activity, tools=self.tools)
         self.current_task = None
         self.build()
         self.activity.subscribe(self.log_line)
@@ -76,6 +83,7 @@ class App(tk.Tk):
     def refresh(self):
         self.activity.emit("SYSTEM -> workspace: " + str(self.ws.root))
         self.activity.emit("SYSTEM -> providers available: " + (", ".join(self.router.available()) or "none"))
+        self.activity.emit("SYSTEM -> browser tools registered")
 
     def ask(self):
         prompt = self.prompt.get("1.0", "end").strip()
