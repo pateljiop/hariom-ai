@@ -34,7 +34,8 @@ def run_command(command, activity, approved=False):
     activity.emit("TERMINAL -> " + command)
     try:
         env = {k: v for k, v in os.environ.items() if k not in {"OPENAI_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_TOKEN"}}
-        p = subprocess.run(argv, shell=False, capture_output=True, text=True, timeout=TIMEOUT_SECONDS, env=env)
+        creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        p = subprocess.run(argv, shell=False, capture_output=True, text=True, timeout=TIMEOUT_SECONDS, env=env, creationflags=creationflags)
     except subprocess.TimeoutExpired as exc:
         activity.emit("TERMINAL -> timeout")
         partial = (exc.stdout or "") + ("\n" + exc.stderr if exc.stderr else "")
