@@ -4,6 +4,7 @@ Keeps the existing task/plan/approval architecture as the single execution
 boundary for UI and background requests. The UI never calls tools directly.
 """
 from threading import RLock
+from uuid import uuid4
 
 from .activity import ActivityBus
 from .agent_execution import AgentExecutionFacade
@@ -12,6 +13,7 @@ from .plan_executor import PlanExecutor
 from .task_executor import TaskExecutor
 from .task_queue import TaskQueue
 from .task_service import TaskService
+from .task_plan import TaskPlan
 from .tool_registry import ToolRegistry
 from .approval_workflow import ApprovalWorkflow
 
@@ -68,15 +70,30 @@ class Workstation:
         return result
 
     def submit_background(self, request, **kwargs):
+        """Plan synchronously, persist the task, then execute it on a bounded worker."""
         self._require_router()
-        prepared = self.prepare(request, **kwargs)
-        state = prepared.get("state", {})
-        task_id = state.get("task_id") if isinstance(state, dict) else None
-        if not task_id:
-            raise WorkstationError("Prepared task did not return a persistent task ID.")
+        planned = self.agent.plan(request, **kwargs)
+        plan = TaskPlan.from_dict(planned["plan"])
+        task_id = "task-bg-" + uuid4().hex[:16]
+        task = self.task_service.create_task(
+            plan.user_request or request,
+            objective=plan.objective or plan.user_request or request,
+            task_id=task_id,
+            steps=tuple(plan.steps),
+            dependencies=tuple(plan.dependencies),
+            expected_files=tuple(plan.expected_files),
+            test_commands=tuple(plan.test_commands),
+            risk_level=plan.risk_level,
+            required_approvals=tuple(plan.required_approvals),
+            rollback_strategy=plan.rollback_strategy,
+            max_retries=plan.max_retries,
+            plan=plan.to_dict(),
+        )
+        self.activity.emit("TASK -> queued " + task_id)
 
         def execute():
-            return self.executor.get_state(task_id)
+            self.activity.emit("TASK -> worker started " + task_id)
+            return self.executor.prepare(plan.to_dict(), task_id=task_id)
 
         return self.queue.submit(task_id, execute)
 
