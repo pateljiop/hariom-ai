@@ -11,6 +11,7 @@ class ComputerController:
         self.activity = activity
         self.workspace = workspace
         self.system = platform.system()
+        self._temporary_artifacts = set()
 
     def _persistent_path(self, path):
         if self.workspace is None:
@@ -53,16 +54,18 @@ class ComputerController:
             tmp = tempfile.NamedTemporaryFile(prefix="hariom-screen-", suffix=".png", delete=False)
             tmp.close()
             target = Path(tmp.name)
+            self._temporary_artifacts.add(target)
         pyautogui.screenshot(str(target))
         self.activity.emit("COMPUTER -> screenshot " + ("persisted" if persist else "temporary"))
         return str(target)
 
     def cleanup_temp(self, path):
         target = Path(path).expanduser().resolve()
-        if not target.name.startswith("hariom-screen-"):
-            raise ValueError("Only computer temporary artifacts can be cleaned up.")
+        if target not in self._temporary_artifacts:
+            raise ValueError("Only tracked computer temporary artifacts can be cleaned up.")
         if target.exists():
             target.unlink()
+        self._temporary_artifacts.discard(target)
         return True
 
     def move_mouse(self, x, y, duration=0.2):
