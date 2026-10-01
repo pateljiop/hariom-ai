@@ -70,9 +70,9 @@ class GitManager:
         return self._run("merge", "--no-ff", name)
 
     def commit(self, message, approved=False):
-        self._ensure_repo()
         if not approved:
             raise PermissionError("Git commit requires explicit approval.")
+        self._ensure_repo()
         if not isinstance(message, str) or not message.strip():
             raise GitError("Commit message is required.")
         findings = self.scan_diff_for_secrets()
