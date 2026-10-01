@@ -165,6 +165,14 @@ class Workstation:
         self.activity.emit("APPROVAL -> rejected " + request_id)
         return result
 
+    def run_tool_loop(self, request, **kwargs):
+        self._require_router()
+        self.activity.emit("AGENT -> native tool loop started")
+        result = self.agent.run_tool_loop(request, **kwargs)
+        status = result.get("status") if isinstance(result, dict) else None
+        self.activity.emit("AGENT -> tool loop " + (status or "finished"))
+        return result
+
     def run_browser(self, request, **kwargs):
         self._require_router()
         self.activity.emit("BROWSER AGENT -> started")
