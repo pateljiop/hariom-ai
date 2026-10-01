@@ -83,6 +83,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
         self.registry.test_runner.run = Mock(return_value={"ok": True, "returncode": 0})
         self.git.diff.return_value = "same diff"
         self.git.commit.return_value = "committed"
+        self.git.head_sha.side_effect = ["a" * 40, "b" * 40]
         with tempfile.TemporaryDirectory() as root:
             store = TaskStore(f"{root}/tasks.sqlite3")
             from app.task_service import TaskService
@@ -92,6 +93,8 @@ class ApprovalWorkflowTests(unittest.TestCase):
             reloaded = ApprovalWorkflow(self.executor, self.git, store=store)
             result = reloaded.approve(prepared["request_id"], "persisted commit")
             self.assertTrue(result["ok"])
+            self.assertEqual(result["commit"]["pre_commit_head"], "a" * 40)
+            self.assertEqual(result["commit"]["post_commit_head"], "b" * 40)
 
     def test_approval_reload_preserves_step_metadata(self):
         self.registry.test_runner.run = Mock(return_value={"ok": True, "returncode": 0})
@@ -196,6 +199,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
         self.registry.test_runner.run = Mock(return_value={"ok": True, "returncode": 0})
         self.git.diff.return_value = "same diff"
         self.git.commit.return_value = "committed"
+        self.git.head_sha.side_effect = ["a" * 40, "b" * 40]
         with tempfile.TemporaryDirectory() as root:
             store = TaskStore(f"{root}/tasks.sqlite3")
             from app.task_service import TaskService
@@ -208,6 +212,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
             second_result = second.approve(prepared["request_id"], "commit again")
             self.assertTrue(second_result["ok"])
             self.assertTrue(second_result["idempotent"])
+            self.assertEqual(second_result["commit"]["post_commit_head"], "b" * 40)
             self.git.commit.assert_called_once_with("commit once", approved=True)
 
     def test_unknown_request_is_rejected(self):
