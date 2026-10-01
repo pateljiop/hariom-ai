@@ -15,7 +15,8 @@ class PlanExecutor:
     def __init__(self, workflow=None, task_service=None):
         self.task_service = task_service or TaskService()
         self.workflow = workflow or ApprovalWorkflow(store=self.task_service.store)
-        self._states = {}\n        self._recovery_requests = {}
+        self._states = {}
+        self._recovery_requests = {}
 
     def prepare(self, payload, task_id=None):
         plan = TaskPlan.from_dict(payload)
