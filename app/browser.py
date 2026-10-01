@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+import ipaddress
+import socket
 import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
@@ -29,10 +31,43 @@ class BrowserController:
                 "'pip install playwright' and 'playwright install chromium'."
             ) from exc
 
+    @staticmethod
+    def _host_is_private(host):
+        host = str(host).strip().lower().rstrip(".")
+        if not host:
+            return True
+        if host == "localhost" or host.endswith(".localhost") or host == "localhost.localdomain":
+            return True
+        try:
+            address = ipaddress.ip_address(host)
+        except ValueError:
+            return False
+        return any((
+            address.is_private,
+            address.is_loopback,
+            address.is_link_local,
+            address.is_multicast,
+            address.is_unspecified,
+            address.is_reserved,
+        ))
+
+    @classmethod
+    def _resolve_public_host(cls, host):
+        if cls._host_is_private(host):
+            raise PermissionError("Browser navigation to local/private network destinations is blocked.")
+        try:
+            infos = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+        except OSError as exc:
+            raise ValueError(f"Unable to resolve browser destination: {host}") from exc
+        addresses = {info[4][0] for info in infos}
+        if not addresses or any(cls._host_is_private(address) for address in addresses):
+            raise PermissionError("Browser navigation to local/private network destinations is blocked.")
+
     def _validate_url(self, url):
         parsed = urlparse(str(url))
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
             raise ValueError("Only valid http/https URLs are allowed.")
+        self._resolve_public_host(parsed.hostname)
         return str(url)
 
     def open(self, url):
