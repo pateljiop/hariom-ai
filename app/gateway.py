@@ -9,6 +9,7 @@ from .config import GATEWAY_API_KEY, GATEWAY_HOST, GATEWAY_PORT, PROVIDERS, ROUT
 from .plan_executor import PlanExecutor
 from .task_plan import TaskPlan
 from .task_service import TaskService, TaskServiceError
+from .task_queue import TaskQueue
 
 
 class ClientRequestError(ValueError):
@@ -18,6 +19,7 @@ activity = ActivityBus()
 router = AIRouter(activity)
 task_service = TaskService()
 plan_executor = PlanExecutor(task_service=task_service)
+task_queue = TaskQueue(max_workers=2)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -141,8 +143,19 @@ class Handler(BaseHTTPRequestHandler):
                     plan = TaskPlan.from_dict(payload)
                     self._send(200, {'ok': True, 'task_id': task_id, 'plan': plan.to_dict()})
                 elif suffix == ['execute']:
-                    result = plan_executor.prepare(payload, task_id=task_id)
-                    self._send(200 if result.get('ok') else 422, result)
+                    if payload.get('background') is True:
+                        task_queue.submit(
+                            task_id,
+                            plan_executor.prepare,
+                            payload,
+                            task_id,
+                        )
+                        self._send(202, {"ok": True, "task_id": task_id, "status": "queued"})
+                    else:
+                        result = plan_executor.prepare(payload, task_id=task_id)
+                        self._send(200 if result.get('ok') else 422, result)
+                elif suffix == ['queue']:
+                    self._send(200, task_queue.status(task_id))
                 elif suffix == ['cancel']:
                     reason = payload.get('reason', 'cancelled by user')
                     task = task_service.cancel_task(task_id, reason=reason)
