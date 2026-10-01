@@ -437,3 +437,31 @@ class TaskQueueTests(unittest.TestCase):
         finally:
             release.set()
             queue.shutdown(wait=True)
+
+
+class BrowserArtifactSecurityTests(unittest.TestCase):
+    def test_browser_cleanup_requires_tracked_artifact(self):
+        import tempfile
+        from pathlib import Path
+        from app.browser import BrowserController
+
+        with tempfile.TemporaryDirectory() as root:
+            target = Path(root) / "hariom-browser-unowned.png"
+            target.write_bytes(b"data")
+            controller = BrowserController(ActivityBus())
+            with self.assertRaises(ValueError):
+                controller.cleanup_temp(target)
+            self.assertTrue(target.exists())
+
+    def test_browser_cleanup_removes_tracked_artifact(self):
+        import tempfile
+        from pathlib import Path
+        from app.browser import BrowserController
+
+        with tempfile.TemporaryDirectory() as root:
+            target = Path(root) / "hariom-browser-owned.png"
+            target.write_bytes(b"data")
+            controller = BrowserController(ActivityBus())
+            controller._temporary_artifacts.add(target.resolve())
+            self.assertTrue(controller.cleanup_temp(target))
+            self.assertFalse(target.exists())
