@@ -94,8 +94,18 @@ class ApprovalWorkflow:
             raise ApprovalWorkflowError("Git branch changed after review; approval is invalid.")
         if self.git.diff() != request.diff:
             raise ApprovalWorkflowError("Workspace diff changed after review; approval is invalid.")
+        pre_commit_head = self.git.head_sha()
         result = self.git.commit(message, approved=True)
-        consumed = ApprovalRequest(**{**request.__dict__, "approved": True, "commit_result": result})
+        post_commit_head = self.git.head_sha()
+        if post_commit_head == pre_commit_head:
+            raise ApprovalWorkflowError("Git commit did not advance HEAD; commit verification failed.")
+        if self.git.current_branch() != request.branch_name:
+            raise ApprovalWorkflowError("Git branch changed during commit; commit verification failed.")
+        consumed = ApprovalRequest(**{**request.__dict__, "approved": True, "commit_result": {
+            "result": result,
+            "pre_commit_head": pre_commit_head,
+            "post_commit_head": post_commit_head,
+        }})
         self._requests[request_id] = consumed
         self._persist(consumed, "approved")
         tokens = self.issue_action_tokens(request_id)
