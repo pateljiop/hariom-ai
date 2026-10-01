@@ -6,6 +6,13 @@ from app.task_store import TaskStore
 
 
 class TaskStoreTests(unittest.TestCase):
+    def test_connection_context_closes_sqlite_handle(self):
+        store = TaskStore(":memory:")
+        with store._connect() as conn:
+            conn.execute("SELECT 1").fetchone()
+        with self.assertRaises(Exception):
+            conn.execute("SELECT 1").fetchone()
+
     def test_create_get_and_update_survive_store_instances(self):
         with tempfile.TemporaryDirectory() as root:
             path = f"{root}/tasks.sqlite3"
