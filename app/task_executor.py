@@ -110,7 +110,7 @@ class TaskExecutor:
             TaskAction("__verification__", {}, expected_files=tuple(expected_files), test_commands=tuple(test_commands))
         )
 
-    def execute(self, actions, step_state=None, checkpoint: Callable | None = None, resume_interrupted=False, max_step_retries=0):
+    def execute(self, actions, step_state=None, checkpoint: Callable | None = None, resume_interrupted=False, max_step_retries=0, task_id=None):
         if not isinstance(max_step_retries, int) or isinstance(max_step_retries, bool) or max_step_retries < 0 or max_step_retries > 10:
             raise TaskExecutionError("max_step_retries must be an integer between 0 and 10.")
         actions = self.validate(actions)
@@ -139,10 +139,12 @@ class TaskExecutor:
                 if checkpoint:
                     checkpoint()
                 try:
-                    result = self.registry.execute(
-                        action.tool, action.arguments, approved=action.approved,
-                        task_id=state.get("_task_id", ""), approval_token=action.approval_token or None
-                    )
+                    execute_kwargs = {"approved": action.approved}
+                    if task_id:
+                        execute_kwargs["task_id"] = task_id
+                    if action.approval_token:
+                        execute_kwargs["approval_token"] = action.approval_token
+                    result = self.registry.execute(action.tool, action.arguments, **execute_kwargs)
                 except ToolApprovalRequired as exc:
                     record.update({"status": "pending", "error": str(exc)})
                     if checkpoint:
