@@ -102,10 +102,13 @@ class PlanExecutorTests(unittest.TestCase):
         })
         task_id = prepared["state"]["task_id"]
 
-        result = executor.recover(
+        pending = executor.recover(
             task_id,
             [TaskAction("workspace.write", {"path": "fix", "content": "ok"})],
         )
+        self.assertFalse(pending["ok"])
+        self.assertEqual(pending["stage"], "awaiting_recovery_approval")
+        result = executor.approve_recovery(pending["request_id"])
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["attempts"], 1)
@@ -113,6 +116,43 @@ class PlanExecutorTests(unittest.TestCase):
         self.assertEqual(result["state"]["attempts"], 1)
         self.assertEqual(result["state"]["stage"], "approval")
         self.assertEqual(workflow.executor.execute.call_args.kwargs["task_id"], task_id)
+
+    def test_recover_requires_human_approval_before_repair_execution(self):
+        workflow = Mock()
+        workflow.git.current_branch.return_value = "feature/test"
+        workflow.prepare.return_value = {"ok": False, "stage": "verification"}
+        workflow.executor.registry.test_runner.run.return_value = {"ok": False}
+        workflow.executor.execute.return_value = {"ok": True, "results": []}
+        executor = PlanExecutor(workflow)
+        prepared = executor.prepare({
+            "task_id": "recovery-approval-required",
+            "actions": [{"tool": "workspace.write", "arguments": {"path": "a", "content": "b"}}],
+        })
+
+        pending = executor.recover(
+            prepared["state"]["task_id"],
+            [TaskAction("workspace.write", {"path": "fix", "content": "ok"})],
+        )
+
+        self.assertEqual(pending["stage"], "awaiting_recovery_approval")
+        workflow.executor.execute.assert_not_called()
+
+    def test_approve_recovery_rejects_branch_change(self):
+        workflow = Mock()
+        workflow.git.current_branch.return_value = "feature/test"
+        workflow.prepare.return_value = {"ok": False, "stage": "verification"}
+        executor = PlanExecutor(workflow)
+        prepared = executor.prepare({
+            "task_id": "recovery-branch-bound",
+            "actions": [{"tool": "workspace.write", "arguments": {"path": "a", "content": "b"}}],
+        })
+        pending = executor.recover(
+            prepared["state"]["task_id"],
+            [TaskAction("workspace.write", {"path": "fix", "content": "ok"})],
+        )
+        workflow.git.current_branch.return_value = "feature/changed"
+        with self.assertRaises(PlanExecutionError):
+            executor.approve_recovery(pending["request_id"])
 
     def test_recover_rejects_unknown_task(self):
         executor = PlanExecutor(Mock())
@@ -175,7 +215,9 @@ class PlanExecutorTests(unittest.TestCase):
                 "actions": [{"tool": "workspace.write", "arguments": {"path": "a", "content": "b"}}],
             })
             second = PlanExecutor(workflow, task_service=TaskService(TaskStore(f"{root}/tasks.sqlite3")))
-            result = second.recover("recover-restart", [TaskAction("workspace.write", {"path": "fix", "content": "ok"})])
+            pending = second.recover("recover-restart", [TaskAction("workspace.write", {"path": "fix", "content": "ok"})])
+            self.assertEqual(pending["stage"], "awaiting_recovery_approval")
+            result = second.approve_recovery(pending["request_id"])
             self.assertTrue(result["ok"])
             self.assertEqual(result["state"]["attempts"], 1)
 
