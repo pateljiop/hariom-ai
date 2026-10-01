@@ -24,6 +24,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
         self.executor = TaskExecutor(self.registry)
         self.git = Mock()
         self.git.current_branch.return_value = "feature/test"
+        self.git.head_sha.return_value = "a" * 40
         self.workflow = ApprovalWorkflow(self.executor, self.git)
 
     def tearDown(self):
@@ -141,6 +142,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
         self.registry.test_runner.run = Mock(return_value={"ok": True, "returncode": 0})
         self.git.diff.return_value = "same diff"
         self.git.commit.return_value = "committed"
+        self.git.head_sha.side_effect = ["a" * 40, "b" * 40]
 
         prepared = self.workflow.prepare([
             TaskAction("workspace.write", {"path": "change.txt", "content": "new"})
@@ -148,7 +150,34 @@ class ApprovalWorkflowTests(unittest.TestCase):
         result = self.workflow.approve(prepared["request_id"], "apply reviewed change")
 
         self.assertTrue(result["ok"])
+        self.assertEqual(result["commit"]["pre_commit_head"], "a" * 40)
+        self.assertEqual(result["commit"]["post_commit_head"], "b" * 40)
         self.git.commit.assert_called_once_with("apply reviewed change", approved=True)
+
+    def test_commit_that_does_not_advance_head_is_rejected(self):
+        self.registry.test_runner.run = Mock(return_value={"ok": True, "returncode": 0})
+        self.git.diff.return_value = "same diff"
+        self.git.commit.return_value = "committed"
+        self.git.head_sha.return_value = "a" * 40
+
+        prepared = self.workflow.prepare([
+            TaskAction("workspace.write", {"path": "change.txt", "content": "new"})
+        ])
+        with self.assertRaisesRegex(ApprovalWorkflowError, "did not advance HEAD"):
+            self.workflow.approve(prepared["request_id"], "apply reviewed change")
+
+    def test_commit_branch_change_is_rejected(self):
+        self.registry.test_runner.run = Mock(return_value={"ok": True, "returncode": 0})
+        self.git.diff.return_value = "same diff"
+        self.git.commit.return_value = "committed"
+        self.git.head_sha.side_effect = ["a" * 40, "b" * 40]
+        self.git.current_branch.side_effect = ["feature/test", "feature/changed"]
+
+        prepared = self.workflow.prepare([
+            TaskAction("workspace.write", {"path": "change.txt", "content": "new"})
+        ])
+        with self.assertRaisesRegex(ApprovalWorkflowError, "branch changed"):
+            self.workflow.approve(prepared["request_id"], "apply reviewed change")
 
     def test_changed_diff_invalidates_approval(self):
         self.registry.test_runner.run = Mock(return_value={"ok": True, "returncode": 0})
