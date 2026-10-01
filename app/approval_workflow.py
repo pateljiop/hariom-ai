@@ -109,8 +109,9 @@ class ApprovalWorkflow:
             if spec is None or not spec.get("permission"):
                 continue
             permissions = [spec["permission"]]
-            if action.arguments.get("sensitive") is True:
-                permissions.append("secrets_access")
+            permissions.extend(self.executor.registry.additional_permissions(
+                action.tool, action.arguments
+            ))
             tokens[action.step_id or action.tool] = self.executor.registry.permission_manager.issue_approval_token(
                 task_id=request.task_id,
                 tool=action.tool,
