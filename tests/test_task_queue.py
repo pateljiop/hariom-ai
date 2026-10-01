@@ -14,7 +14,7 @@ class TaskQueueTests(unittest.TestCase):
                     break
                 time.sleep(0.01)
             self.assertEqual(result["status"], "completed")
-            self.assertTrue(result["result"]["ok"])
+            self.assertEqual(result["result"]["ok"], True)
         finally:
             q.shutdown()
 

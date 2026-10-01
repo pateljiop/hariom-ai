@@ -100,7 +100,7 @@ class AIRouter:
             and not response_format
             and all(m.get('role') != 'tool' for m in messages)
         )
-        key = cache_key(messages, profile)
+        key = cache_key(messages, f'{profile}|preferred={preferred}')
         if cacheable:
             cached = cache_get(key)
             if cached:
