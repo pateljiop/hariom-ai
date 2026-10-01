@@ -40,6 +40,7 @@ class Workstation:
         )
         self.queue = TaskQueue(max_workers=max_workers)
         self._lock = RLock()
+        self.recover_background_tasks()
 
     def attach_router(self, router):
         if router is None:
@@ -89,6 +90,9 @@ class Workstation:
             max_retries=plan.max_retries,
             plan=plan.to_dict(),
         )
+        task.result["background"] = True
+        task.result["queue_status"] = "queued"
+        self.task_service.store.save(task)
         self.activity.emit("TASK -> queued " + task_id)
 
         def execute():
@@ -96,6 +100,31 @@ class Workstation:
             return self.executor.prepare(plan.to_dict(), task_id=task_id)
 
         return self.queue.submit(task_id, execute)
+
+    def recover_background_tasks(self):
+        """Requeue persisted background tasks that are not terminal."""
+        try:
+            tasks = self.task_service.list_tasks()
+        except Exception:
+            return []
+        recovered = []
+        terminal = {"completed", "cancelled", "rolled_back"}
+        for task in tasks:
+            if not isinstance(task.result, dict) or not task.result.get("background"):
+                continue
+            status = getattr(task.status, "value", str(task.status))
+            if status in terminal or not isinstance(task.plan, dict):
+                continue
+            try:
+                result = self.queue.submit(
+                    task.task_id,
+                    lambda p=task.plan, tid=task.task_id: self.executor.prepare(p, task_id=tid),
+                )
+                recovered.append(result)
+                self.activity.emit("TASK -> restart recovery " + task.task_id)
+            except Exception:
+                continue
+        return recovered
 
     def status(self, task_id):
         state = self.executor.get_state(task_id)
