@@ -38,3 +38,17 @@ class Workspace:
             raise ValueError("Path is outside the workspace.")
 
         return target
+
+    def patch_file(self, path, old, new, expected_replacements=1):
+        """Replace an exact number of text occurrences inside the workspace."""
+        if not isinstance(expected_replacements, int) or isinstance(expected_replacements, bool) or expected_replacements < 1:
+            raise ValueError("expected_replacements must be a positive integer.")
+        target = self._safe_path(path)
+        content = target.read_text(encoding="utf-8")
+        count = content.count(old)
+        if count != expected_replacements:
+            raise ValueError(
+                f"Expected {expected_replacements} replacement(s), found {count}."
+            )
+        target.write_text(content.replace(old, new), encoding="utf-8")
+        return target
