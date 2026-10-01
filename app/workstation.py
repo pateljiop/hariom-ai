@@ -154,6 +154,18 @@ class Workstation:
         self.activity.emit("TASK -> cancelled " + task_id)
         return {"task_id": task_id, "cancelled": cancelled, "status": task.status.value}
 
+    def approve_actions(self, task_id, step_ids=None):
+        """Approve pending task actions; execution remains behind the task boundary."""
+        result = self.executor.approve_actions(task_id, step_ids=step_ids)
+        self.activity.emit(
+            "APPROVAL -> " + (
+                "action approval complete " + task_id
+                if result.get("status") != "awaiting_approval"
+                else "additional action approval required " + task_id
+            )
+        )
+        return result
+
     def approve(self, request_id, message):
         self._require_router()
         result = self.agent.facade.approve(request_id, message)
