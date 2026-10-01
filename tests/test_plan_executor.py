@@ -93,6 +93,7 @@ class PlanExecutorTests(unittest.TestCase):
         workflow.executor.execute.assert_called_once()
         self.assertEqual(result["state"]["attempts"], 1)
         self.assertEqual(result["state"]["stage"], "approval")
+        self.assertEqual(workflow.executor.execute.call_args.kwargs["task_id"], task_id)
 
     def test_recover_rejects_unknown_task(self):
         executor = PlanExecutor(Mock())
