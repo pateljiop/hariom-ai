@@ -51,6 +51,14 @@ class ComputerController:
         self.activity.emit("COMPUTER -> screenshot " + ("persisted" if persist else "temporary"))
         return str(target)
 
+    def cleanup_temp(self, path):
+        target = Path(path).expanduser().resolve()
+        if not target.name.startswith("hariom-screen-"):
+            raise ValueError("Only computer temporary artifacts can be cleaned up.")
+        if target.exists():
+            target.unlink()
+        return True
+
     def move_mouse(self, x, y, duration=0.2):
         pyautogui = self._pyautogui()
         x, y = int(x), int(y)
