@@ -94,7 +94,7 @@ class PlanExecutorTests(unittest.TestCase):
         test_runner = Mock()
         test_runner.run.side_effect = [{"ok": False}, {"ok": True}]
         workflow.executor.registry.test_runner = test_runner
-        workflow.executor.registry.describe.return_value = [{"name": "workspace.write", "permissions": []}]
+        workflow.executor.registry.describe.return_value = [{"name": "workspace.write", "permission": "workspace.write"}]
         workflow.executor.execute.return_value = {"ok": True, "results": []}
         executor = PlanExecutor(workflow)
 
