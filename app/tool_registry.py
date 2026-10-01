@@ -153,14 +153,16 @@ class ToolRegistry:
         if spec.permission:
             decision = self.permission_manager.decide(
                 spec.permission, approved=approved, task_id=task_id, tool=name,
-                arguments=arguments, approval=approval, approval_token=approval_token
+                arguments=arguments, approval=approval, approval_token=approval_token,
+                consume_token=False
             )
             if not decision.allowed:
                 raise ToolApprovalRequired(f"Tool '{name}' requires approval for permission '{spec.permission}'.")
         if arguments and arguments.get("sensitive") is True:
             decision = self.permission_manager.decide(
                 Permission.SECRETS_ACCESS, approved=False, task_id=task_id, tool=name,
-                arguments=arguments, approval_token=approval_token
+                arguments=arguments, approval_token=approval_token,
+                consume_token=False
             )
             if not decision.allowed:
                 raise ToolApprovalRequired("Sensitive input requires secrets_access approval.")
