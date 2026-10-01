@@ -26,6 +26,12 @@ class ToolRegistryContractTests(unittest.TestCase):
     def test_browser_read_accepts_selector(self):
         self.assertTrue(self.registry.validate_arguments("browser.read", {"selector": "#main"}))
 
+    def test_computer_hotkey_requires_approval(self):
+        spec = next(item for item in self.registry.describe() if item["name"] == "computer.hotkey")
+        self.assertTrue(spec["requires_approval"])
+        self.assertEqual(spec["permission"], "computer.keyboard")
+        self.assertTrue(self.registry.validate_arguments("computer.hotkey", {"keys": ["ctrl", "c"]}))
+
     def test_computer_click_rejects_invalid_button_and_click_count(self):
         with self.assertRaises(Exception):
             self.registry.validate_arguments("computer.click", {"button": "invalid"})
