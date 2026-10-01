@@ -55,7 +55,7 @@ class ToolSchemaEnforcementTests(unittest.TestCase):
 
     def test_task_bound_approval_requires_matching_task_tool_and_arguments(self):
         registry = ToolRegistry(permission_manager=PermissionManager())
-        args = {"selector": "#submit"}
+        args = {"selector": "#safe-button"}
         registry._tools["browser.click"] = registry._tools["browser.click"].__class__(
             **{**registry._tools["browser.click"].__dict__, "handler": lambda selector, approved=False: {"selector": selector}}
         )
