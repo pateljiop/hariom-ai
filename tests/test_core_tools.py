@@ -94,6 +94,19 @@ class BrowserValidationTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertTrue(all(item["ok"] for item in result["checks"]))
 
+    def test_browser_classifies_sensitive_and_side_effect_selectors(self):
+        self.assertTrue(BrowserController.selector_is_sensitive("#password"))
+        self.assertTrue(BrowserController.selector_is_sensitive("[name=card_number]"))
+        self.assertTrue(BrowserController.selector_has_side_effect("#submit"))
+        self.assertTrue(BrowserController.selector_has_side_effect("button.pay-now"))
+        self.assertFalse(BrowserController.selector_has_side_effect("#preview"))
+
+    def test_persistent_browser_screenshot_requires_workspace(self):
+        controller = BrowserController(Mock())
+        controller.session = Mock()
+        with self.assertRaises(PermissionError):
+            controller.screenshot("outside.png", approved=True, persist=True)
+
     def test_non_http_urls_are_rejected(self):
         for url in ("file:///C:/secret.txt", "javascript:alert(1)", "example.com"):
             with self.subTest(url=url):
