@@ -55,7 +55,8 @@ class PermissionManager:
             return PermissionDecision(False, True, "approval_task_mismatch")
         if tool and approval.get("tool") != tool:
             return PermissionDecision(False, True, "approval_tool_mismatch")
-        if approval.get("permission") not in {None, permission.value}:
+        approved_permissions = set(approval.get("permissions", ()))
+        if approval.get("permission") not in {None, permission.value} and permission.value not in approved_permissions:
             return PermissionDecision(False, True, "approval_permission_mismatch")
         if "arguments_hash" in approval and approval["arguments_hash"] != self.argument_fingerprint(arguments):
             return PermissionDecision(False, True, "approval_arguments_mismatch")
