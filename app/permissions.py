@@ -1,5 +1,8 @@
 """Central permission and approval policy for agent tools."""
 from dataclasses import dataclass
+from datetime import datetime, timezone
+import hashlib
+import json
 from enum import Enum
 
 
@@ -26,24 +29,46 @@ class PermissionDecision:
 
 
 class PermissionManager:
+    """Central gate for capabilities and exact, expiring task approvals."""
+
     def __init__(self, grants=None):
         self._grants = set(grants or ())
+
+    @staticmethod
+    def argument_fingerprint(arguments=None):
+        payload = json.dumps(arguments or {}, sort_keys=True, separators=(",", ":"), default=str)
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     def decide(self, permission, approved=False, *, task_id=None, tool=None, arguments=None, approval=None):
         permission = permission if isinstance(permission, Permission) else Permission(permission)
         if permission.value in self._grants:
             return PermissionDecision(True, False, "permission_granted")
-        if approved:
-            if approval is None:
-                return PermissionDecision(True, False, "explicit_approval")
-            if not isinstance(approval, dict):
-                return PermissionDecision(False, True, "invalid_approval")
-            if task_id and approval.get("task_id") != task_id:
-                return PermissionDecision(False, True, "approval_task_mismatch")
-            if tool and approval.get("tool") != tool:
-                return PermissionDecision(False, True, "approval_tool_mismatch")
-            return PermissionDecision(True, False, "bound_approval")
-        return PermissionDecision(False, True, "approval_required")
+        if not approved:
+            return PermissionDecision(False, True, "approval_required")
+        if approval is None:
+            if task_id:
+                return PermissionDecision(False, True, "bound_approval_required")
+            return PermissionDecision(True, False, "explicit_approval")
+        if not isinstance(approval, dict):
+            return PermissionDecision(False, True, "invalid_approval")
+        if task_id and approval.get("task_id") != task_id:
+            return PermissionDecision(False, True, "approval_task_mismatch")
+        if tool and approval.get("tool") != tool:
+            return PermissionDecision(False, True, "approval_tool_mismatch")
+        if approval.get("permission") not in {None, permission.value}:
+            return PermissionDecision(False, True, "approval_permission_mismatch")
+        if "arguments_hash" in approval and approval["arguments_hash"] != self.argument_fingerprint(arguments):
+            return PermissionDecision(False, True, "approval_arguments_mismatch")
+        expires_at = approval.get("expires_at")
+        if expires_at:
+            try:
+                if datetime.now(timezone.utc) >= datetime.fromisoformat(expires_at):
+                    return PermissionDecision(False, True, "approval_expired")
+            except (TypeError, ValueError):
+                return PermissionDecision(False, True, "invalid_approval_expiry")
+        if approval.get("consumed"):
+            return PermissionDecision(False, True, "approval_consumed")
+        return PermissionDecision(True, False, "bound_approval")
 
     def grant(self, permission):
         permission = permission if isinstance(permission, Permission) else Permission(permission)
