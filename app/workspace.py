@@ -4,9 +4,20 @@ from . import config
 
 
 class Workspace:
+    MAX_FILE_SIZE = 2 * 1024 * 1024
+    MAX_WRITE_SIZE = 2 * 1024 * 1024
+
     def __init__(self, root=None):
         self.root = Path(root or config.WORKSPACE).expanduser().resolve()
         self.root.mkdir(parents=True, exist_ok=True)
+
+    def _check_regular_file(self, target):
+        if target.exists() and target.is_symlink():
+            raise ValueError("Symlink targets are not allowed.")
+        if target.exists() and not target.is_file():
+            raise ValueError("Workspace target must be a regular file.")
+        if target.exists() and target.stat().st_size > self.MAX_FILE_SIZE:
+            raise ValueError("Workspace file exceeds the maximum allowed size.")
 
     def list_files(self):
         if not self.root.exists():
