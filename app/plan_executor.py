@@ -28,8 +28,7 @@ class PlanExecutor:
                 self.task_service.create_task(
                     plan.user_request or "agent task",
                     objective=plan.objective or plan.user_request or "agent task",
-                    task_id=task_id,
-                    steps=tuple(plan.steps),
+                    task_id=task_id, steps=tuple(plan.steps),
                     dependencies=tuple(plan.dependencies),
                     expected_files=tuple(plan.expected_files),
                     test_commands=tuple(plan.test_commands),
@@ -73,18 +72,17 @@ class PlanExecutor:
             self._persist_state(task_id, state)
 
         result = self.workflow.prepare(
-            plan.actions,
-            plan.test_target,
-            task_id=task_id,
-            step_state=state.steps,
-            checkpoint=checkpoint,
+            plan.actions, plan.test_target, task_id=task_id,
+            step_state=state.steps, checkpoint=checkpoint,
             max_step_retries=plan.max_retries,
             expected_files=plan.expected_files,
             test_commands=plan.test_commands,
         )
         if result.get("ok"):
             self.task_service.transition(task_id, "testing")
-            self.task_service.transition(task_id, "awaiting_commit_approval", request_id=result.get("request_id"))
+            self.task_service.transition(
+                task_id, "awaiting_commit_approval", request_id=result.get("request_id")
+            )
             state.transition("approval", request_id=result.get("request_id"))
         else:
             self.task_service.transition(task_id, "testing")
@@ -127,11 +125,7 @@ class PlanExecutor:
             return {"ok": True, "execution": result}
 
         state.transition("recovering", max_attempts=state.max_attempts)
-        recovery = RecoveryCoordinator(
-            verify,
-            repair,
-            max_attempts=state.max_attempts,
-        ).run()
+        recovery = RecoveryCoordinator(verify, repair, max_attempts=state.max_attempts).run()
         if recovery.ok:
             state.transition("approval", recovered=True)
         else:
@@ -159,6 +153,7 @@ class PlanExecutor:
                     state = candidate
                     task_id = candidate.task_id
                     break
+        verification = result.get("post_commit_verification")
         if task_id:
             task = self.task_service.get_task(task_id)
             if task.status.value == "awaiting_commit_approval":
@@ -174,9 +169,7 @@ class PlanExecutor:
                     verification["ok"] = bool(verification["test_result"].get("ok"))
                 if not verification.get("ok"):
                     self.task_service.transition(
-                        task_id,
-                        "failed",
-                        error_type="post_commit_verification",
+                        task_id, "failed", error_type="post_commit_verification"
                     )
                     if state is None:
                         state = ExecutionState(task_id, max_attempts=task.max_retries)
