@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from app.terminal import run_command
+from app.terminal import run_command, _redact, _safe_environment
 
 
 class TerminalTests(unittest.TestCase):
@@ -45,6 +45,22 @@ class TerminalTests(unittest.TestCase):
     def test_risky_command_requires_approval(self):
         with self.assertRaises(PermissionError):
             run_command("git reset --hard", self.activity)
+
+    def test_secret_output_is_redacted(self):
+        self.assertEqual(_redact("token=supersecret"), "token=[REDACTED]")
+
+    @patch.dict("app.terminal.os.environ", {
+        "SAFE_VALUE": "ok",
+        "OPENAI_API_KEY": "hidden",
+        "MY_SERVICE_TOKEN": "hidden",
+        "DB_PASSWORD": "hidden",
+    }, clear=True)
+    def test_secret_environment_variables_are_excluded(self):
+        env = _safe_environment()
+        self.assertEqual(env["SAFE_VALUE"], "ok")
+        self.assertNotIn("OPENAI_API_KEY", env)
+        self.assertNotIn("MY_SERVICE_TOKEN", env)
+        self.assertNotIn("DB_PASSWORD", env)
 
 
 if __name__ == "__main__":
