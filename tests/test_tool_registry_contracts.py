@@ -1,6 +1,6 @@
 import unittest
 
-from app.tool_registry import ToolRegistry
+from app.tool_registry import ToolApprovalRequired, ToolRegistry
 
 
 class ToolRegistryContractTests(unittest.TestCase):
@@ -32,7 +32,7 @@ class ToolRegistryContractTests(unittest.TestCase):
         self.assertEqual(spec["permission"], "external_network")
 
     def test_sensitive_input_requires_secrets_access(self):
-        with self.assertRaises(Exception):
+        with self.assertRaises(ToolApprovalRequired):
             self.registry.execute("browser.type", {"selector": "#password", "text": "secret", "sensitive": True}, approved=True)
 
     def test_computer_hotkey_requires_approval(self):
