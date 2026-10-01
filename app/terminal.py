@@ -14,7 +14,7 @@ MAX_OUTPUT = 12000
 TIMEOUT_SECONDS = 120
 MAX_COMMAND_LENGTH = 4000
 SECRET_ENV_RE = re.compile(r"(?:^|_)(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD|PASSWD|PRIVATE[_-]?KEY)(?:$|_)", re.I)
-SECRET_ASSIGNMENT_RE = re.compile(r"(\b(?:api[_-]?key|token|secret|password|passwd|private[_-]?key)\b\s*[=:]\s*)(["']?)[^\s,;&|]+", re.I)
+SECRET_ASSIGNMENT_RE = re.compile(r"""(\b(?:api[_-]?key|token|secret|password|passwd|private[_-]?key)\b\s*[=:]\s*)(["']?)[^\s,;&|]+""", re.I)
 
 def _redact(value):
     return SECRET_ASSIGNMENT_RE.sub(r"\1\2[REDACTED]", str(value))
