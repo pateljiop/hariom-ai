@@ -353,6 +353,22 @@ class TestRunnerTests(unittest.TestCase):
 
 
 class GitManagerTests(unittest.TestCase):
+    def test_commit_rejects_protected_current_branch(self):
+        with tempfile.TemporaryDirectory() as root:
+            git = GitManager(root)
+            git._ensure_repo = Mock()
+            git._run = Mock(side_effect=lambda *args: "main" if args == ("branch", "--show-current") else "")
+            with self.assertRaisesRegex(GitError, "Protected branch"):
+                git.commit("direct commit", approved=True)
+
+    def test_merge_rejects_protected_current_branch(self):
+        with tempfile.TemporaryDirectory() as root:
+            git = GitManager(root)
+            git._ensure_repo = Mock()
+            git._run = Mock(side_effect=lambda *args: "main" if args == ("branch", "--show-current") else "")
+            with self.assertRaisesRegex(GitError, "Protected branch"):
+                git.merge_branch("feature/test", approved=True)
+
     def test_commit_requires_approval(self):
         with tempfile.TemporaryDirectory() as root:
             with self.assertRaises(PermissionError):
