@@ -28,6 +28,9 @@ class TaskService:
         self.store.create(task)
         return task
 
+    def list_tasks(self, statuses=None):
+        return self.store.list_tasks(statuses)
+
     def get_task(self, task_id):
         task = self.store.get(task_id)
         if task is None:
