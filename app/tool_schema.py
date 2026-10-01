@@ -39,6 +39,8 @@ class ToolSchema:
             expected_types = expected if isinstance(expected, tuple) else (expected,)
             if not isinstance(value, expected_types):
                 raise ToolSchemaError(f"Argument '{key}' has an invalid type.")
+            if isinstance(value, bool) and int in expected_types and bool not in expected_types:
+                raise ToolSchemaError(f"Argument '{key}' has an invalid type.")
             if bool in expected_types and type(value) is not bool and expected_types == (bool,):
                 raise ToolSchemaError(f"Argument '{key}' has an invalid type.")
             if key in self.enums and value not in self.enums[key]:
