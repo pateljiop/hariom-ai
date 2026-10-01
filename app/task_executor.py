@@ -10,6 +10,7 @@ class TaskAction:
     tool: str
     arguments: Dict[str, Any]
     approved: bool = False
+    approval_token: str = ""
     dependencies: tuple = ()
     step_id: str = ""
     retryable: bool = False
@@ -138,7 +139,10 @@ class TaskExecutor:
                 if checkpoint:
                     checkpoint()
                 try:
-                    result = self.registry.execute(action.tool, action.arguments, approved=action.approved)
+                    result = self.registry.execute(
+                        action.tool, action.arguments, approved=action.approved,
+                        task_id=state.get("_task_id", ""), approval_token=action.approval_token or None
+                    )
                 except ToolApprovalRequired as exc:
                     record.update({"status": "pending", "error": str(exc)})
                     if checkpoint:
