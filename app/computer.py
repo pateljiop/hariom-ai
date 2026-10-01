@@ -7,9 +7,15 @@ import time
 class ComputerController:
     """Windows desktop controller with explicit, bounded actions."""
 
-    def __init__(self, activity):
+    def __init__(self, activity, workspace=None):
         self.activity = activity
+        self.workspace = workspace
         self.system = platform.system()
+
+    def _persistent_path(self, path):
+        if self.workspace is None:
+            raise PermissionError("Persistent computer artifacts require a workspace boundary.")
+        return self.workspace._safe_path(path)
 
     def _pyautogui(self):
         if self.system != "Windows":
@@ -41,7 +47,7 @@ class ComputerController:
         if persist:
             if not path:
                 raise ValueError("A path is required when persist=True.")
-            target = Path(path).expanduser().resolve()
+            target = self._persistent_path(path)
             target.parent.mkdir(parents=True, exist_ok=True)
         else:
             tmp = tempfile.NamedTemporaryFile(prefix="hariom-screen-", suffix=".png", delete=False)
