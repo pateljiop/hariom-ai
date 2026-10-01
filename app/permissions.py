@@ -52,7 +52,10 @@ class ApprovalAuthority:
     def issue(self, *, task_id, tool, permission, arguments, ttl_seconds=1800):
         if not task_id or not tool:
             raise ValueError("task_id and tool are required for bound approval.")
-        permissions = {str(p) for p in (permission if isinstance(permission, (list, tuple, set)) else [permission])}
+        permissions = {
+            p.value if isinstance(p, Permission) else str(p)
+            for p in (permission if isinstance(permission, (list, tuple, set)) else [permission])
+        }
         if not permissions:
             raise ValueError("At least one permission is required.")
         expires_at = datetime.fromtimestamp(
