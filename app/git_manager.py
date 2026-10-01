@@ -24,8 +24,20 @@ class GitError(Exception):
 
 
 class GitManager:
+    PROTECTED_BRANCHES = frozenset({"main", "master", "production", "prod"})
+
     def __init__(self, root=None):
         self.root = Path(root or ".").resolve()
+
+    @classmethod
+    def _validate_branch_name(cls, name):
+        if not isinstance(name, str) or not name.strip() or name.startswith("-") or any(
+            x in name for x in ["..", "~", "^", " ", "\\"]
+        ):
+            raise GitError("Invalid branch name.")
+        if name in cls.PROTECTED_BRANCHES:
+            raise GitError("Protected branch cannot be created or directly merged.")
+        return name
 
     def _run(self, *args):
         p = subprocess.run(["git", *args], cwd=self.root, capture_output=True, text=True, timeout=30)
@@ -45,9 +57,8 @@ class GitManager:
             raise GitError("Workspace is not a Git repository.")
 
     def create_branch(self, name):
-        if not isinstance(name, str) or not name.strip() or name.startswith("-") or any(x in name for x in ["..", "~", "^", " ", "\\"]):
-            raise GitError("Invalid branch name.")
-        return self._run("switch", "-c", name)
+        self._ensure_repo()
+        return self._run("switch", "-c", self._validate_branch_name(name))
 
     def scan_diff_for_secrets(self, diff=None):
         diff = self.diff() if diff is None else str(diff)
@@ -59,8 +70,7 @@ class GitManager:
         self._ensure_repo()
         if not approved:
             raise PermissionError("Git merge requires explicit approval.")
-        if not isinstance(name, str) or not name.strip() or name.startswith("-"):
-            raise GitError("Invalid branch name.")
+        name = self._validate_branch_name(name)
         current = self._run("branch", "--show-current")
         if current == name:
             raise GitError("Cannot merge the current branch into itself.")
