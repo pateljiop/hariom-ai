@@ -66,7 +66,8 @@ class ToolRegistryContractTests(unittest.TestCase):
             permission=["browser.type", "secrets_access"],
             arguments=args, ttl_seconds=60,
         )
-        self.registry.browser.type_text = lambda **kwargs: True
+        tool = self.registry._tools["browser.type"]
+        self.registry._tools["browser.type"] = tool.__class__(**{**tool.__dict__, "handler": lambda selector, text, sensitive=False: {"typed": True}})
         result = self.registry.execute(
             "browser.type", args, task_id="task-sensitive",
             approval_token=token,
@@ -82,7 +83,8 @@ class ToolRegistryContractTests(unittest.TestCase):
             permission=["browser.click", "external_side_effect"],
             arguments=args, ttl_seconds=60,
         )
-        self.registry.browser.click = lambda **kwargs: True
+        tool = self.registry._tools["browser.click"]
+        self.registry._tools["browser.click"] = tool.__class__(**{**tool.__dict__, "handler": lambda selector, approved=False: {"clicked": True}})
         result = self.registry.execute(
             "browser.click", args, task_id="task-side-effect",
             approval_token=token,
