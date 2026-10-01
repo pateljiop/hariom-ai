@@ -97,6 +97,12 @@ class TaskPlanTests(unittest.TestCase):
                 with self.assertRaises(PlanValidationError):
                     TaskPlan.from_dict(payload)
 
+    def test_rejects_self_approved_action(self):
+        with self.assertRaisesRegex(PlanValidationError, "cannot self-approve"):
+            TaskPlan.from_dict({
+                "actions": [{"tool": "terminal.run", "arguments": {"command": "echo safe"}, "approved": True}],
+            })
+
     def test_rejects_malformed_action(self):
         cases = [
             {"actions": [{"arguments": {}}]},
