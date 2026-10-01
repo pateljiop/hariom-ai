@@ -51,6 +51,10 @@ class TaskPlan:
                 raise PlanValidationError(f"Step {index} arguments must be an object.")
             if not isinstance(approved, bool):
                 raise PlanValidationError(f"Step {index} approved must be boolean.")
+            if approved:
+                raise PlanValidationError(
+                    f"Step {index} cannot self-approve; human approval must be issued outside the plan."
+                )
             step_id = raw.get("step_id", f"step-{index + 1}")
             if not isinstance(step_id, str) or not step_id.strip():
                 raise PlanValidationError(f"Step {index} step_id must be a non-empty string.")
