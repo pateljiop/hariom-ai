@@ -174,11 +174,18 @@ class PlanExecutor:
                     if state is None:
                         state = ExecutionState(task_id, max_attempts=task.max_retries)
                         self._states[task_id] = state
+                    commit = result.get("commit") or {}
+                    rollback_candidate = {
+                        "branch_name": commit.get("branch_name"),
+                        "pre_commit_head": commit.get("pre_commit_head"),
+                        "post_commit_head": commit.get("post_commit_head"),
+                    }
                     state.result = {
                         "ok": False,
                         "stage": "post_commit_verification",
-                        "commit": result.get("commit"),
+                        "commit": commit,
                         "verification": verification,
+                        "rollback_candidate": rollback_candidate,
                     }
                     state.transition("failed", error_type="post_commit_verification")
                     self._persist_state(task_id, state)
@@ -203,6 +210,55 @@ class PlanExecutor:
             result["state"] = state.snapshot()
             result["post_commit_verification"] = verification
         return result
+
+    def rollback(self, task_id, approved=False):
+        """Explicitly compensate a failed post-commit task with a Git revert."""
+        if not approved:
+            raise PermissionError("Task rollback requires explicit human approval.")
+        task = self.task_service.get_task(task_id)
+        if task.status.value != "failed":
+            raise PlanExecutionError(
+                f"Task '{task_id}' can only be rolled back from failed status."
+            )
+        candidate = task.result.get("execution_state", {}).get("result", {}).get(
+            "rollback_candidate"
+        )
+        if not isinstance(candidate, dict):
+            candidate = task.result.get("rollback_candidate")
+        if not isinstance(candidate, dict):
+            raise PlanExecutionError("Task has no verified rollback candidate.")
+        branch = candidate.get("branch_name")
+        pre_commit = candidate.get("pre_commit_head")
+        post_commit = candidate.get("post_commit_head")
+        if not branch or not pre_commit or not post_commit:
+            raise PlanExecutionError("Rollback candidate is incomplete.")
+        if self.workflow.git.current_branch() != branch:
+            raise PlanExecutionError("Git branch changed after rollback candidate was recorded.")
+        rollback = self.workflow.git.rollback_to_commit(
+            pre_commit, post_commit, approved=True
+        )
+        self.task_service.transition(
+            task_id, "rolled_back", rollback=rollback
+        )
+        state = self._restore_state(task_id)
+        if state is None:
+            state = ExecutionState(task_id, max_attempts=task.max_retries)
+            self._states[task_id] = state
+        state.transition("rolled_back", rollback=rollback)
+        state.result = {
+            "ok": True,
+            "stage": "rolled_back",
+            "rollback": rollback,
+            "rollback_candidate": candidate,
+        }
+        self._persist_state(task_id, state)
+        return {
+            "ok": True,
+            "stage": "rolled_back",
+            "task_id": task_id,
+            "rollback": rollback,
+            "state": state.snapshot(),
+        }
 
     def get_state(self, task_id):
         state = self._restore_state(task_id)
