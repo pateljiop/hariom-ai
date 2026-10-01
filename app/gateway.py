@@ -158,6 +158,9 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(200, task_queue.status(task_id))
                 elif suffix == ['cancel']:
                     reason = payload.get('reason', 'cancelled by user')
+                    queued = task_queue.cancel(task_id)
+                    if not queued.get('cancelled'):
+                        raise ClientRequestError('Task is already running and cannot be safely cancelled.')
                     task = task_service.cancel_task(task_id, reason=reason)
                     self._send(200, self._task_response(task))
                 elif suffix == ['approve']:
