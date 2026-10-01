@@ -43,6 +43,24 @@ class PermissionTests(unittest.TestCase):
         self.assertFalse(replay.allowed)
         self.assertEqual(replay.reason, "approval_consumed")
 
+    def test_signed_approval_token_is_invalid_after_authority_restart(self):
+        original = PermissionManager()
+        token = original.issue_approval_token(
+            task_id="task-1", tool="workspace.write",
+            permission=Permission.WORKSPACE_WRITE,
+            arguments={"path": "x.txt", "content": "ok"}, ttl_seconds=60
+        )
+
+        restarted = PermissionManager()
+        decision = restarted.decide(
+            Permission.WORKSPACE_WRITE, task_id="task-1",
+            tool="workspace.write", arguments={"path": "x.txt", "content": "ok"},
+            approval_token=token
+        )
+        self.assertFalse(decision.allowed)
+        self.assertTrue(decision.requires_approval)
+        self.assertEqual(decision.reason, "unknown_approval_token")
+
     def test_signed_approval_token_rejects_argument_changes(self):
         manager = PermissionManager()
         token = manager.issue_approval_token(
