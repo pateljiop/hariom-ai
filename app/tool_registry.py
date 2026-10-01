@@ -155,7 +155,7 @@ class ToolRegistry:
             if not decision.allowed:
                 raise ToolApprovalRequired(f"Tool '{name}' requires approval for permission '{spec.permission}'.")
         if arguments and arguments.get("sensitive") is True:
-            decision = self.permission_manager.decide(Permission.SECRETS_ACCESS, approved=approved, task_id=task_id, tool=name, arguments=arguments, approval=approval)
+            decision = self.permission_manager.decide(Permission.SECRETS_ACCESS, approved=approved and approval is not None, task_id=task_id, tool=name, arguments=arguments, approval=approval)
             if not decision.allowed:
                 raise ToolApprovalRequired("Sensitive input requires secrets_access approval.")
         if spec.requires_approval and not approved and name != "terminal.run":
