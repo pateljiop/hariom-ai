@@ -50,8 +50,9 @@ class AgentToolLoopTests(unittest.TestCase):
             "workspace.read", {"path": "a.txt"}, approved=False
         )
         sent = self.router.chat_request.call_args_list[1].args[0]
-        self.assertEqual(sent[-1]["role"], "tool")
-        self.assertEqual(sent[-1]["tool_call_id"], "call-1")
+        tool_messages = [msg for msg in sent if msg.get("role") == "tool"]
+        self.assertEqual(len(tool_messages), 1)
+        self.assertEqual(tool_messages[0]["tool_call_id"], "call-1")
 
     def test_risky_tool_requires_human_approval(self):
         self.registry.describe.return_value = [{
