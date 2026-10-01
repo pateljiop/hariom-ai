@@ -47,7 +47,12 @@ class GitManager:
 
     def scan_diff_for_secrets(self, diff=None):
         if diff is None:
-            diff = self._run("diff", "HEAD", "--")
+            working = self.diff()
+            try:
+                staged = self._run("diff", "--cached", "--")
+            except GitError:
+                staged = ""
+            diff = working + ("\n" + staged if staged else "")
         else:
             diff = str(diff)
         # Inspect added lines only; removed historical secrets are not being committed.
