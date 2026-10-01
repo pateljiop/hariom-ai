@@ -56,6 +56,8 @@ class App(tk.Tk):
         ttk.Button(buttons, text="Background", command=self.run_background).pack(side="left", padx=6)
         ttk.Button(buttons, text="List Workspace", command=self.list_workspace).pack(side="left")
         ttk.Button(buttons, text="Choose Workspace", command=self.choose_workspace).pack(side="left", padx=6)
+        ttk.Button(buttons, text="Browser Agent", command=self.run_browser_agent).pack(side="left", padx=6)
+        ttk.Button(buttons, text="Computer Agent", command=self.run_computer_agent).pack(side="left")
 
         approval = ttk.Frame(left)
         approval.pack(fill="x", pady=(8, 0))
@@ -152,6 +154,55 @@ class App(tk.Tk):
             self.pending_approval = request_id
             self.append(self.log, "APPROVAL REQUIRED -> " + request_id)
             self.approval_entry.focus_set()
+
+    def _visual_approval(self, request):
+        event = threading.Event()
+        decision = {"approved": False}
+        def ask_user():
+            label = request.get("tool", "desktop action")
+            args = request.get("arguments", {})
+            approved = messagebox.askyesno(
+                "Hariom AI approval",
+                "Allow this action?\\n\\nTool: %s\\nArguments: %s" % (label, args),
+                parent=self,
+            )
+            decision["approved"] = bool(approved)
+            event.set()
+        self.after(0, ask_user)
+        event.wait(timeout=300)
+        return decision["approved"]
+
+    def run_browser_agent(self):
+        request = self._request()
+        if not request:
+            return
+        threading.Thread(target=self._browser_worker, args=(request,), daemon=True).start()
+
+    def _browser_worker(self, request):
+        try:
+            result = self.workstation.run_browser(
+                request,
+                approval_checker=self._visual_approval,
+            )
+            self.after(0, lambda: self.append(self.response, "Browser agent:\\n" + repr(result)))
+        except Exception as exc:
+            self.after(0, lambda: messagebox.showerror("Browser agent", str(exc)))
+
+    def run_computer_agent(self):
+        request = self._request()
+        if not request:
+            return
+        threading.Thread(target=self._computer_worker, args=(request,), daemon=True).start()
+
+    def _computer_worker(self, request):
+        try:
+            result = self.workstation.run_computer(
+                request,
+                approval_checker=self._visual_approval,
+            )
+            self.after(0, lambda: self.append(self.response, "Computer agent:\\n" + repr(result)))
+        except Exception as exc:
+            self.after(0, lambda: messagebox.showerror("Computer agent", str(exc)))
 
     def run_background(self):
         request = self._request()
