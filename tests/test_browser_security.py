@@ -1,4 +1,6 @@
+import socket
 import unittest
+from unittest.mock import patch
 
 from app.browser import BrowserController
 
@@ -24,6 +26,17 @@ class BrowserUrlSecurityTests(unittest.TestCase):
         for host in ("127.0.0.1", "10.0.0.5", "172.16.0.10", "192.168.1.10", "::1", "169.254.169.254"):
             with self.assertRaises(PermissionError):
                 self.controller._validate_url("http://" + ("[" + host + "]" if ":" in host else host))
+
+    def test_rejects_hostname_resolving_to_private_address(self):
+        infos = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 0))]
+        with patch("app.browser.socket.getaddrinfo", return_value=infos):
+            with self.assertRaises(PermissionError):
+                self.controller._validate_url("https://public.example")
+
+    def test_rejects_hostname_when_dns_resolution_fails(self):
+        with patch("app.browser.socket.getaddrinfo", side_effect=socket.gaierror("resolution failed")):
+            with self.assertRaises(PermissionError):
+                self.controller._validate_url("https://public.example")
 
     def test_rejects_invalid_or_non_http_urls(self):
         for url in ("file:///etc/passwd", "ftp://example.com", "https://"):
