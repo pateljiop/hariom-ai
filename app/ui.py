@@ -53,6 +53,7 @@ class App(tk.Tk):
         buttons = ttk.Frame(left)
         buttons.pack(fill="x")
         ttk.Button(buttons, text="Run Agent", command=self.run_agent).pack(side="left")
+        ttk.Button(buttons, text="Tool Loop", command=self.run_tool_loop).pack(side="left", padx=6)
         ttk.Button(buttons, text="Background", command=self.run_background).pack(side="left", padx=6)
         ttk.Button(buttons, text="List Workspace", command=self.list_workspace).pack(side="left")
         ttk.Button(buttons, text="Choose Workspace", command=self.choose_workspace).pack(side="left", padx=6)
@@ -171,6 +172,22 @@ class App(tk.Tk):
         self.after(0, ask_user)
         event.wait(timeout=300)
         return decision["approved"]
+
+    def run_tool_loop(self):
+        request = self._request()
+        if not request:
+            return
+        threading.Thread(target=self._tool_loop_worker, args=(request,), daemon=True).start()
+
+    def _tool_loop_worker(self, request):
+        try:
+            result = self.workstation.run_tool_loop(
+                request,
+                approval_checker=self._visual_approval,
+            )
+            self.after(0, lambda: self.append(self.response, "Tool loop:\\n" + repr(result)))
+        except Exception as exc:
+            self.after(0, lambda: messagebox.showerror("Tool loop", str(exc)))
 
     def run_browser_agent(self):
         request = self._request()
