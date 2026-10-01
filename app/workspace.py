@@ -34,10 +34,16 @@ class Workspace:
 
     def read_file(self, path):
         target = self._safe_path(path)
+        self._check_regular_file(target)
         return target.read_text(encoding="utf-8")
 
     def write_file(self, path, content):
+        if not isinstance(content, str):
+            raise TypeError("Workspace content must be text.")
+        if len(content.encode("utf-8")) > self.MAX_WRITE_SIZE:
+            raise ValueError("Workspace write exceeds the maximum allowed size.")
         target = self._safe_path(path)
+        self._check_regular_file(target)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         return target
