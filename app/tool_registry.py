@@ -190,8 +190,9 @@ class ToolRegistry:
                 )
         if spec.requires_approval and not approved and approval_token is None and name != "terminal.run":
             raise ToolApprovalRequired(f"Tool '{name}' requires explicit approval.")
-        if approval_token is not None and not self.permission_manager.approval_authority.consume(approval_token):
-            raise ToolApprovalRequired("Approval token could not be consumed.")
+        if approval_token is not None:
+            if not self.permission_manager.approval_authority.consume(approval_token):
+                raise ToolApprovalRequired("Approval token could not be consumed.")
         if arguments is None:
             arguments = {}
         try:
