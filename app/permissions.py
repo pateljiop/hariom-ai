@@ -127,15 +127,18 @@ class PermissionManager:
         payload = json.dumps(arguments or {}, sort_keys=True, separators=(",", ":"), default=str)
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
-    def decide(self, permission, approved=False, *, task_id=None, tool=None, arguments=None, approval=None, approval_token=None):
+    def decide(self, permission, approved=False, *, task_id=None, tool=None, arguments=None, approval=None, approval_token=None, consume_token=True):
         permission = permission if isinstance(permission, Permission) else Permission(permission)
         if task_id is None and permission.value in self._grants:
             return PermissionDecision(True, False, "permission_granted")
         if approval_token is not None:
-            return self.approval_authority.verify(
+            decision = self.approval_authority.verify(
                 approval_token, task_id=task_id, tool=tool,
                 permission=permission.value, arguments=arguments
             )
+            if decision.allowed and consume_token:
+                self.approval_authority.consume(approval_token)
+            return decision
         if not approved:
             return PermissionDecision(False, True, "approval_required")
         if approval is None:
