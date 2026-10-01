@@ -129,7 +129,8 @@ class PermissionManager:
 
     def decide(self, permission, approved=False, *, task_id=None, tool=None, arguments=None, approval=None, approval_token=None, consume_token=True):
         permission = permission if isinstance(permission, Permission) else Permission(permission)
-        if task_id is None and permission.value in self._grants:
+        task_safe_grants = {Permission.WORKSPACE_READ.value, Permission.WORKSPACE_WRITE.value}
+        if permission.value in self._grants and (task_id is None or permission.value in task_safe_grants):
             return PermissionDecision(True, False, "permission_granted")
         if approval_token is not None:
             decision = self.approval_authority.verify(
