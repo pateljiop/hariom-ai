@@ -107,7 +107,8 @@ class PlanExecutor:
         self._persist_state(task_id, state)
         return result
 
-    def recover(self, task_id, repair_actions, test_target=None):
+    def prepare_recovery(self, task_id, repair_actions, test_target=None):
+        """Create a recovery request without executing repair actions."""
         state = self._restore_state(task_id)
         if state is None:
             raise PlanExecutionError(f"Unknown task: {task_id}")
@@ -116,6 +117,67 @@ class PlanExecutor:
         actions = tuple(repair_actions)
         if not all(isinstance(action, TaskAction) for action in actions):
             raise PlanExecutionError("Repair actions must be TaskAction objects.")
+        branch = self.workflow.git.current_branch()
+        task = self.task_service.get_task(task_id)
+        if not task.branch_name or task.branch_name != branch:
+            raise PlanExecutionError("Recovery must run on the task-bound Git branch.")
+        request_id = "recovery-" + __import__("uuid").uuid4().hex
+        self._recovery_requests[request_id] = {
+            "task_id": task_id, "actions": actions, "test_target": test_target,
+            "branch_name": branch,
+        }
+        state.transition("awaiting_recovery_approval", request_id=request_id)
+        state.result = {
+            "ok": False, "stage": "awaiting_recovery_approval",
+            "request_id": request_id, "branch_name": branch,
+            "actions": [{"tool": a.tool, "arguments": dict(a.arguments), "step_id": a.step_id} for a in actions],
+        }
+        self._persist_state(task_id, state)
+        return {"ok": False, "stage": "awaiting_recovery_approval",
+                "request_id": request_id, "state": state.snapshot()}
+
+    def approve_recovery(self, request_id):
+        """Explicit human approval boundary for recovery repair actions."""
+        request = self._recovery_requests.pop(request_id, None)
+        if request is None:
+            raise PlanExecutionError("Unknown or already-consumed recovery request.")
+        if self.workflow.git.current_branch() != request["branch_name"]:
+            raise PlanExecutionError("Git branch changed after recovery review; approval is invalid.")
+        tokens = {}
+        for action in request["actions"]:
+            spec = next((item for item in self.workflow.executor.registry.describe()
+                         if item["name"] == action.tool), None)
+            if spec is None or not spec.get("permission"):
+                raise PlanExecutionError(f"Unknown permission for recovery tool: {action.tool}")
+            permissions = [spec["permission"]]
+            permissions.extend(self.workflow.executor.registry.additional_permissions(
+                action.tool, action.arguments
+            ))
+            tokens[action.step_id or action.tool] = self.workflow.executor.registry.permission_manager.issue_approval_token(
+                task_id=request["task_id"], tool=action.tool, permission=permissions,
+                arguments=action.arguments, ttl_seconds=300,
+            )
+        actions = tuple(
+            TaskAction(
+                tool=a.tool, arguments=dict(a.arguments), approved=True,
+                dependencies=a.dependencies, step_id=a.step_id, retryable=a.retryable,
+                expected_files=a.expected_files, test_commands=a.test_commands,
+                approval_token=tokens[a.step_id or a.tool],
+            ) for a in request["actions"]
+        )
+        return self.recover(request["task_id"], actions, request["test_target"], _approved=True)
+
+    def recover(self, task_id, repair_actions, test_target=None, _approved=False):
+        state = self._restore_state(task_id)
+        if state is None:
+            raise PlanExecutionError(f"Unknown task: {task_id}")
+        if not isinstance(repair_actions, (list, tuple)) or not repair_actions:
+            raise PlanExecutionError("Repair actions are required.")
+        actions = tuple(repair_actions)
+        if not all(isinstance(action, TaskAction) for action in actions):
+            raise PlanExecutionError("Repair actions must be TaskAction objects.")
+        if not _approved:
+            return self.prepare_recovery(task_id, actions, test_target)
         target = test_target or state.result.get("test_target") or "tests"
 
         def verify():
@@ -138,7 +200,11 @@ class PlanExecutor:
             return {"ok": True, "execution": result}
 
         state.transition("recovering", max_attempts=state.max_attempts)
-        recovery = RecoveryCoordinator(verify, repair, max_attempts=state.max_attempts).run()
+        recovery = RecoveryCoordinator(
+            verify,
+            repair,
+            max_attempts=state.max_attempts,
+        ).run()
         if recovery.ok:
             state.transition("approval", recovered=True)
         else:
