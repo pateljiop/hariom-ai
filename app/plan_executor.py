@@ -148,9 +148,16 @@ class PlanExecutor:
         }
 
     def approve(self, request_id, message):
-        result = self.workflow.approve(request_id, message)
         approval = self.task_service.store.get_approval(request_id)
         task_id = approval.get("task_id") if approval else None
+        if task_id:
+            task = self.task_service.get_task(task_id)
+            status = getattr(task.status, "value", task.status)
+            if status != "awaiting_commit_approval":
+                raise PlanExecutionError(
+                    f"Task '{task_id}' is not awaiting commit approval."
+                )
+        result = self.workflow.approve(request_id, message)
         state = self._states.get(task_id) if task_id else None
         if state is None and task_id:
             state = self._restore_state(task_id)
