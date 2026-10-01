@@ -1,6 +1,7 @@
 """SQLite persistence for tasks, events, and approval requests."""
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import Optional
 
@@ -21,7 +22,7 @@ class TaskStore:
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("PRAGMA journal_mode = WAL")
         conn.execute("PRAGMA busy_timeout = 5000")
-        return conn
+        return closing(conn)
 
     def _initialize(self):
         with self._connect() as conn:
