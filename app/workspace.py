@@ -26,7 +26,7 @@ class Workspace:
         return [
             path
             for path in self.root.rglob("*")
-            if path.is_file()
+            if path.is_file() and not path.is_symlink()
         ]
 
     def exists(self, path):
