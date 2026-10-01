@@ -70,6 +70,28 @@ class BrowserValidationTests(unittest.TestCase):
         self.assertEqual(self.controller._validate_url("https://example.com"), "https://example.com")
         self.assertEqual(self.controller._validate_url("http://example.com/path"), "http://example.com/path")
 
+    def test_browser_observe_uses_controller_timeout(self):
+        page = Mock()
+        page.url = "https://example.com"
+        page.title.return_value = "Example"
+        page.locator.return_value.inner_text.return_value = "Hello world"
+        from app.browser import BrowserSession
+        self.controller = BrowserController(Mock(), action_timeout_ms=3210)
+        self.controller.session = BrowserSession(Mock(), page, Mock())
+        self.controller.observe()
+        page.locator.return_value.inner_text.assert_called_once_with(timeout=3210)
+
+    def test_browser_close_cleans_tracked_temporary_artifacts(self):
+        controller = BrowserController(Mock())
+        temp = Path(tempfile.mkstemp(prefix="hariom-browser-", suffix=".png")[1])
+        controller._temporary_artifacts.add(temp)
+        browser = Mock()
+        playwright = Mock()
+        controller.session = type("S", (), {"browser": browser, "playwright": playwright})()
+        self.assertTrue(controller.close())
+        self.assertFalse(temp.exists())
+        self.assertEqual(controller._temporary_artifacts, set())
+
     def test_observe_returns_current_page_context(self):
         page = Mock()
         page.url = "https://example.com"
