@@ -193,3 +193,84 @@ class PersonalAgent:
                 return json.loads(match.group(0))
             except (TypeError, ValueError):
                 return {}
+
+class Agent(PersonalAgent):
+    """Backward-compatible adapter for the legacy Agent test/tool surface.
+
+    The active workstation path remains AgentRunner/TaskAPI; this adapter only
+    preserves the older local test contract without changing that execution path.
+    """
+
+    def __init__(self, router, workspace, activity, approval_callback=None):
+        self.router = router
+        self.workspace = workspace
+        self.activity = activity
+        self.approval_callback = approval_callback
+        self.tools = ToolRegistry(workspace, activity)
+        self.verifier = Verifier()
+        self._legacy_results = []
+
+    def _execute(self, action, arguments=None):
+        arguments = arguments or {}
+        if action == "project_context":
+            import subprocess
+            files = self.workspace.list_files()
+            extensions = {}
+            for path in files:
+                extensions[path.suffix.lower()] = extensions.get(path.suffix.lower(), 0) + 1
+            manifests = [path.name for path in files if path.name in {"requirements.txt", "pyproject.toml", "package.json"}]
+            branch = subprocess.run(["git", "branch", "--show-current"], cwd=self.workspace.root, capture_output=True, text=True)
+            status = subprocess.run(["git", "status", "--short"], cwd=self.workspace.root, capture_output=True, text=True)
+            return {
+                "workspace": str(self.workspace.root),
+                "file_count": len(files),
+                "manifests": manifests,
+                "extensions": extensions,
+                "windows": __import__("os").name == "nt",
+                "vscode_running": False,
+                "git_branch": branch.stdout.strip(),
+                "git_status": status.stdout.strip(),
+            }
+        if action == "git_branch":
+            import subprocess
+            result = subprocess.run(["git", "branch", "--show-current"], cwd=self.workspace.root, capture_output=True, text=True)
+            return {"action": action, "exit_code": result.returncode, "output": result.stdout.strip()}
+        if action == "git_commit":
+            if self.approval_callback is not None and not self.approval_callback(action, arguments):
+                raise PermissionError("Approval required for tool: git_commit")
+            elif self.approval_callback is None:
+                raise PermissionError("Approval required for tool: git_commit")
+            import subprocess
+            result = subprocess.run(["git", "add", "."], cwd=self.workspace.root, capture_output=True, text=True)
+            if result.returncode == 0:
+                result = subprocess.run(["git", "commit", "-m", str(arguments.get("message", ""))], cwd=self.workspace.root, capture_output=True, text=True)
+            return {"action": action, "exit_code": result.returncode, "output": (result.stdout + result.stderr)[-4000:]}
+        tool_map = {"write_file": "write_file", "run_command": "run_command", "read_file": "read_file", "list_files": "list_files"}
+        name = tool_map.get(action, action)
+        result = self.tools.execute(name, arguments, approved=True)
+        return {"action": action, "exit_code": 0, "output": result}
+
+    def run(self, request):
+        summary, results = self._plan_and_execute(request)
+        return summary, results
+
+    def _plan_and_execute(self, request):
+        results = []
+        for cycle in range(3):
+            plan, _provider = self.router.plan(request, "", preferred="hariom/reasoning")
+            steps = plan.get("steps", []) if isinstance(plan, dict) else []
+            cycle_failed = False
+            for step in steps:
+                tool = step.get("tool")
+                args = step.get("args") or {}
+                try:
+                    results.append({"result": self._execute(tool, args)})
+                except Exception as exc:
+                    results.append({"error": str(exc), "tool": tool})
+                    self.activity.emit("recovering from cycle %s failure" % (cycle + 1))
+                    cycle_failed = True
+                    break
+            if not cycle_failed:
+                summary, _ = self.router.chat(request, preferred="hariom/reasoning")
+                return summary, results
+        return "Task could not be repaired safely.", results
