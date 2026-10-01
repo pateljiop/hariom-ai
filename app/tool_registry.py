@@ -90,6 +90,14 @@ class ToolRegistry:
     def register(self, spec):
         if not isinstance(spec, ToolSpec) or not spec.name:
             raise ValueError("A valid ToolSpec is required.")
+        if not isinstance(spec.schema, ToolSchema):
+            raise ValueError("ToolSpec.schema must be a ToolSchema.")
+        if spec.return_schema is not None and not isinstance(spec.return_schema, dict):
+            raise ValueError("ToolSpec.return_schema must be an object.")
+        if spec.permission is not None and not isinstance(spec.permission, str):
+            raise ValueError("ToolSpec.permission must be a string or None.")
+        if not isinstance(spec.limits, dict):
+            raise ValueError("ToolSpec.limits must be an object.")
         if spec.timeout <= 0 or spec.retry < 0:
             raise ValueError("Tool timeout must be positive and retry must be non-negative.")
         if spec.risk not in {"low", "medium", "high", "critical"}:
@@ -103,7 +111,15 @@ class ToolRegistry:
                 "requires_approval": s.requires_approval, "risk": s.risk,
                 "permission": s.permission, "timeout": s.timeout, "retry": s.retry,
                 "rollback": s.rollback, "limits": dict(s.limits),
-                "return_schema": s.return_schema,
+                "input_schema": s.schema.to_dict(),
+                "return_schema": s.return_schema or {
+                    "type": "object",
+                    "required": ["ok", "tool"],
+                    "properties": {
+                        "ok": {"type": "boolean"},
+                        "tool": {"type": "string"},
+                    },
+                },
                 "schema": s.schema.to_dict(),
             }
             for s in self._tools.values()
