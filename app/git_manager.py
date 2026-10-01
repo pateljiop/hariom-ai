@@ -49,6 +49,15 @@ class GitManager:
     def status(self):
         return self._run("status", "--short")
 
+    def head_sha(self):
+        self._ensure_repo()
+        return self._run("rev-parse", "HEAD")
+
+    def verify_head(self, expected_sha):
+        if not isinstance(expected_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", expected_sha):
+            raise GitError("Invalid expected Git HEAD.")
+        return self.head_sha() == expected_sha
+
     def current_branch(self):
         self._ensure_repo()
         return self._run("branch", "--show-current")
