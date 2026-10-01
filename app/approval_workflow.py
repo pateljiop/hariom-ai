@@ -91,7 +91,33 @@ class ApprovalWorkflow:
         consumed = ApprovalRequest(**{**request.__dict__, "approved": True, "commit_result": result})
         self._requests[request_id] = consumed
         self._persist(consumed, "approved")
-        return {"ok": True, "request_id": request_id, "commit": result}
+        tokens = self.issue_action_tokens(request_id)
+        return {"ok": True, "request_id": request_id, "commit": result, "approval_tokens": tokens}
+
+    def issue_action_tokens(self, request_id):
+        request = self._load(request_id)
+        if not request.approved:
+            raise ApprovalDeniedError("Approval request must be approved before action tokens are issued.")
+        if not request.task_id:
+            return {}
+        tokens = {}
+        for action in request.actions:
+            spec = next((item for item in self.executor.registry.describe() if item["name"] == action.tool), None)
+            if spec is None or not spec.get("permission"):
+                continue
+            permissions = [spec["permission"]]
+            if action.arguments.get("sensitive") is True:
+                permissions.append("secrets_access")
+            tokens[action.step_id or action.tool] = self.executor.registry.permission_manager.issue_approval_token(
+                task_id=request.task_id,
+                tool=action.tool,
+                permission=permissions,
+                arguments=action.arguments,
+                ttl_seconds=max(1, int(
+                    (datetime.fromisoformat(request.expires_at) - datetime.now(timezone.utc)).total_seconds()
+                )),
+            )
+        return tokens
 
     def reject(self, request_id, reason="rejected by user"):
         request = self._load(request_id)
