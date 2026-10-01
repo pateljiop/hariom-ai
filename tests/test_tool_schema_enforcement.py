@@ -61,13 +61,14 @@ class ToolSchemaEnforcementTests(unittest.TestCase):
         )
         with self.assertRaises(ToolApprovalRequired):
             registry.execute("browser.click", args, approved=True, task_id="task-1")
-        approval = {
-            "task_id": "task-1",
-            "tool": "browser.click",
-            "permission": Permission.BROWSER_CLICK.value,
-            "arguments_hash": registry.permission_manager.argument_fingerprint(args),
-        }
-        result = registry.execute("browser.click", args, approved=True, task_id="task-1", approval=approval)
+        approval_token = registry.permission_manager.issue_approval_token(
+            task_id="task-1", tool="browser.click",
+            permission=Permission.BROWSER_CLICK, arguments=args, ttl_seconds=60
+        )
+        result = registry.execute(
+            "browser.click", args, task_id="task-1",
+            approval_token=approval_token
+        )
         self.assertTrue(result["ok"], result)
 
     def test_task_bound_approval_rejects_argument_replay(self):
