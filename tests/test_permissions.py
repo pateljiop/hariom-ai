@@ -17,6 +17,13 @@ class PermissionTests(unittest.TestCase):
         self.assertFalse(decision.requires_approval)
         self.assertFalse(manager.has(Permission.GIT_COMMIT))
 
+    def test_task_bound_approval_overrides_persistent_grant(self):
+        manager = PermissionManager(grants=(Permission.TERMINAL_EXECUTE,))
+        decision = manager.decide(Permission.TERMINAL_EXECUTE, approved=True, task_id="task-1", tool="terminal.run")
+        self.assertFalse(decision.allowed)
+        self.assertTrue(decision.requires_approval)
+        self.assertEqual(decision.reason, "bound_approval_required")
+
     def test_grant_and_revoke(self):
         manager = PermissionManager()
         manager.grant(Permission.WORKSPACE_READ)
