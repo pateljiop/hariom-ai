@@ -279,7 +279,12 @@ class Agent(PersonalAgent):
                 tool = step.get("tool")
                 args = step.get("args") or {}
                 try:
-                    results.append({"result": self._execute(tool, args)})
+                    result = self._execute(tool, args)
+                    results.append({"result": result})
+                    if isinstance(result, dict) and result.get("ok") is False:
+                        self.activity.emit("recovering from cycle %s failure" % (cycle + 1))
+                        cycle_failed = True
+                        break
                 except Exception as exc:
                     results.append({"error": str(exc), "tool": tool})
                     self.activity.emit("recovering from cycle %s failure" % (cycle + 1))
