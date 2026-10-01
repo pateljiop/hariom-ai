@@ -371,6 +371,18 @@ class GitManagerTests(unittest.TestCase):
             with self.assertRaisesRegex(GitError, "Protected branch"):
                 git.merge_branch("feature/test", approved=True)
 
+    def test_head_sha_requires_valid_repository(self):
+        with tempfile.TemporaryDirectory() as root:
+            git = GitManager(root)
+            git._ensure_repo = Mock()
+            git._run = Mock(return_value="a" * 40)
+            self.assertEqual(git.head_sha(), "a" * 40)
+
+    def test_verify_head_rejects_invalid_sha(self):
+        git = GitManager(tempfile.gettempdir())
+        with self.assertRaisesRegex(GitError, "Invalid expected Git HEAD"):
+            git.verify_head("not-a-sha")
+
     def test_commit_requires_approval(self):
         with tempfile.TemporaryDirectory() as root:
             with self.assertRaises(PermissionError):
