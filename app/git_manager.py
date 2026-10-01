@@ -40,8 +40,12 @@ class GitManager:
     def diff(self):
         return self._run("diff", "--")
 
+    def _ensure_repo(self):
+        if not (self.root / ".git").exists():
+            raise GitError("Workspace is not a Git repository.")
+
     def create_branch(self, name):
-        if not isinstance(name, str) or not name.strip() or name.startswith("-") or any(x in name for x in ["..", "~", "^"]):
+        if not isinstance(name, str) or not name.strip() or name.startswith("-") or any(x in name for x in ["..", "~", "^", " ", "\\"]):
             raise GitError("Invalid branch name.")
         return self._run("switch", "-c", name)
 
@@ -52,6 +56,7 @@ class GitManager:
         return scan_secrets(added)
 
     def merge_branch(self, name, approved=False):
+        self._ensure_repo()
         if not approved:
             raise PermissionError("Git merge requires explicit approval.")
         if not isinstance(name, str) or not name.strip() or name.startswith("-"):
@@ -65,6 +70,7 @@ class GitManager:
         return self._run("merge", "--no-ff", name)
 
     def commit(self, message, approved=False):
+        self._ensure_repo()
         if not approved:
             raise PermissionError("Git commit requires explicit approval.")
         if not isinstance(message, str) or not message.strip():
