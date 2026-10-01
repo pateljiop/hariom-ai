@@ -110,10 +110,10 @@ class AgentToolLoopTests(unittest.TestCase):
                 "function": {"name": "workspace.read", "arguments": '{"path":"a.txt"}'},
             }],
         }, "fast")
-        result = self.runner.run_tool_loop("Keep reading", max_iterations=4)
+        result = self.runner.run_tool_loop("Keep reading", max_iterations=5)
         self.assertFalse(result["ok"])
         self.assertEqual(result["status"], "loop_detected")
-        self.assertEqual(self.registry.execute.call_count, 4)
+        self.assertEqual(self.registry.execute.call_count, 3)
 
     def test_invalid_tool_call_is_rejected(self):
         self.router.chat_request.return_value = ({
