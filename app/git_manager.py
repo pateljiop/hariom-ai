@@ -46,7 +46,15 @@ class GitManager:
         return self._run("switch", "-c", name)
 
     def scan_diff_for_secrets(self, diff=None):
-        diff = self.diff() if diff is None else str(diff)
+        if diff is None:
+            working = self.diff()
+            try:
+                staged = self._run("diff", "--cached", "--")
+            except GitError:
+                staged = ""
+            diff = working + ("\n" + staged if staged else "")
+        else:
+            diff = str(diff)
         # Inspect added lines only; removed historical secrets are not being committed.
         added = "\n".join(line for line in diff.splitlines() if line.startswith("+") and not line.startswith("+++"))
         return scan_secrets(added)
@@ -60,8 +68,13 @@ class GitManager:
         if current == name:
             raise GitError("Cannot merge the current branch into itself.")
         findings = self.scan_diff_for_secrets()
+        incoming = self._run("diff", "HEAD", name, "--")
+        findings = findings + scan_secrets(
+            "\n".join(line for line in incoming.splitlines()
+                       if line.startswith("+") and not line.startswith("+++"))
+        )
         if findings:
-            raise PermissionError("Potential secret detected in working diff; merge blocked.")
+            raise PermissionError("Potential secret detected in merge changes; merge blocked.")
         return self._run("merge", "--no-ff", name)
 
     def commit(self, message, approved=False):
