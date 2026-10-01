@@ -1,6 +1,6 @@
 # Free AI Provider Catalog
 
-Last audited: 2026-09-30
+Last audited: 2026-10-01
 
 This catalog is for Hariom AI's personal-use, Windows-first provider router. It separates recurring free tiers from one-time credits/trials.
 
@@ -91,3 +91,18 @@ No new recurring-free, sufficiently verified **hosted video-generation API** was
 Task -> capability filter -> free/paid classification -> provider health -> quota/cooldown -> selected provider -> fallback -> stop before unexpected billing
 
 This file is a discovery catalog, not a guarantee that every provider is available in every country/account.
+
+
+## Current verified changes — 2026-10-01
+
+### OpenRouter free pool — newly verified current state
+OpenRouter's current free-model offering remains useful as a fallback pool, but the exact model roster and limits rotate. A current OpenRouter model page/search result shows newly available zero-price models, including experimental/preview models. These should be treated as opportunistic free capacity rather than a guaranteed stable provider. The router should continue using the documented `openrouter/free` route rather than hardcoding volatile model names.
+
+### ElevenLabs — verification status
+Current third-party reports still advertise a 10,000-credit/month free plan, but this run did not obtain a sufficiently authoritative current official pricing/API source to promote it into the recurring-free section. Keep it **unlisted/unverified** rather than assuming the earlier claim is permanent.
+
+### Deepgram — verification status
+Deepgram's commonly advertised signup credit remains a promotional/trial offer rather than recurring free access. It stays in the trial/promo category and is not a free fallback target.
+
+### No new verified free hosted video API
+No newly available recurring-free hosted video-generation API met the verification threshold in this run. Google Vids remains a free product capability, not a documented free public API.
