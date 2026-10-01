@@ -62,36 +62,53 @@ class ToolRegistry:
         self._register_defaults()
 
     def _register_defaults(self):
-        self.register(ToolSpec("workspace.list", "List files in the workspace.", lambda: [str(p.relative_to(self.workspace.root)) for p in self.workspace.list_files()], permission=Permission.WORKSPACE_READ.value))
-        self.register(ToolSpec("workspace.read", "Read a UTF-8 text file from the workspace.", self.workspace.read_file, schema=ToolSchema(required=("path",), types={"path": (str,)}), permission=Permission.WORKSPACE_READ.value))
-        self.register(ToolSpec("workspace.write", "Write UTF-8 text to a file in the workspace.", self.workspace.write_file, schema=ToolSchema(required=("path", "content"), types={"path": (str,), "content": (str,)}), permission=Permission.WORKSPACE_WRITE.value))
-        self.register(ToolSpec("terminal.run", "Run a shell command with existing risky-command approval controls.", self._run_terminal, schema=ToolSchema(required=("command",), optional=("approved",), types={"command": (str,), "approved": (bool,)}), permission=Permission.TERMINAL_EXECUTE.value, risk="high", requires_approval=True))
-        self.register(ToolSpec("workspace.patch", "Replace an exact text fragment in one workspace file.", self._patch_workspace, schema=ToolSchema(required=("path", "old", "new"), optional=("expected_count",), types={"path": (str,), "old": (str,), "new": (str,), "expected_count": (int,)}), permission=Permission.WORKSPACE_WRITE.value))
-        self.register(ToolSpec("tests.run", "Run Python unittest discovery inside the workspace.", self._run_tests, schema=ToolSchema(optional=("target",), types={"target": (str,)}), permission=Permission.TERMINAL_EXECUTE.value, risk="medium"))
-        self.register(ToolSpec("browser.open", "Open a URL in the browser.", self.browser.open, schema=ToolSchema(required=("url",), types={"url": (str,)}), permission=Permission.BROWSER_READ.value, risk="medium"))
-        self.register(ToolSpec("browser.read", "Read the current browser page.", self.browser.read_text, permission=Permission.BROWSER_READ.value, risk="low"))
-        self.register(ToolSpec("browser.observe", "Observe the current browser URL, title, and visible text.", self.browser.observe, schema=ToolSchema(optional=("selector",), types={"selector": (str,)}), permission=Permission.BROWSER_READ.value, risk="low"))
-        self.register(ToolSpec("browser.verify", "Verify explicit browser state conditions.", self.browser.verify, schema=ToolSchema(optional=("selector", "text", "url_contains"), types={"selector": (str,), "text": (str,), "url_contains": (str,)}), permission=Permission.BROWSER_READ.value, risk="low"))
-        self.register(ToolSpec("browser.click", "Click a browser element.", self.browser.click, schema=ToolSchema(required=("selector",), optional=("approved",), types={"selector": (str,), "approved": (bool,)}), permission=Permission.BROWSER_CLICK.value, requires_approval=True, risk="high"))
-        self.register(ToolSpec("browser.type", "Type into a browser field.", self.browser.type_text, schema=ToolSchema(required=("selector", "text"), optional=("approved", "sensitive"), types={"selector": (str,), "text": (str,), "approved": (bool,), "sensitive": (bool,)}), permission=Permission.BROWSER_TYPE.value, requires_approval=True, risk="high"))
-        self.register(ToolSpec("browser.screenshot", "Capture the current browser view temporarily; persistence must be explicitly requested.", self.browser.screenshot, schema=ToolSchema(optional=("path", "approved", "persist"), types={"path": (str,), "approved": (bool,), "persist": (bool,)}), permission=Permission.COMPUTER_SCREENSHOT.value, requires_approval=True, risk="high"))
-        self.register(ToolSpec("computer.screen_size", "Read the current screen dimensions.", self.computer.screen_size, risk="low"))
-        self.register(ToolSpec("computer.position", "Read the current mouse position.", self.computer.position, risk="low"))
-        self.register(ToolSpec("computer.screenshot", "Capture the current computer screen temporarily; persistence must be explicitly requested.", self.computer.screenshot, schema=ToolSchema(optional=("path", "approved", "persist"), types={"path": (str,), "approved": (bool,), "persist": (bool,)}), permission=Permission.COMPUTER_SCREENSHOT.value, requires_approval=True, risk="high"))
-        self.register(ToolSpec("computer.click", "Click at screen coordinates.", self.computer.click, schema=ToolSchema(optional=("x", "y", "button", "clicks", "approved"), types={"x": (int,), "y": (int,), "button": (str,), "clicks": (int,), "approved": (bool,)}), permission=Permission.COMPUTER_KEYBOARD.value, requires_approval=True, risk="high"))
-        self.register(ToolSpec("computer.type", "Type text on the computer.", self.computer.type_text, schema=ToolSchema(required=("text",), optional=("interval", "approved", "sensitive"), types={"text": (str,), "interval": (int, float), "approved": (bool,), "sensitive": (bool,)}), permission=Permission.COMPUTER_KEYBOARD.value, requires_approval=True, risk="high"))
-        self.register(ToolSpec("computer.key", "Press an allowed keyboard key.", self.computer.press_key, schema=ToolSchema(required=("key",), optional=("approved",), types={"key": (str,), "approved": (bool,)}), permission=Permission.COMPUTER_KEYBOARD.value, requires_approval=True, risk="high"))
-        self.register(ToolSpec("git.status", "Show workspace Git status.", self.git.status, permission=Permission.WORKSPACE_READ.value))
-        self.register(ToolSpec("git.diff", "Show the current Git diff.", self.git.diff, permission=Permission.WORKSPACE_READ.value))
-        self.register(ToolSpec("git.branch", "Create a new isolated Git branch.", self.git.create_branch, schema=ToolSchema(required=("name",), types={"name": (str,)}), permission=Permission.WORKSPACE_WRITE.value))
-        self.register(ToolSpec("git.commit", "Commit workspace changes; explicit approval is required.", self.git.commit, requires_approval=True, schema=ToolSchema(required=("message",), optional=("approved",), types={"message": (str,), "approved": (bool,)}), permission=Permission.GIT_COMMIT.value, risk="high"))
-        self.register(ToolSpec("git.merge", "Merge an isolated branch; explicit approval is required.", self.git.merge_branch, requires_approval=True, schema=ToolSchema(required=("name",), optional=("approved",), types={"name": (str,), "approved": (bool,)}), permission=Permission.GIT_COMMIT.value, risk="critical"))
+        self.register(ToolSpec("workspace.list", "List files in the workspace.", lambda: [str(p.relative_to(self.workspace.root)) for p in self.workspace.list_files()], permission=Permission.WORKSPACE_READ.value, return_schema={"type": "array", "items": {"type": "string"}}))
+        self.register(ToolSpec("workspace.read", "Read a UTF-8 text file from the workspace.", self.workspace.read_file, schema=ToolSchema(required=("path",), types={"path": (str,)}), permission=Permission.WORKSPACE_READ.value, return_schema={"type": "object"}))
+        self.register(ToolSpec("workspace.write", "Write UTF-8 text to a file in the workspace.", self.workspace.write_file, schema=ToolSchema(required=("path", "content"), types={"path": (str,), "content": (str,)}), permission=Permission.WORKSPACE_WRITE.value, return_schema={"type": "object"}))
+        self.register(ToolSpec("terminal.run", "Run a shell command with existing risky-command approval controls.", self._run_terminal, schema=ToolSchema(required=("command",), optional=("approved",), types={"command": (str,), "approved": (bool,)}), permission=Permission.TERMINAL_EXECUTE.value, risk="high", requires_approval=True, return_schema={"type": "object"}))
+        self.register(ToolSpec("workspace.patch", "Replace an exact text fragment in one workspace file.", self._patch_workspace, schema=ToolSchema(required=("path", "old", "new"), optional=("expected_count",), types={"path": (str,), "old": (str,), "new": (str,), "expected_count": (int,)}), permission=Permission.WORKSPACE_WRITE.value, return_schema={"type": "object"}))
+        self.register(ToolSpec("tests.run", "Run Python unittest discovery inside the workspace.", self._run_tests, schema=ToolSchema(optional=("target",), types={"target": (str,)}), permission=Permission.TERMINAL_EXECUTE.value, risk="medium", return_schema={"type": "object"}))
+        self.register(ToolSpec("browser.open", "Open a URL in the browser.", self.browser.open, schema=ToolSchema(required=("url",), types={"url": (str,)}), permission=Permission.BROWSER_READ.value, risk="medium", return_schema={"type": "object"}))
+        self.register(ToolSpec("browser.read", "Read the current browser page.", self.browser.read_text, schema=ToolSchema(optional=("selector",), types={"selector": (str,)}), permission=Permission.BROWSER_READ.value, risk="low", return_schema={"type": "string"}))
+        self.register(ToolSpec("browser.observe", "Observe the current browser URL, title, and visible text.", self.browser.observe, schema=ToolSchema(optional=("selector",), types={"selector": (str,)}), permission=Permission.BROWSER_READ.value, risk="low", return_schema={"type": "object"}))
+        self.register(ToolSpec("browser.verify", "Verify explicit browser state conditions.", self.browser.verify, schema=ToolSchema(optional=("selector", "text", "url_contains"), types={"selector": (str,), "text": (str,), "url_contains": (str,)}), permission=Permission.BROWSER_READ.value, risk="low", return_schema={"type": "object"}))
+        self.register(ToolSpec("browser.find", "Find browser elements by CSS selector, optionally filtering by visible text.", self.browser.find, schema=ToolSchema(required=("selector",), optional=("text",), types={"selector": (str,), "text": (str,)}), permission=Permission.BROWSER_READ.value, risk="low", return_schema={"type": "object"}))
+        self.register(ToolSpec("browser.click", "Click a browser element.", self.browser.click, schema=ToolSchema(required=("selector",), optional=("approved",), types={"selector": (str,), "approved": (bool,)}), permission=Permission.BROWSER_CLICK.value, requires_approval=True, risk="high", return_schema={"type": "object"}))
+        self.register(ToolSpec("browser.type", "Type into a browser field.", self.browser.type_text, schema=ToolSchema(required=("selector", "text"), optional=("approved", "sensitive"), types={"selector": (str,), "text": (str,), "approved": (bool,), "sensitive": (bool,)}), permission=Permission.BROWSER_TYPE.value, requires_approval=True, risk="high", return_schema={"type": "object"}))
+        self.register(ToolSpec("browser.screenshot", "Capture the current browser view temporarily; persistence must be explicitly requested.", self.browser.screenshot, schema=ToolSchema(optional=("path", "approved", "persist"), types={"path": (str,), "approved": (bool,), "persist": (bool,)}), permission=Permission.COMPUTER_SCREENSHOT.value, requires_approval=True, risk="high", return_schema={"type": "object"}))
+        self.register(ToolSpec("computer.screen_size", "Read the current screen dimensions.", self.computer.screen_size, risk="low", return_schema={"type": "object"}))
+        self.register(ToolSpec("computer.position", "Read the current mouse position.", self.computer.position, risk="low", return_schema={"type": "object"}))
+        self.register(ToolSpec("computer.screenshot", "Capture the current computer screen temporarily; persistence must be explicitly requested.", self.computer.screenshot, schema=ToolSchema(optional=("path", "approved", "persist"), types={"path": (str,), "approved": (bool,), "persist": (bool,)}), permission=Permission.COMPUTER_SCREENSHOT.value, requires_approval=True, risk="high", return_schema={"type": "object"}))
+        self.register(ToolSpec("computer.click", "Click at screen coordinates.", self.computer.click, schema=ToolSchema(optional=("x", "y", "button", "clicks", "approved"), types={"x": (int,), "y": (int,), "button": (str,), "clicks": (int,), "approved": (bool,)}, enums={"button": ("left", "middle", "right")}, min_values={"clicks": 1}, max_values={"clicks": 10}), permission=Permission.COMPUTER_KEYBOARD.value, requires_approval=True, risk="high", return_schema={"type": "boolean"}))
+        self.register(ToolSpec("computer.type", "Type text on the computer.", self.computer.type_text, schema=ToolSchema(required=("text",), optional=("interval", "approved", "sensitive"), types={"text": (str,), "interval": (int, float), "approved": (bool,), "sensitive": (bool,)}), permission=Permission.COMPUTER_KEYBOARD.value, requires_approval=True, risk="high", return_schema={"type": "object"}))
+        self.register(ToolSpec("computer.key", "Press an allowed keyboard key.", self.computer.press_key, schema=ToolSchema(required=("key",), optional=("approved",), types={"key": (str,), "approved": (bool,)}), permission=Permission.COMPUTER_KEYBOARD.value, requires_approval=True, risk="high", return_schema={"type": "object"}))
+        self.register(ToolSpec("git.status", "Show workspace Git status.", self.git.status, permission=Permission.WORKSPACE_READ.value, return_schema={"type": "object"}))
+        self.register(ToolSpec("git.diff", "Show the current Git diff.", self.git.diff, permission=Permission.WORKSPACE_READ.value, return_schema={"type": "object"}))
+        self.register(ToolSpec("git.branch", "Create a new isolated Git branch.", self.git.create_branch, schema=ToolSchema(required=("name",), types={"name": (str,)}), permission=Permission.WORKSPACE_WRITE.value, return_schema={"type": "object"}))
+        self.register(ToolSpec("git.commit", "Commit workspace changes; explicit approval is required.", self.git.commit, requires_approval=True, schema=ToolSchema(required=("message",), optional=("approved",), types={"message": (str,), "approved": (bool,)}), permission=Permission.GIT_COMMIT.value, risk="high", return_schema={"type": "object"}))
+        self.register(ToolSpec("git.merge", "Merge an isolated branch; explicit approval is required.", self.git.merge_branch, requires_approval=True, schema=ToolSchema(required=("name",), optional=("approved",), types={"name": (str,), "approved": (bool,)}), permission=Permission.GIT_COMMIT.value, risk="critical", return_schema={"type": "object"}))
 
     def register(self, spec):
         if not isinstance(spec, ToolSpec) or not spec.name:
             raise ValueError("A valid ToolSpec is required.")
-        if spec.timeout <= 0 or spec.retry < 0:
-            raise ValueError("Tool timeout must be positive and retry must be non-negative.")
+        if not isinstance(spec.schema, ToolSchema):
+            raise ValueError("ToolSpec.schema must be a ToolSchema.")
+        if spec.return_schema is not None and not isinstance(spec.return_schema, dict):
+            raise ValueError("ToolSpec.return_schema must be an object.")
+        if spec.permission is not None and not isinstance(spec.permission, str):
+            raise ValueError("ToolSpec.permission must be a string or None.")
+        if not isinstance(spec.limits, dict):
+            raise ValueError("ToolSpec.limits must be an object.")
+        if not isinstance(spec.version, str) or not spec.version.strip():
+            raise ValueError("ToolSpec.version must be a non-empty string.")
+        if not isinstance(spec.timeout, int) or isinstance(spec.timeout, bool) or spec.timeout <= 0:
+            raise ValueError("ToolSpec.timeout must be a positive integer.")
+        if not isinstance(spec.retry, int) or isinstance(spec.retry, bool) or spec.retry < 0:
+            raise ValueError("ToolSpec.retry must be a non-negative integer.")
+        if not isinstance(spec.rollback, str) or not spec.rollback.strip():
+            raise ValueError("ToolSpec.rollback must be a non-empty string.")
+        if not isinstance(spec.requires_approval, bool):
+            raise ValueError("ToolSpec.requires_approval must be boolean.")
         if spec.risk not in {"low", "medium", "high", "critical"}:
             raise ValueError("Tool risk must be low, medium, high, or critical.")
         self._tools[spec.name] = spec
@@ -103,7 +120,15 @@ class ToolRegistry:
                 "requires_approval": s.requires_approval, "risk": s.risk,
                 "permission": s.permission, "timeout": s.timeout, "retry": s.retry,
                 "rollback": s.rollback, "limits": dict(s.limits),
-                "return_schema": s.return_schema,
+                "input_schema": s.schema.to_dict(),
+                "return_schema": s.return_schema or {
+                    "type": "object",
+                    "required": ["ok", "tool"],
+                    "properties": {
+                        "ok": {"type": "boolean"},
+                        "tool": {"type": "string"},
+                    },
+                },
                 "schema": s.schema.to_dict(),
             }
             for s in self._tools.values()
