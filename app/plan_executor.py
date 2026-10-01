@@ -193,6 +193,7 @@ class PlanExecutor:
                     result["stage"] = "post_commit_verification"
                     result["state"] = state.snapshot()
                     result["verification"] = verification
+                    result["rollback_candidate"] = rollback_candidate
                     return result
                 self.task_service.transition(task_id, "completed", request_id=request_id)
             elif task.status.value != "completed":
