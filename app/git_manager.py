@@ -94,6 +94,49 @@ class GitManager:
             raise PermissionError("Potential secret detected in working diff; merge blocked.")
         return self._run("merge", "--no-ff", name)
 
+    def rollback_to_commit(self, target_sha, expected_current_sha, approved=False):
+        """Create a compensating revert after explicit approval."""
+        if not approved:
+            raise PermissionError("Git rollback requires explicit approval.")
+        sha_pattern = r"[0-9a-f]{40}"
+        if not re.fullmatch(sha_pattern, str(target_sha)) or not re.fullmatch(
+            sha_pattern, str(expected_current_sha)
+        ):
+            raise GitError("Invalid rollback commit SHA.")
+        self._ensure_repo()
+        branch = self.current_branch()
+        if branch in self.PROTECTED_BRANCHES:
+            raise GitError("Protected branch cannot be rolled back directly.")
+        current = self.head_sha()
+        if current != expected_current_sha:
+            raise GitError("Git HEAD changed after rollback was approved.")
+        if current == target_sha:
+            raise GitError("Rollback target is already the current HEAD.")
+        if self.status():
+            raise GitError("Working tree must be clean before rollback.")
+        try:
+            self._run("merge-base", "--is-ancestor", target_sha, expected_current_sha)
+        except GitError as exc:
+            raise GitError("Rollback target must be an ancestor of the current HEAD.") from exc
+        try:
+            result = self._run("revert", "--no-edit", expected_current_sha)
+        except GitError:
+            try:
+                self._run("revert", "--abort")
+            except GitError:
+                pass
+            raise
+        new_head = self.head_sha()
+        if new_head == expected_current_sha or not self.verify_head(new_head):
+            raise GitError("Rollback commit verification failed.")
+        return {
+            "result": result,
+            "branch": branch,
+            "target_sha": target_sha,
+            "reverted_sha": expected_current_sha,
+            "rollback_sha": new_head,
+        }
+
     def commit(self, message, approved=False):
         if not approved:
             raise PermissionError("Git commit requires explicit approval.")
