@@ -118,7 +118,7 @@ class PlanExecutor:
                 return {"ok": False, "stage": "recovery_limit"}
             state.transition("repairing", attempt=state.attempts)
             try:
-                result = self.workflow.executor.execute(actions)
+                result = self.workflow.executor.execute(actions, task_id=task_id)
             except TaskExecutionError as exc:
                 state.transition("failed", error_type="repair_execution")
                 return {"ok": False, "stage": "repair_execution", "error": str(exc)}
