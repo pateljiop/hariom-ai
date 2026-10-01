@@ -51,6 +51,19 @@ class GitManager:
         added = "\n".join(line for line in diff.splitlines() if line.startswith("+") and not line.startswith("+++"))
         return scan_secrets(added)
 
+    def merge_branch(self, name, approved=False):
+        if not approved:
+            raise PermissionError("Git merge requires explicit approval.")
+        if not isinstance(name, str) or not name.strip() or name.startswith("-"):
+            raise GitError("Invalid branch name.")
+        current = self._run("branch", "--show-current")
+        if current == name:
+            raise GitError("Cannot merge the current branch into itself.")
+        findings = self.scan_diff_for_secrets()
+        if findings:
+            raise PermissionError("Potential secret detected in working diff; merge blocked.")
+        return self._run("merge", "--no-ff", name)
+
     def commit(self, message, approved=False):
         if not approved:
             raise PermissionError("Git commit requires explicit approval.")
