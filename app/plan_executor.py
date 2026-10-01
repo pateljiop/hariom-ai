@@ -25,11 +25,16 @@ class PlanExecutor:
             task_id = requested_task_id
             try:
                 existing_task = self.task_service.get_task(task_id)
+                if not isinstance(current_branch, str) or not current_branch.strip():
+                    raise PlanExecutionError("Unable to establish the current Git branch for task binding.")
                 if existing_task.branch_name and existing_task.branch_name != current_branch:
                     raise PlanExecutionError(
                         f"Task '{task_id}' is bound to branch '{existing_task.branch_name}', "
                         f"but current branch is '{current_branch}'."
                     )
+                if not existing_task.branch_name:
+                    existing_task.branch_name = current_branch
+                    self.task_service.store.save(existing_task)
             except TaskServiceError:
                 self.task_service.create_task(
                     plan.user_request or "agent task",
