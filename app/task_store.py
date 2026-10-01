@@ -51,6 +51,23 @@ class TaskStore:
                 (task.task_id, payload, task.status.value, task.created_at, task.updated_at))
         return task
 
+    def list_tasks(self, statuses=None):
+        """Return persisted tasks, optionally filtered by status."""
+        allowed = None if statuses is None else {
+            status.value if isinstance(status, TaskStatus) else str(status)
+            for status in statuses
+        }
+        with self._connect() as conn:
+            if allowed:
+                placeholders = ",".join("?" for _ in allowed)
+                rows = conn.execute(
+                    f"SELECT payload FROM tasks WHERE status IN ({placeholders}) ORDER BY updated_at DESC",
+                    tuple(sorted(allowed)),
+                ).fetchall()
+            else:
+                rows = conn.execute("SELECT payload FROM tasks ORDER BY updated_at DESC").fetchall()
+        return [self._from_payload(row["payload"]) for row in rows]
+
     def get(self, task_id):
         with self._connect() as conn:
             row = conn.execute("SELECT payload FROM tasks WHERE task_id=?", (task_id,)).fetchone()
