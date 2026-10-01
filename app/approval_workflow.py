@@ -32,6 +32,7 @@ class ApprovalRequest:
     expires_at: str = ""
     rejected: bool = False
     commit_result: object = None
+    branch_name: str = ""
 
 
 class ApprovalWorkflow:
@@ -62,13 +63,14 @@ class ApprovalWorkflow:
         if not test_result["ok"]:
             return {"ok": False, "stage": "verification", "execution": execution, "expectation_result": expectation_result, "test_result": test_result}
         diff = self.git.diff()
+        branch_name = self.git.current_branch()
         request_id = 'approval-' + uuid4().hex
         now = datetime.now(timezone.utc)
         expires = now + timedelta(seconds=self.approval_ttl_seconds)
         request = ApprovalRequest(
             request_id=request_id, actions=actions, test_target=test_target,
             test_result=test_result, diff=diff, task_id=task_id,
-            created_at=now.isoformat(), expires_at=expires.isoformat(),
+            created_at=now.isoformat(), expires_at=expires.isoformat(), branch_name=branch_name,
         )
         self._requests[request_id] = request
         self._persist(request, "pending")
@@ -88,6 +90,8 @@ class ApprovalWorkflow:
             raise ApprovalWorkflowError("Commit message is required.")
         if datetime.now(timezone.utc) >= datetime.fromisoformat(request.expires_at):
             raise ApprovalDeniedError("Approval request has expired.")
+        if self.git.current_branch() != request.branch_name:
+            raise ApprovalWorkflowError("Git branch changed after review; approval is invalid.")
         if self.git.diff() != request.diff:
             raise ApprovalWorkflowError("Workspace diff changed after review; approval is invalid.")
         result = self.git.commit(message, approved=True)
@@ -155,7 +159,7 @@ class ApprovalWorkflow:
                     created_at=saved["created_at"], expires_at=saved["expires_at"],
                     approved=saved["status"] == "approved",
                     rejected=saved["status"] == "rejected",
-                    commit_result=saved.get("commit_result"),
+                    commit_result=saved.get("commit_result"), branch_name=saved.get("branch_name", ""),
                 )
                 self._requests[request_id] = request
                 return request
@@ -181,6 +185,7 @@ class ApprovalWorkflow:
             "test_result": request.test_result,
             "diff": request.diff,
             "commit_result": request.commit_result,
+            "branch_name": request.branch_name,
         }
         self.store.save_approval(request.request_id, payload, request.created_at, request.expires_at, status)
 
