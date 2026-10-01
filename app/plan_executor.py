@@ -20,10 +20,16 @@ class PlanExecutor:
     def prepare(self, payload, task_id=None):
         plan = TaskPlan.from_dict(payload)
         requested_task_id = task_id or plan.task_id
+        current_branch = self.workflow.git.current_branch()
         if requested_task_id:
             task_id = requested_task_id
             try:
-                self.task_service.get_task(task_id)
+                existing_task = self.task_service.get_task(task_id)
+                if existing_task.branch_name and existing_task.branch_name != current_branch:
+                    raise PlanExecutionError(
+                        f"Task '{task_id}' is bound to branch '{existing_task.branch_name}', "
+                        f"but current branch is '{current_branch}'."
+                    )
             except TaskServiceError:
                 self.task_service.create_task(
                     plan.user_request or "agent task",
@@ -35,6 +41,7 @@ class PlanExecutor:
                     risk_level=plan.risk_level,
                     required_approvals=tuple(plan.required_approvals),
                     rollback_strategy=plan.rollback_strategy,
+                    branch_name=current_branch,
                     max_retries=plan.max_retries,
                     plan=plan.to_dict(),
                 )
@@ -48,6 +55,7 @@ class PlanExecutor:
                 risk_level=plan.risk_level,
                 required_approvals=tuple(plan.required_approvals),
                 rollback_strategy=plan.rollback_strategy,
+                branch_name=current_branch,
                 max_retries=plan.max_retries,
                 plan=plan.to_dict(),
             )
