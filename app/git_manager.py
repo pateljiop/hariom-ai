@@ -72,6 +72,8 @@ class GitManager:
             raise PermissionError("Git merge requires explicit approval.")
         name = self._validate_branch_name(name)
         current = self._run("branch", "--show-current")
+        if current in self.PROTECTED_BRANCHES:
+            raise GitError("Protected branch cannot be a merge target.")
         if current == name:
             raise GitError("Cannot merge the current branch into itself.")
         findings = self.scan_diff_for_secrets()
@@ -84,8 +86,11 @@ class GitManager:
             raise PermissionError("Git commit requires explicit approval.")
         if not isinstance(message, str) or not message.strip():
             raise GitError("Commit message is required.")
+        self._ensure_repo()
+        current = self._run("branch", "--show-current")
+        if current in self.PROTECTED_BRANCHES:
+            raise GitError("Protected branch cannot receive direct commits.")
         findings = self.scan_diff_for_secrets()
         if findings:
             raise PermissionError("Potential secret detected in Git diff; explicit security review required.")
-        self._ensure_repo()
         return self._run("add", "-A") + ("\n" + self._run("commit", "-m", message))
