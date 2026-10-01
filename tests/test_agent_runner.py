@@ -131,6 +131,61 @@ class AgentRunnerTests(unittest.TestCase):
         self.assertEqual(result["status"], "completed")
         self.assertEqual(self.router.chat_vision.call_count, 2)
 
+    def test_run_tool_loop_executes_safe_tool_then_continues(self):
+        self.registry.describe.return_value = [{
+            "name": "workspace.read", "description": "read",
+            "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}},
+        }]
+        self.registry.execute.return_value = {"ok": True, "tool": "workspace.read", "result": "hello"}
+        self.router.chat_request.side_effect = [
+            ({"role": "assistant", "tool_calls": [{
+                "id": "call-1", "function": {"name": "workspace.read", "arguments": "{\"path\":\"a.txt\"}"},
+            }]}, "fast"),
+            ({"role": "assistant", "content": "Done."}, "fast"),
+        ]
+        result = self.runner.run_tool_loop("Read a.txt", max_iterations=2)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(self.router.chat_request.call_count, 2)
+        self.registry.execute.assert_called_once_with("workspace.read", {"path": "a.txt"}, approved=False, task_id=None)
+        tool_message = [m for m in self.router.chat_request.call_args_list[1].args[0] if m.get("role") == "tool"][-1]
+        self.assertEqual(tool_message["role"], "tool")
+        self.assertEqual(tool_message["tool_call_id"], "call-1")
+
+    def test_run_tool_loop_stops_at_approval_boundary(self):
+        from app.tool_registry import ToolApprovalRequired
+        self.registry.describe.return_value = [{
+            "name": "browser.click", "description": "click",
+            "input_schema": {"type": "object", "properties": {"selector": {"type": "string"}}},
+        }]
+        self.registry.execute.side_effect = ToolApprovalRequired("approval required")
+        self.router.chat_request.return_value = (
+            {"role": "assistant", "tool_calls": [{
+                "id": "call-2", "function": {"name": "browser.click", "arguments": "{\"selector\":\"#buy\"}"},
+            }]}, "fast"
+        )
+        result = self.runner.run_tool_loop("Click buy", max_iterations=2)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], "awaiting_approval")
+        self.assertEqual(result["tool"], "browser.click")
+        self.assertEqual(self.router.chat_request.call_count, 1)
+
+    def test_run_tool_loop_has_bounded_iterations(self):
+        self.registry.describe.return_value = [{
+            "name": "workspace.read", "description": "read",
+            "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}},
+        }]
+        self.registry.execute.return_value = {"ok": True, "tool": "workspace.read", "result": "hello"}
+        self.router.chat_request.return_value = (
+            {"role": "assistant", "tool_calls": [{
+                "id": "call-loop", "function": {"name": "workspace.read", "arguments": "{\"path\":\"a.txt\"}"},
+            }]}, "fast"
+        )
+        result = self.runner.run_tool_loop("Keep reading", max_iterations=2)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], "iteration_limit")
+        self.assertEqual(self.router.chat_request.call_count, 2)
+
     def test_provider_failure_is_wrapped(self):
         self.router.chat.side_effect = RuntimeError("no provider")
         with self.assertRaises(AgentRunError):
