@@ -9,9 +9,11 @@ from .activity import ActivityBus
 from .agent_execution import AgentExecutionFacade
 from .agent_runner import AgentRunner
 from .plan_executor import PlanExecutor
+from .task_executor import TaskExecutor
 from .task_queue import TaskQueue
 from .task_service import TaskService
 from .tool_registry import ToolRegistry
+from .approval_workflow import ApprovalWorkflow
 
 
 class WorkstationError(Exception):
@@ -23,7 +25,9 @@ class Workstation:
         self.activity = activity or ActivityBus()
         self.registry = ToolRegistry(workspace=workspace, activity=self.activity)
         self.task_service = TaskService()
-        self.executor = PlanExecutor(task_service=self.task_service)
+        self.task_executor = TaskExecutor(self.registry)
+        self.workflow = ApprovalWorkflow(executor=self.task_executor, git=self.registry.git, store=self.task_service.store)
+        self.executor = PlanExecutor(workflow=self.workflow, task_service=self.task_service)
         # Reuse the exact registry/executor path; no duplicate execution stack.
         self.agent = AgentRunner(
             router=None,
