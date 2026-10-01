@@ -91,7 +91,7 @@ class Task:
         TaskStatus.REPAIRING: {TaskStatus.TESTING, TaskStatus.FAILED, TaskStatus.TIMED_OUT, TaskStatus.CANCELLED},
         TaskStatus.AWAITING_COMMIT_APPROVAL: {TaskStatus.COMMITTING, TaskStatus.FAILED, TaskStatus.CANCELLED},
         TaskStatus.COMMITTING: {TaskStatus.COMPLETED, TaskStatus.ROLLED_BACK, TaskStatus.FAILED, TaskStatus.TIMED_OUT},
-        TaskStatus.FAILED: {TaskStatus.REPAIRING, TaskStatus.CANCELLED},
+        TaskStatus.FAILED: {TaskStatus.REPAIRING, TaskStatus.ROLLED_BACK, TaskStatus.CANCELLED},
         TaskStatus.TIMED_OUT: {TaskStatus.REPAIRING, TaskStatus.CANCELLED},
         TaskStatus.CANCELLED: set(),
         TaskStatus.COMPLETED: set(),
