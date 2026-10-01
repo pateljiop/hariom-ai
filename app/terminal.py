@@ -1,6 +1,7 @@
 import re
 import shlex
 import subprocess
+import os
 
 RISKY = (
     "del ", "erase ", "rmdir ", "format ", "shutdown", "reg delete",
@@ -11,10 +12,13 @@ RISKY = (
 SHELL_META = re.compile(r"[;&|<>`$()]")
 MAX_OUTPUT = 12000
 TIMEOUT_SECONDS = 120
+MAX_COMMAND_LENGTH = 4000
 
 def _parse_command(command, approved=False):
     if not isinstance(command, str) or not command.strip():
         raise ValueError("Command must be a non-empty string.")
+    if len(command) > MAX_COMMAND_LENGTH:
+        raise ValueError("Command exceeds the maximum allowed length.")
     if SHELL_META.search(command) and not approved:
         raise PermissionError("Shell metacharacters are not allowed.")
     try:
@@ -29,7 +33,8 @@ def run_command(command, activity, approved=False):
         raise PermissionError("Risky command blocked. Explicit approval required.")
     activity.emit("TERMINAL -> " + command)
     try:
-        p = subprocess.run(argv, shell=False, capture_output=True, text=True, timeout=TIMEOUT_SECONDS)
+        env = {k: v for k, v in os.environ.items() if k not in {"OPENAI_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_TOKEN"}}
+        p = subprocess.run(argv, shell=False, capture_output=True, text=True, timeout=TIMEOUT_SECONDS, env=env)
     except subprocess.TimeoutExpired as exc:
         activity.emit("TERMINAL -> timeout")
         partial = (exc.stdout or "") + ("\n" + exc.stderr if exc.stderr else "")
