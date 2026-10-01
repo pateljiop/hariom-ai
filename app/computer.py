@@ -101,7 +101,9 @@ class ComputerController:
         self.activity.emit("COMPUTER -> key press: " + key)
         return True
 
-    def hotkey(self, keys):
+    def hotkey(self, keys, approved=False):
+        if not approved:
+            raise PermissionError("Computer hotkey requires explicit approval.")
         pyautogui = self._pyautogui()
         if not isinstance(keys, (list, tuple)) or not keys:
             raise ValueError("keys must be a non-empty list.")
