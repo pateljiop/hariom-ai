@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import ipaddress
+import socket
 import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
@@ -10,6 +11,7 @@ class BrowserSession:
     browser: object
     page: object
     playwright: object
+    context: object
 
 
 class BrowserController:
@@ -79,21 +81,53 @@ class BrowserController:
             address.is_reserved,
         ))
 
+    @classmethod
+    def _resolved_addresses(cls, hostname):
+        try:
+            infos = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
+        except socket.gaierror as exc:
+            raise PermissionError("Browser destination hostname could not be safely resolved.") from exc
+        addresses = {item[4][0] for item in infos}
+        if not addresses or any(cls._host_is_private(address) for address in addresses):
+            raise PermissionError("Browser destination resolves to a local/private network address.")
+        return addresses
+
     def _validate_url(self, url):
         parsed = urlparse(str(url))
         if parsed.scheme not in {"http", "https"} or not parsed.hostname:
             raise ValueError("Only valid http/https URLs are allowed.")
         if self._host_is_private(parsed.hostname):
             raise PermissionError("Browser navigation to local/private network destinations is blocked.")
+        self._resolved_addresses(parsed.hostname)
         return str(url)
+
+    def _route_is_safe(self, request_url):
+        parsed = urlparse(str(request_url))
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            return False
+        if self._host_is_private(parsed.hostname):
+            return False
+        try:
+            self._resolved_addresses(parsed.hostname)
+        except PermissionError:
+            return False
+        return True
+
+    def _handle_route(self, route):
+        if self._route_is_safe(route.request.url):
+            route.continue_()
+        else:
+            route.abort("blockedbyclient")
 
     def open(self, url):
         url = self._validate_url(url)
         if self.session is None:
             playwright = self._playwright()().start()
             browser = playwright.chromium.launch(headless=self.headless)
-            page = browser.new_page()
-            self.session = BrowserSession(browser, page, playwright)
+            context = browser.new_context(service_workers="block")
+            context.route("**/*", self._handle_route)
+            page = context.new_page()
+            self.session = BrowserSession(browser, page, playwright, context)
         self.session.page.goto(url, wait_until="domcontentloaded", timeout=self.action_timeout_ms)
         self.activity.emit("BROWSER -> opened " + url)
         return {"url": self.session.page.url, "title": self.session.page.title()}
