@@ -30,7 +30,7 @@ class VisualAgentTests(unittest.TestCase):
             {"ok": True, "result": {"width": 1200, "height": 800}},
             {"ok": True, "result": "/tmp/screen.png"},
         ]
-        agent = VisualAgent(router, registry)
+        agent = VisualAgent(router, registry, approval_checker=lambda _: True)
         agent._screen_size_for_test = True
         # The computer loop fingerprints the returned file; use a real temp file.
         import tempfile
