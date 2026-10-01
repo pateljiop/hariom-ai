@@ -26,6 +26,15 @@ class ToolRegistryContractTests(unittest.TestCase):
     def test_browser_read_accepts_selector(self):
         self.assertTrue(self.registry.validate_arguments("browser.read", {"selector": "#main"}))
 
+    def test_browser_open_requires_external_network_approval(self):
+        spec = next(item for item in self.registry.describe() if item["name"] == "browser.open")
+        self.assertTrue(spec["requires_approval"])
+        self.assertEqual(spec["permission"], "external_network")
+
+    def test_sensitive_input_requires_secrets_access(self):
+        with self.assertRaises(Exception):
+            self.registry.execute("browser.type", {"selector": "#password", "text": "secret", "sensitive": True}, approved=True)
+
     def test_computer_hotkey_requires_approval(self):
         spec = next(item for item in self.registry.describe() if item["name"] == "computer.hotkey")
         self.assertTrue(spec["requires_approval"])
