@@ -1,4 +1,5 @@
 from pathlib import Path
+import tempfile
 import platform
 import time
 
@@ -33,12 +34,21 @@ class ComputerController:
         point = pyautogui.position()
         return {"x": point.x, "y": point.y}
 
-    def screenshot(self, path="computer-screen.png"):
+    def screenshot(self, path=None, approved=False, persist=False):
+        if not approved:
+            raise PermissionError("Computer screenshot requires explicit approval.")
         pyautogui = self._pyautogui()
-        target = Path(path).expanduser().resolve()
-        target.parent.mkdir(parents=True, exist_ok=True)
+        if persist:
+            if not path:
+                raise ValueError("A path is required when persist=True.")
+            target = Path(path).expanduser().resolve()
+            target.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            tmp = tempfile.NamedTemporaryFile(prefix="hariom-screen-", suffix=".png", delete=False)
+            tmp.close()
+            target = Path(tmp.name)
         pyautogui.screenshot(str(target))
-        self.activity.emit("COMPUTER -> screenshot " + str(target))
+        self.activity.emit("COMPUTER -> screenshot " + ("persisted" if persist else "temporary"))
         return str(target)
 
     def move_mouse(self, x, y, duration=0.2):
@@ -50,7 +60,9 @@ class ComputerController:
         pyautogui.moveTo(x, y, duration=float(duration))
         return {"x": x, "y": y}
 
-    def click(self, x=None, y=None, button="left", clicks=1):
+    def click(self, x=None, y=None, button="left", clicks=1, approved=False):
+        if not approved:
+            raise PermissionError("Computer click requires explicit approval.")
         pyautogui = self._pyautogui()
         if x is not None or y is not None:
             if x is None or y is None:
@@ -63,13 +75,17 @@ class ComputerController:
         self.activity.emit("COMPUTER -> mouse click")
         return True
 
-    def type_text(self, text, interval=0.01):
+    def type_text(self, text, interval=0.01, approved=False, sensitive=False):
+        if not approved:
+            raise PermissionError("Computer typing requires explicit approval.")
         pyautogui = self._pyautogui()
         pyautogui.write(str(text), interval=float(interval))
         self.activity.emit("COMPUTER -> typed text")
         return True
 
-    def press_key(self, key):
+    def press_key(self, key, approved=False):
+        if not approved:
+            raise PermissionError("Computer keyboard control requires explicit approval.")
         pyautogui = self._pyautogui()
         allowed = {
             "enter", "esc", "tab", "space", "backspace", "delete",

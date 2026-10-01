@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -50,32 +51,80 @@ class BrowserController:
             raise RuntimeError("No browser session is open.")
         return {"url": self.session.page.url, "title": self.session.page.title()}
 
+    def observe(self, selector="body"):
+        """Return fresh browser state for closed-loop agent decisions."""
+        if not self.session:
+            raise RuntimeError("No browser session is open.")
+        page = self.session.page
+        observation = {
+            "url": page.url,
+            "title": page.title(),
+            "text": page.locator(selector).inner_text(timeout=10000)[:12000],
+        }
+        self.activity.emit("BROWSER -> observed current page")
+        return observation
+
+    def verify(self, selector=None, text=None, url_contains=None):
+        """Check current browser state against explicit, user/task-provided expectations."""
+        if not self.session:
+            raise RuntimeError("No browser session is open.")
+        page = self.session.page
+        checks = []
+        if selector:
+            checks.append(("selector", bool(page.locator(selector).count())))
+        if text is not None:
+            checks.append(("text", str(text) in page.locator("body").inner_text(timeout=10000)))
+        if url_contains is not None:
+            checks.append(("url", str(url_contains) in page.url))
+        if not checks:
+            raise ValueError("At least one verification condition is required.")
+        return {
+            "ok": all(value for _, value in checks),
+            "checks": [{"type": kind, "ok": value} for kind, value in checks],
+            "url": page.url,
+            "title": page.title(),
+        }
+
     def read_text(self, selector="body"):
         if not self.session:
             raise RuntimeError("No browser session is open.")
         return self.session.page.locator(selector).inner_text(timeout=10000)[:12000]
 
-    def click(self, selector):
+    def click(self, selector, approved=False):
         if not self.session:
             raise RuntimeError("No browser session is open.")
+        if not approved:
+            raise PermissionError("Browser click requires explicit approval.")
         self.session.page.locator(selector).first.click(timeout=10000)
         self.activity.emit("BROWSER -> clicked " + selector)
         return self.current_page()
 
-    def type_text(self, selector, text):
+    def type_text(self, selector, text, approved=False, sensitive=False):
         if not self.session:
             raise RuntimeError("No browser session is open.")
+        if not approved:
+            raise PermissionError("Browser typing requires explicit approval.")
         self.session.page.locator(selector).first.fill(str(text), timeout=10000)
-        self.activity.emit("BROWSER -> filled " + selector)
+        self.activity.emit("BROWSER -> filled field" + (" [sensitive]" if sensitive else ""))
         return True
 
-    def screenshot(self, path="browser.png"):
+    def screenshot(self, path=None, approved=False, persist=False):
         if not self.session:
             raise RuntimeError("No browser session is open.")
-        target = Path(path).expanduser().resolve()
-        target.parent.mkdir(parents=True, exist_ok=True)
+        if not approved:
+            raise PermissionError("Browser screenshot requires explicit approval.")
+        if persist:
+            if not path:
+                raise ValueError("A path is required when persist=True.")
+            target = Path(path).expanduser().resolve()
+            target.parent.mkdir(parents=True, exist_ok=True)
+            self.session.page.screenshot(path=str(target), full_page=True)
+            self.activity.emit("BROWSER -> screenshot persisted")
+            return str(target)
+        with tempfile.NamedTemporaryFile(prefix="hariom-browser-", suffix=".png", delete=False) as tmp:
+            target = Path(tmp.name)
         self.session.page.screenshot(path=str(target), full_page=True)
-        self.activity.emit("BROWSER -> screenshot " + str(target))
+        self.activity.emit("BROWSER -> screenshot temporary")
         return str(target)
 
     def close(self):
