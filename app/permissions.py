@@ -36,6 +36,7 @@ class ApprovalAuthority:
     def __init__(self, secret=None):
         self._secret = secret or secrets.token_bytes(32)
         self._consumed = set()
+        self._issued = {}
 
     @staticmethod
     def _payload(task_id, tool, permissions, arguments, expires_at, nonce):
