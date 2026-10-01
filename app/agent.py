@@ -248,13 +248,21 @@ class Agent(PersonalAgent):
                 result = subprocess.run(["git", "commit", "-m", str(arguments.get("message", ""))], cwd=self.workspace.root, capture_output=True, text=True)
             return {"action": action, "exit_code": result.returncode, "output": (result.stdout + result.stderr)[-4000:]}
         if action == "run_tests":
-            result = self.test_runner.run_command(arguments.get("command", ""))
-            return {
-                "action": action,
-                "exit_code": result.get("returncode"),
-                "output": result.get("output", ""),
-                "ok": result.get("ok", False),
-            }
+            try:
+                result = self.test_runner.run_command(arguments.get("command", ""))
+                return {
+                    "action": action,
+                    "exit_code": result.get("returncode"),
+                    "output": result.get("output", ""),
+                    "ok": result.get("ok", False),
+                }
+            except Exception as exc:
+                return {
+                    "action": action,
+                    "exit_code": None,
+                    "output": str(exc),
+                    "ok": False,
+                }
         tool_map = {"write_file": "write_file", "run_command": "run_command", "read_file": "read_file", "list_files": "list_files"}
         name = tool_map.get(action, action)
         if name == "write_file":
