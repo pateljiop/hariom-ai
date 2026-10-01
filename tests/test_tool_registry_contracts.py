@@ -108,7 +108,8 @@ class ToolRegistryContractTests(unittest.TestCase):
             permission=["browser.click", "external_side_effect"],
             arguments=args, ttl_seconds=60,
         )
-        self.registry.browser.click = lambda **kwargs: True
+        tool = self.registry._tools["browser.click"]
+        self.registry._tools["browser.click"] = tool.__class__(**{**tool.__dict__, "handler": lambda selector, approved=False: {"clicked": True}})
         self.assertTrue(self.registry.execute(
             "browser.click", args, task_id="task-replay", approval_token=token
         )["ok"])
