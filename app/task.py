@@ -55,6 +55,7 @@ class Task:
     risk_level: RiskLevel = RiskLevel.LOW
     required_approvals: tuple = ()
     rollback_strategy: str = "none"
+    branch_name: str = ""
     max_retries: int = 2
     plan: Optional[Dict[str, Any]] = None
     result: Dict[str, Any] = field(default_factory=dict)
@@ -79,6 +80,8 @@ class Task:
             raise ValueError("max_retries must be between 0 and 10.")
         if not isinstance(self.rollback_strategy, str) or not self.rollback_strategy.strip():
             raise ValueError("rollback_strategy must be a non-empty string.")
+        if not isinstance(self.branch_name, str):
+            raise ValueError("branch_name must be a string.")
 
     _ALLOWED_TRANSITIONS = {
         TaskStatus.CREATED: {TaskStatus.PLANNING, TaskStatus.CANCELLED},
@@ -139,6 +142,7 @@ class Task:
             "risk_level": self.risk_level.value,
             "required_approvals": list(self.required_approvals),
             "rollback_strategy": self.rollback_strategy,
+            "branch_name": self.branch_name,
             "max_retries": self.max_retries,
             "plan": self.plan,
             "result": self.result,
