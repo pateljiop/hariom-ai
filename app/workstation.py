@@ -108,7 +108,10 @@ class Workstation:
         except Exception:
             return []
         recovered = []
-        terminal = {"completed", "cancelled", "rolled_back"}
+        terminal = {
+            "completed", "cancelled", "rolled_back",
+            "awaiting_commit_approval", "committing",
+        }
         for task in tasks:
             if not isinstance(task.result, dict) or not task.result.get("background"):
                 continue
@@ -137,10 +140,16 @@ class Workstation:
 
     def cancel(self, task_id):
         cancelled = False
+        queued = False
         try:
             cancelled = self.queue.cancel(task_id).get("cancelled", False)
+            queued = True
         except Exception:
             pass
+        if not cancelled and queued:
+            raise WorkstationError(
+                f"Task '{task_id}' is already running and cannot be cancelled safely."
+            )
         task = self.task_service.cancel_task(task_id)
         self.activity.emit("TASK -> cancelled " + task_id)
         return {"task_id": task_id, "cancelled": cancelled, "status": task.status.value}
