@@ -11,6 +11,8 @@ from app.terminal import run_command
 from app.activity import ActivityBus
 from app.tool_registry import ToolRegistry, ToolError, UnknownToolError
 from app.task_executor import TaskAction, TaskExecutor
+from app.task_queue import TaskQueue
+import threading
 from app.workspace_patcher import PatchError, TextPatch, WorkspacePatcher
 from app.test_runner import TestRunner, TestRunnerError
 from app.git_manager import GitError, GitManager
@@ -398,3 +400,40 @@ class GitManagerTests(unittest.TestCase):
             git.diff = Mock(return_value="+OPENAI_API_KEY = \"sk-proj-123456789012345678\"")
             with self.assertRaisesRegex(PermissionError, "secret"):
                 git.commit("commit secret", approved=True)
+
+
+class TaskQueueTests(unittest.TestCase):
+    def test_running_task_cannot_be_cancelled(self):
+        queue = TaskQueue(max_workers=1)
+        started = threading.Event()
+        release = threading.Event()
+
+        def work():
+            started.set()
+            release.wait(2)
+
+        try:
+            queue.submit("task-running", work)
+            self.assertTrue(started.wait(1))
+            self.assertFalse(queue.cancel("task-running")["cancelled"])
+        finally:
+            release.set()
+            queue.shutdown(wait=True)
+
+    def test_queued_task_can_be_cancelled(self):
+        queue = TaskQueue(max_workers=1)
+        started = threading.Event()
+        release = threading.Event()
+
+        def blocker():
+            started.set()
+            release.wait(2)
+
+        try:
+            queue.submit("task-blocker", blocker)
+            self.assertTrue(started.wait(1))
+            queue.submit("task-queued", lambda: None)
+            self.assertTrue(queue.cancel("task-queued")["cancelled"])
+        finally:
+            release.set()
+            queue.shutdown(wait=True)
