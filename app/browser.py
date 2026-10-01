@@ -14,10 +14,37 @@ class BrowserSession:
 class BrowserController:
     """Optional Playwright browser controller for Hariom AI."""
 
-    def __init__(self, activity, headless=True):
+    SENSITIVE_FIELD_TERMS = (
+        "password", "passcode", "passwd", "secret", "token", "api_key",
+        "apikey", "cvv", "cvc", "cardnumber", "card_number", "creditcard",
+        "credit_card", "otp", "one-time-code", "securitycode",
+    )
+    SIDE_EFFECT_TERMS = (
+        "submit", "send", "purchase", "buy", "pay", "checkout", "confirm",
+        "delete", "remove", "publish", "post", "login", "sign-in", "signin",
+        "logout", "authorize", "transfer", "withdraw",
+    )
+
+    def __init__(self, activity, headless=True, workspace=None):
         self.activity = activity
         self.headless = headless
+        self.workspace = workspace
         self.session = None
+
+    @classmethod
+    def selector_is_sensitive(cls, selector):
+        value = str(selector).lower()
+        return any(term in value for term in cls.SENSITIVE_FIELD_TERMS)
+
+    @classmethod
+    def selector_has_side_effect(cls, selector):
+        value = str(selector).lower()
+        return any(term in value for term in cls.SIDE_EFFECT_TERMS)
+
+    def _persistent_path(self, path):
+        if self.workspace is None:
+            raise PermissionError("Persistent browser artifacts require a workspace boundary.")
+        return self.workspace._safe_path(path)
 
     def _playwright(self):
         try:
@@ -136,7 +163,7 @@ class BrowserController:
         if persist:
             if not path:
                 raise ValueError("A path is required when persist=True.")
-            target = Path(path).expanduser().resolve()
+            target = self._persistent_path(path)
             target.parent.mkdir(parents=True, exist_ok=True)
             self.session.page.screenshot(path=str(target), full_page=True)
             self.activity.emit("BROWSER -> screenshot persisted")
