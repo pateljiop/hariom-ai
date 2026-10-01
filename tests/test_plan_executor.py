@@ -104,6 +104,8 @@ class PlanExecutorTests(unittest.TestCase):
         workflow = Mock()
         workflow.prepare.return_value = {"ok": True, "stage": "approval", "request_id": "abc", "diff": "d"}
         workflow.approve.return_value = {"ok": True, "request_id": "abc", "commit": {"ok": True}}
+        workflow.executor.verify_expectations.return_value = {"ok": True}
+        workflow.executor.registry.test_runner.run.return_value = {"ok": True}
         executor = PlanExecutor(workflow)
         prepared = executor.prepare({
             "actions": [{"tool": "workspace.write", "arguments": {"path": "a", "content": "b"}}],
@@ -159,6 +161,8 @@ class PlanExecutorTests(unittest.TestCase):
         workflow = Mock()
         workflow.prepare.return_value = {"ok": True, "stage": "approval", "request_id": "restart-commit", "diff": "d"}
         workflow.approve.return_value = {"ok": True, "request_id": "restart-commit", "commit": {"ok": True}}
+        workflow.executor.verify_expectations.return_value = {"ok": True}
+        workflow.executor.registry.test_runner.run.return_value = {"ok": True}
         import tempfile
         with tempfile.TemporaryDirectory() as root:
             store = TaskStore(f"{root}/tasks.sqlite3")
