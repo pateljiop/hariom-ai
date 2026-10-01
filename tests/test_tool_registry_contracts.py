@@ -57,6 +57,38 @@ class ToolRegistryContractTests(unittest.TestCase):
                 approval_token=token,
             )
 
+    def test_sensitive_selector_requires_bound_secrets_token(self):
+        args = {"selector": "#password", "text": "secret"}
+        with self.assertRaises(ToolApprovalRequired):
+            self.registry.execute("browser.type", args, approved=True)
+        token = self.registry.permission_manager.issue_approval_token(
+            task_id="task-sensitive", tool="browser.type",
+            permission=["browser.type", "secrets_access"],
+            arguments=args, ttl_seconds=60,
+        )
+        self.registry.browser.type_text = lambda **kwargs: True
+        result = self.registry.execute(
+            "browser.type", args, task_id="task-sensitive",
+            approval_token=token,
+        )
+        self.assertTrue(result["ok"])
+
+    def test_side_effect_browser_click_requires_extra_permission(self):
+        args = {"selector": "#submit"}
+        with self.assertRaises(ToolApprovalRequired):
+            self.registry.execute("browser.click", args, approved=True)
+        token = self.registry.permission_manager.issue_approval_token(
+            task_id="task-side-effect", tool="browser.click",
+            permission=["browser.click", "external_side_effect"],
+            arguments=args, ttl_seconds=60,
+        )
+        self.registry.browser.click = lambda **kwargs: True
+        result = self.registry.execute(
+            "browser.click", args, task_id="task-side-effect",
+            approval_token=token,
+        )
+        self.assertTrue(result["ok"])
+
     def test_legacy_approval_dict_is_not_authorization(self):
         with self.assertRaises(ToolApprovalRequired):
             self.registry.execute(
