@@ -29,8 +29,9 @@ class TaskExecutor:
         if actions is None:
             raise TaskExecutionError("Actions are required.")
         normalized = list(actions)
-        ids = {getattr(action, "step_id", None) for action in normalized}
-        ids.discard(None)
+        explicit_ids = [action.step_id for action in normalized if getattr(action, "step_id", "")]
+        if len(explicit_ids) != len(set(explicit_ids)):
+            raise TaskExecutionError("Step IDs must be unique.")
         for action in normalized:
             if not isinstance(action, TaskAction):
                 raise TaskExecutionError("Each action must be a TaskAction.")
