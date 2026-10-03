@@ -1,6 +1,6 @@
 # Free AI Provider Catalog
 
-Last audited: 2026-10-01
+Last audited: 2026-10-03
 
 This catalog is for Hariom AI's personal-use, Windows-first provider router. It separates recurring free tiers from one-time credits/trials.
 
@@ -15,6 +15,7 @@ This catalog is for Hariom AI's personal-use, Windows-first provider router. It 
 | Cloudflare Workers AI | LLM/image/audio | 10,000 Neurons/day on Workers Free; excess usage requires Workers Paid; selected models remain available on Free | No for Free plan | Image/audio/LLM experiments |
 | Cloudflare AI Gateway | AI gateway | Core gateway features are free on all plans; Free plan has 100,000 persistent logs total across gateways | No | Provider routing, caching, rate limiting, observability |
 | Hugging Face Inference Providers | Multi-model | Free users receive $0.10/month inference credits; extra usage requires purchased credits | No for free credits | Experimental model access |
+| ElevenLabs | TTS + STT + voice/media | 10,000 free credits/month; API endpoints are available on the free plan; exact feature consumption varies | No credit card required for free signup | High-quality TTS, realtime voice-agent TTS, STT, voice/media fallback |
 | Cohere | LLM/rerank/embeddings | Free/evaluation access with limits | No | Rerank/LLM backup |
 | Pexels | Stock media | Free API quota | No | Photos + videos |
 | Pixabay | Stock media | Free API quota | No | Photos + videos fallback |
@@ -106,3 +107,19 @@ Deepgram's commonly advertised signup credit remains a promotional/trial offer r
 
 ### No new verified free hosted video API
 No newly available recurring-free hosted video-generation API met the verification threshold in this run. Google Vids remains a free product capability, not a documented free public API.
+
+## Current verified changes — 2026-10-03
+
+### ElevenLabs — recurring free API access verified
+ElevenLabs' current official developer page explicitly offers **10,000 free credits** on signup, with **no credit card required**, and says the free tier includes API access. Its API help documentation also states that most API endpoints are available on all plans, including the free plan. This qualifies ElevenLabs for the recurring-free catalog; it must still be quota-guarded because the 10,000 credits are limited, not unlimited. citeturn1search17turn1search15
+
+The current official ElevenLabs changelog (September 28, 2026) adds **Eleven v4** and **Eleven v4 Turbo**. v4 is available through the Text to Dialogue API, while v4 Turbo is intended for realtime agent/interactive use through WebSocket. This is directly relevant to Hariom AI's planned voice-agent layer. citeturn1search10
+
+### Gemini API status correction — 2.0 models are shut down
+Google's official Gemini API release notes state that `gemini-2.0-flash`, `gemini-2.0-flash-001`, `gemini-2.0-flash-lite`, and `gemini-2.0-flash-lite-001` were shut down on **June 1, 2026**. Hariom AI must not add these model IDs as free fallbacks; migrations should use currently supported models such as Gemini 3.5 Flash or Gemini 3.1 Flash-Lite where appropriate. citeturn1search18
+
+### Gemini 3.8 TTS GA status
+Google's official release notes confirm `gemini-3.8-flash-tts` and `gemini-3.8-flash-lite-tts` reached GA on **September 22, 2026**, including the Gemini API Voices endpoint. The catalog already tracks the Lite TTS free-tier capability; the full 3.8 TTS model should not be labeled free unless its current pricing row explicitly grants free-tier access. citeturn1search18
+
+### No new recurring-free hosted video-generation API verified
+Current official/vendor evidence reviewed in this run did not establish a new recurring-free public video-generation API that meets the catalog's verification bar. Do not promote product-level free video features or promotional credits into the automatic API router without an explicit free API quota.
