@@ -31,6 +31,31 @@ class Workspace:
         target.write_text(content, encoding="utf-8")
         return target
 
+    def patch_file(self, path, old_text, new_text, expected_replacements=1):
+        """Replace an exact text fragment, refusing ambiguous or stale patches."""
+        if not isinstance(old_text, str) or not old_text:
+            raise ValueError("old_text must be a non-empty string.")
+        if not isinstance(new_text, str):
+            raise TypeError("new_text must be a string.")
+        if not isinstance(expected_replacements, int) or isinstance(expected_replacements, bool) or expected_replacements < 1:
+            raise ValueError("expected_replacements must be a positive integer.")
+
+        target = self._safe_path(path)
+        if not target.is_file():
+            raise FileNotFoundError("Cannot patch a file that does not exist: " + str(path))
+
+        original = target.read_text(encoding="utf-8")
+        matches = original.count(old_text)
+        if matches != expected_replacements:
+            raise ValueError(
+                "Patch expected %d exact match(es), found %d."
+                % (expected_replacements, matches)
+            )
+
+        updated = original.replace(old_text, new_text)
+        target.write_text(updated, encoding="utf-8")
+        return target
+
     def _safe_path(self, path):
         target = (self.root / path).resolve()
 
